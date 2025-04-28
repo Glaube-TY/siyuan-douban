@@ -1,8 +1,8 @@
 {
-  "name": "plugin-sample-vite-svelte",
-  "author": "frostime",
-  "url": "https://github.com/siyuan-note/plugin-sample-vite-svelte",
-  "version": "0.3.6",
+  "name": "siyuan-douban",
+  "author": "Glaube-TY",
+  "url": "https://github.com/Glaube-TY/siyuan-douban",
+  "version": "1.0.0",
   "minAppVersion": "3.0.12",
   "backends": [
     "windows",
@@ -21,12 +21,12 @@
     "desktop-window"
   ],
   "displayName": {
-    "en_US": "Plugin sample with vite and svelte",
-    "zh_CN": "插件样例 vite + svelte 版"
+    "en_US": "Douban Book",
+    "zh_CN": "豆瓣书籍"
   },
   "description": {
-    "en_US": "SiYuan plugin sample with vite and svelte",
-    "zh_CN": "使用 vite 和 svelte 开发的思源插件样例"
+    "en_US": "Get book information from Douban and import it into the book database",
+    "zh_CN": "快速获取豆瓣书籍信息并导入书籍数据库"
   },
   "readme": {
     "en_US": "README.md",
@@ -34,12 +34,13 @@
   },
   "funding": {
     "custom": [
-      ""
+      "https://docs.qq.com/aio/DR2ZZeUdwT09JaHBr?p=paXnYvAw0KsVz6UU7XlTT5"
     ]
   },
   "keywords": [
-    "plugin",
-    "sample",
-    "插件样例"
+    "豆瓣读书",
+    "douban",
+    "书籍",
+    "book"
   ]
 }
