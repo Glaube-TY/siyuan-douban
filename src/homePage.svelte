@@ -561,6 +561,16 @@
                                 >siyuan-douban</a
                             >
                         </div>
+                        <span class="icon">&nbsp;&nbsp;&nbsp;</span>
+                        <span class="icon">✒</span>
+                        <div>
+                            <p class="label">插件教程：</p>
+                            <a
+                                href="https://cooperative-ferry-4dc.notion.site/SY-1e3c50d8b56c8074a709cad7290d1592?pvs=74"
+                                class="link"
+                                >插件教程</a
+                            >
+                        </div>
                     </div>
 
                     <div class="about-card">
@@ -585,18 +595,9 @@
                         <span class="icon">💖</span>
                         <div>
                             <p class="label">支持开发者：</p>
-                            <div class="sponsor-options">
-                                <img
-                                    src="https://glaube-ty.oss-cn-chengdu.aliyuncs.com/img/wechatpay.png"
-                                    alt="微信赞助"
-                                    class="qr-code"
-                                />
-                                <img
-                                    src="https://glaube-ty.oss-cn-chengdu.aliyuncs.com/img/alipay.jpg"
-                                    alt="支付宝赞助"
-                                    class="qr-code"
-                                />
-                            </div>
+                            <a href="https://cooperative-ferry-4dc.notion.site/SY-1e3c50d8b56c809bae91e6e059c87e82" class="link"
+                                >🌹 请作者喝咖啡</a
+                            >
                         </div>
                     </div>
                 </div>
@@ -605,9 +606,6 @@
                     <p>
                         ❤
                         由一位热爱阅读的开发者制作，希望为你带来更好的知识管理体验
-                    </p>
-                    <p class="copyright">
-                        © 2024 siyuan-douban Project. MIT License.
                     </p>
                 </div>
             </div>
