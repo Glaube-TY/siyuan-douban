@@ -2,7 +2,7 @@
   "name": "siyuan-douban",
   "version": "1.0.0",
   "type": "module",
-  "description": "This is a sample plugin based on vite and svelte for Siyuan (https://b3log.org/siyuan)",
+  "description": "Get book information from Douban and import it into the book database(https://github.com/Glaube-TY/siyuan-douban)",
   "repository": "",
   "homepage": "",
   "author": "Glaube-TY",
