@@ -238,6 +238,10 @@ export async function loadAVData(avID: string, fullData: any) {
             const path = require('path');
             const https = require('https');
 
+            if (!url || !url.startsWith('https://')) {
+                throw new Error('仅支持 HTTPS 协议下载封面');
+            }
+
             const cleanTitle = title.replace(/[^\w\u4e00-\u9fa5]/g, '_');
             const timestamp = formatTime();
 
@@ -252,7 +256,11 @@ export async function loadAVData(avID: string, fullData: any) {
             const coverPath = path.join(coverDir, `${cleanTitle}_${timestamp}.${fileExt}`);
 
             return new Promise((resolve, reject) => {
-                https.get(url, (response) => {
+                https.get(url, {
+                    headers: {
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                    }
+                }, (response) => {
                     const fileStream = fs.createWriteStream(coverPath);
                     response.pipe(fileStream);
                     fileStream.on('finish', () => {

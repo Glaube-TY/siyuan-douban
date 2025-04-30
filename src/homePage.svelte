@@ -213,7 +213,7 @@
 
                                 const result = await loadAVData(avID, fullData);
                                 if (result) {
-                                    showMessage(`❌ 保存失败: ${result}`, 5000);
+                                    showMessage(`❌ 保存失败: ${result.msg}`, 5000);
                                 } else {
                                     showMessage(
                                         `✅《${bookInfo.title}》已加入书库`,
