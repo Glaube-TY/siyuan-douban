@@ -28,10 +28,10 @@ const extractInfo = (doc: Document, label: string): string | null => {
 export async function fetchDoubanBook(isbn: string): Promise<BookInfo> {
     const response = await fetch(`https://douban.com/isbn/${isbn}`, {
         headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Referer': 'https://book.douban.com/'
+            'User-Agent': 'Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36',
+            'Referer': 'https://m.douban.com/'
         },
-        credentials: 'omit' // 禁止发送cookie
+        credentials: 'omit'
     });
     if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
 

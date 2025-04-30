@@ -1,6 +1,6 @@
 <script lang="ts">
     import { onMount } from "svelte";
-    import { I18N, showMessage } from "siyuan";
+    import { I18N, showMessage, fetchPost } from "siyuan";
     import { sql } from "./api";
     import { fetchDoubanBook } from "./fetchDouban";
     import "./homePage.scss";
@@ -11,7 +11,6 @@
     export let plugin;
 
     let isbnInput = "";
-    let resultHTML = "";
     let bookInfo: BookInfo | null = null;
     let statusMessage = "";
     let addNotes1 = true;
@@ -60,25 +59,49 @@
     }
 
     async function fetchBookData() {
-        if (!isbnInput) {
-            statusMessage = "请输入ISBN号"; // 新增提示
-            return;
-        }
-        if (!/^(97(8|9))?\d{9}(\d|X)$/.test(isbnInput)) {
-            resultHTML = "ISBN格式不正确";
-            return;
-        }
-
         try {
-            statusMessage = "获取书籍信息中...";
-            bookInfo = await fetchDoubanBook(isbnInput);
-            bookInfo.isbn = isbnInput;
-            bookInfo.addNotes = addNotes1;
-            statusMessage = "";
-            localStorage.setItem(`book-${isbnInput}`, JSON.stringify(bookInfo));
+            // 检查空值
+            if (!isbnInput) {
+                throw new Error("ISBN号不能为空");
+            }
+
+            // 格式校验
+            if (!/^(97(8|9))?\d{9}(\d|X)$/.test(isbnInput)) {
+                throw new Error("ISBN格式不正确");
+            }
+
+            try {
+                statusMessage = "获取书籍信息中...";
+                bookInfo = await fetchDoubanBook(isbnInput).catch(e => {
+                    throw new Error(`豆瓣接口访问失败: ${e.message}`);
+                });
+
+                // 数据完整性检查
+                if (!bookInfo?.title) {
+                    throw new Error("获取的书籍数据不完整");
+                }
+
+                // 处理数据
+                bookInfo.isbn = isbnInput;
+
+                // 存储数据
+                try {
+                    localStorage.setItem(
+                        `book-${isbnInput}`,
+                        JSON.stringify(bookInfo),
+                    );
+                } catch (storageError) {
+                    console.error("本地存储失败:", storageError);
+                    throw new Error("数据保存失败，请检查存储空间");
+                }
+
+                statusMessage = "";
+            } catch (apiError) {
+                throw new Error(`数据获取失败: ${apiError.message}`);
+            }
         } catch (error) {
-            statusMessage = "获取数据失败，请检查ISBN号或网络连接";
-            resultHTML = "获取数据失败，请检查ISBN号或网络连接";
+            statusMessage = error.message || "未知错误，请检查控制台";
+            console.error("书籍获取失败:", error);
         }
     }
 
@@ -121,8 +144,7 @@
         const savedISBN = localStorage.getItem("lastISBN");
         if (savedISBN) isbnInput = savedISBN;
 
-        // 替换 localStorage 为思源数据存储
-        plugin.loadData("settings.json").then((savedSettings) => {
+        plugin.loadData("settings.json").then(async (savedSettings) => {
             if (savedSettings) {
                 customRatings = savedSettings.ratings || [
                     "⭐",
@@ -142,7 +164,7 @@
                 tempStatuses = customReadingStatuses.join(", ");
 
                 if (bookDatabassID) {
-                    validateDatabaseID();
+                    await validateDatabaseID();
                 }
             }
         });
@@ -213,11 +235,18 @@
 
                                 const result = await loadAVData(avID, fullData);
                                 if (result) {
-                                    showMessage(`❌ 保存失败: ${result.msg}`, 5000);
+                                    showMessage(
+                                        `❌ 保存失败: ${result.msg}`,
+                                        5000,
+                                    );
                                 } else {
                                     showMessage(
                                         `✅《${bookInfo.title}》已加入书库`,
                                         3000,
+                                    );
+                                    await fetchPost(
+                                        "/api/ui/reloadAttributeView",
+                                        { id: avID },
                                     );
                                 }
                             }}
@@ -537,7 +566,10 @@
                             showMessage("✅ 设置保存成功", 3000);
                             await validateDatabaseID();
                         } catch (error) {
-                            showMessage(`❌ 设置保存失败: ${error.message}`, 5000);
+                            showMessage(
+                                `❌ 设置保存失败: ${error.message}`,
+                                5000,
+                            );
                         }
                     }}>保存自定义选项</button
                 >
@@ -546,7 +578,7 @@
             <!-- 第三个标签页 - 关于插件 -->
             <div class="about">
                 <div class="about-header">
-                    <h3>📚 豆瓣书籍插件 v1.0.2</h3>
+                    <h3>📚 豆瓣书籍插件 v1.0.3</h3>
                     <p class="motto">让阅读管理更优雅</p>
                 </div>
 
@@ -557,8 +589,7 @@
                             <p class="label">插件主页：</p>
                             <a
                                 href="https://github.com/Glaube-TY/siyuan-douban"
-                                class="link"
-                                >siyuan-douban</a
+                                class="link">siyuan-douban</a
                             >
                         </div>
                         <span class="icon">&nbsp;&nbsp;&nbsp;</span>
@@ -566,9 +597,8 @@
                         <div>
                             <p class="label">插件教程：</p>
                             <a
-                                href="https://cooperative-ferry-4dc.notion.site/SY-1e3c50d8b56c8074a709cad7290d1592?pvs=74"
-                                class="link"
-                                >插件教程</a
+                                href="https://cooperative-ferry-4dc.notion.site/SY-1e3c50d8b56c809bae91e6e059c87e82"
+                                class="link">插件教程</a
                             >
                         </div>
                     </div>
@@ -580,6 +610,12 @@
                             <a href="https://github.com/Glaube-TY" class="link"
                                 >Glaube-TY</a
                             >
+                            <p>
+                                <a
+                                    href="https://cooperative-ferry-4dc.notion.site/Glaube-TY-1d9c50d8b56c80fdb67aefe123efb849"
+                                    class="link">Glaube-TY 个人主页</a
+                                >
+                            </p>
                         </div>
                         <span class="icon">&nbsp;&nbsp;&nbsp;</span>
                         <span class="icon">📊</span>
@@ -595,9 +631,25 @@
                         <span class="icon">💖</span>
                         <div>
                             <p class="label">支持开发者：</p>
-                            <a href="https://cooperative-ferry-4dc.notion.site/SY-1e3c50d8b56c809bae91e6e059c87e82" class="link"
-                                >🌹 请作者喝咖啡</a
+                            <a
+                                href="https://cooperative-ferry-4dc.notion.site/SY-1e3c50d8b56c809bae91e6e059c87e82"
+                                class="link">🌹 请作者喝咖啡</a
                             >
+                        </div>
+                        <span class="icon">&nbsp;&nbsp;&nbsp;</span>
+                        <span class="icon">⁉</span>
+                        <div>
+                            <p class="label">反馈&建议：</p>
+                            <a
+                                href="https://github.com/Glaube-TY/siyuan-douban/issues"
+                                class="link">反馈地址1</a
+                            >
+                            <p>
+                                <a
+                                    href="https://pd.qq.com/s/724c4lpoc"
+                                    class="link">反馈地址2</a
+                                >
+                            </p>
                         </div>
                     </div>
                 </div>

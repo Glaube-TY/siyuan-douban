@@ -54,6 +54,11 @@
     <div style="margin: 1.5em 0; padding: 1.5em; background: white; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.05);">
         <h2 style="color: #2d8cf0; margin: 0 0 1em;">📆 更新日志</h2>
         <div style="padding: 12px; background: #f8f9fa; border-radius: 6px;">
+            <span style="display: inline-block; padding: 4px 12px; background: #19be6b; color: white; border-radius: 20px;">2025-04-30 v1.0.3</span>
+            <p style="margin: 0.5em 0;">增加添加完成书籍信息后自动刷新数据库显示的功能</p>
+            <p style="margin: 0.5em 0;">修复一些已知bug</p>
+        </div>
+        <div style="padding: 12px; background: #f8f9fa; border-radius: 6px;">
             <span style="display: inline-block; padding: 4px 12px; background: #19be6b; color: white; border-radius: 20px;">2025-04-30 v1.0.1~v1.0.2</span>
             <p style="margin: 0.5em 0;">修复可能的第三方cookie错误以及显示错误</p>
         </div>
@@ -61,5 +66,22 @@
             <span style="display: inline-block; padding: 4px 12px; background: #19be6b; color: white; border-radius: 20px;">2025-04-28 v1.0.0</span>
             <p style="margin: 0.5em 0;">初始版本发布，包含基础书籍查询和保存功能</p>
         </div>
+        <a href="https://cooperative-ferry-4dc.notion.site/1e5c50d8b56c803ab385f6670661d48d" 
+           style="display: inline-flex;
+                  align-items: center;
+                  padding: 12px 24px;
+                  background: linear-gradient(135deg, #2d8cf0 30%, #1e6bff 70%);
+                  color: white;
+                  border-radius: 6px;
+                  text-decoration: none;
+                  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+                  transform: translateY(0);
+                  box-shadow: 0 4px 8px rgba(45,140,240,0.15);
+                  border: 1px solid rgba(255,255,255,0.2);
+                  margin-top: 1.2em;
+                  gap: 8px;">
+            <span style="font-size: 1.1em; filter: drop-shadow(0 1px 1px rgba(0,0,0,0.1));">📄</span>
+            <span style="font-weight: 500; letter-spacing: 0.5px;">完整更新日志</span>
+        </a>
     </div>
 </div>
