@@ -30,6 +30,10 @@
     let bookCategoryIndex = 0;
     let readingStatusIndex = 0;
 
+    let showTemplateEditor = false;
+    let noteTemplate = "";
+    let originalTemplate = "";
+
     const tabs = ["📚 书籍查询", "⚙️ 用户设置", "ℹ️ 关于插件"];
     let activeTab = tabs[0];
 
@@ -72,7 +76,7 @@
 
             try {
                 statusMessage = "获取书籍信息中...";
-                bookInfo = await fetchDoubanBook(isbnInput).catch(e => {
+                bookInfo = await fetchDoubanBook(isbnInput).catch((e) => {
                     throw new Error(`豆瓣接口访问失败: ${e.message}`);
                 });
 
@@ -83,6 +87,8 @@
 
                 // 处理数据
                 bookInfo.isbn = isbnInput;
+                // 新增：应用默认生成读书笔记设置
+                bookInfo.addNotes = addNotes1;
 
                 // 存储数据
                 try {
@@ -146,6 +152,7 @@
 
         plugin.loadData("settings.json").then(async (savedSettings) => {
             if (savedSettings) {
+                noteTemplate = savedSettings.noteTemplate || ``;
                 customRatings = savedSettings.ratings || [
                     "⭐",
                     "⭐⭐",
@@ -217,6 +224,7 @@
                                 const fullData = {
                                     ...bookInfo,
                                     ISBN: isbnInput,
+                                    databaseBlockId: bookDatabassID,
                                     myRating:
                                         customRatings[myRatingIndex] ||
                                         "未评分",
@@ -230,7 +238,8 @@
                                     startDate: bookInfo.startDate || "",
                                     finishDate: bookInfo.finishDate || "",
                                     publishDate: bookInfo.publishDate || "",
-                                    addNotes: bookInfo.addNotes ?? addNotes1,
+                                    addNotes: bookInfo.addNotes,
+                                    noteTemplate: noteTemplate,
                                 };
 
                                 const result = await loadAVData(avID, fullData);
@@ -460,14 +469,14 @@
                                         </select>
                                     </label>
                                 </div>
-                                <!-- <div>
+                                <div>
                                     <label>
                                         <input
                                             type="checkbox"
                                             bind:checked={bookInfo.addNotes}
                                         />是否生成读书笔记
                                     </label>
-                                </div> -->
+                                </div>
                             </div>
 
                             <div
@@ -505,7 +514,7 @@
                     <input
                         type="text"
                         bind:value={bookDatabassID}
-                        placeholder="请输入豆瓣书籍数据库块ID"
+                        placeholder="请输入书籍数据库块ID"
                     />
                 </div>
                 <div class="database-status" style="padding-bottom: 10px;">
@@ -533,14 +542,26 @@
                         /></label
                     >
                 </div>
-                <!-- <div class="form-row">
+                <div class="form-row">
                     <label
-                        >默认生成读书笔记：<input
+                        style="display: inline-flex; align-items: center; gap: 8px;"
+                    >
+                        <input
                             type="checkbox"
                             bind:checked={addNotes1}
-                        /></label
+                            style="margin-right: 6px;"
+                        />默认生成读书笔记</label
                     >
-                </div> -->
+                    <button
+                        class="b3-button"
+                        on:click={() => {
+                            originalTemplate = noteTemplate;
+                            showTemplateEditor = true;
+                        }}
+                        style="margin-left: 12px; padding: 8px 12px; font-size: 14px;"
+                        >📝 设置模板</button
+                    >
+                </div>
                 <button
                     class="primary"
                     on:click={async () => {
@@ -571,14 +592,14 @@
                                 5000,
                             );
                         }
-                    }}>保存自定义选项</button
+                    }}>保存设置</button
                 >
             </div>
         {:else}
             <!-- 第三个标签页 - 关于插件 -->
             <div class="about">
                 <div class="about-header">
-                    <h3>📚 豆瓣书籍插件 v1.0.4</h3>
+                    <h3>📚 豆瓣书籍插件 v1.1.0</h3>
                     <p class="motto">让阅读管理更优雅</p>
                 </div>
 
@@ -664,3 +685,82 @@
         {/if}
     </div>
 </div>
+
+{#if showTemplateEditor}
+    <div class="b3-dialog-container" style="z-index: 9999;">
+        <div
+            class="b3-dialog-scrim"
+            role="button"
+            tabindex="0"
+            on:click|self={() => (showTemplateEditor = false)}
+            on:keydown={(e) =>
+                (e.key === "Enter" || e.key === " ") &&
+                (showTemplateEditor = false)}
+        ></div>
+        <div class="b3-dialog-card">
+            <div class="b3-dialog__header" role="heading" aria-level="2">
+                <div
+                    style="display: flex; justify-content: space-between; align-items: center; width: 100%;"
+                >
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <span>📝</span>
+                        <p class="b3-dialog__title">自定义读书笔记模板</p>
+                    </div>
+                    <div style="display: flex; gap: 8px;">
+                        <button
+                            class="b3-button b3-button--text"
+                            on:click={() => {
+                                noteTemplate = originalTemplate; // 恢复原始模板
+                                showTemplateEditor = false;
+                            }}>取消</button
+                        >
+                        <button
+                            class="b3-button b3-button--text b3-button--text-primary"
+                            on:click={async () => {
+                                try {
+                                    // 获取当前设置并更新模板
+                                    const currentSettings =
+                                        (await plugin.loadData(
+                                            "settings.json",
+                                        )) || {};
+                                    currentSettings.noteTemplate = noteTemplate;
+
+                                    // 保存更新后的设置
+                                    await plugin.saveData(
+                                        "settings.json",
+                                        currentSettings,
+                                    );
+                                    originalTemplate = noteTemplate; // 更新暂存副本
+                                    showTemplateEditor = false;
+                                    showMessage("✅ 模板保存成功", 3000);
+                                } catch (error) {
+                                    showMessage(
+                                        `❌ 模板保存失败: ${error.message}`,
+                                        5000,
+                                    );
+                                }
+                            }}>确认</button
+                        >
+                    </div>
+                </div>
+            </div>
+            <div class="b3-dialog__body">
+                <textarea
+                    bind:value={noteTemplate}
+                    style="width: calc(100% - 32px);
+                          height: 340px;
+                          margin: 0 16px 16px 16px;
+                          padding: 12px;
+                          font-family: monospace;
+                          border: 1px solid var(--b3-theme-divider);
+                          border-radius: 4px;
+                          background-color: var(--b3-theme-background);
+                          color: var(--b3-theme-text);
+                          transition: background-color 0.2s ease;
+                          box-sizing: border-box;"
+                    placeholder="在此输入你的笔记模板..."
+                ></textarea>
+            </div>
+        </div>
+    </div>
+{/if}

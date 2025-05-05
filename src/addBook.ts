@@ -1,6 +1,78 @@
+import { fetchSyncPost } from "siyuan";
+import { sql } from "./api";
+
 export async function loadAVData(avID: string, fullData: any) {
     const fs = require('fs');
     const workspacePath = window.siyuan.config.system.workspaceDir;
+
+    // 封装格式化时间戳函数
+    function formatTime() {
+        const now = new Date();
+        return [
+            now.getFullYear(),
+            String(now.getMonth() + 1).padStart(2, '0'),
+            String(now.getDate()).padStart(2, '0'),
+            String(now.getHours()).padStart(2, '0'),
+            String(now.getMinutes()).padStart(2, '0'),
+            String(now.getSeconds()).padStart(2, '0')
+        ].join('');
+    }
+
+    // 将日期字符串转换为时间戳
+    function parseDateToTimestamp(dateStr: string): number {
+        if (!dateStr) return 0;
+        // 支持格式：YYYY、YYYY-MM、YYYY-MM-DD
+        const formats = [
+            /^(\d{4})-(\d{1,2})-(\d{1,2})$/, // YYYY-MM-DD
+            /^(\d{4})-(\d{1,2})$/,          // YYYY-MM
+            /^(\d{4})$/,                     // YYYY
+            /^(\d{4})年(\d{1,2})月(\d{1,2})日$/, // 中文日期
+            /^(\d{4})年(\d{1,2})月$/,        // 中文年月
+            /^(\d{4})年$/                    // 中文年
+        ];
+
+        let year = 0, month = 0, day = 0;
+
+        for (const regex of formats) {
+            const match = dateStr.match(regex);
+            if (match) {
+                year = parseInt(match[1]);
+                month = match[2] ? parseInt(match[2]) - 1 : 0; // 月份从0开始
+                day = match[3] ? parseInt(match[3]) : 1;
+                break;
+            }
+        }
+
+        // 如果都没匹配到，返回当前时间戳
+        if (!year) return 0;
+
+        return new Date(year, month, day).getTime();
+    }
+
+    // 将字符串中的数字提取出来（保留小数点）
+    function cleanNumberString(numStr: string): number {
+        if (!numStr) return 0;
+        // 允许数字和小数点，替换所有非数字和小数点字符
+        const cleaned = numStr.replace(/[^\d.]/g, '');
+        // 处理多个小数点的情况（如 "12.34.56" → "12.34"）
+        const validNumber = cleaned.replace(/\.+$/, '').replace(/^\.+/, '')
+            .replace(/\.(?=.*\.)/g, '');
+        return parseFloat(validNumber) || 0;
+    }
+
+    // 封装随机字符生成函数
+    function generateRandomId(length = 7) {
+        const chars = '0123456789abcdefghijklmnopqrstuvwxyz';
+        return Array.from({ length }, () =>
+            chars[Math.floor(Math.random() * chars.length)]
+        ).join('');
+    }
+
+    function generateUniqueBlocked() {
+        const timestamp = formatTime(); // 使用格式化时间戳
+        const randomId = generateRandomId(); // 使用随机字符生成
+        return `${timestamp}-${randomId}`; // 拼接成唯一ID 
+    }
 
     try {
         // 读取原始数据库文件
@@ -8,77 +80,71 @@ export async function loadAVData(avID: string, fullData: any) {
         const response = await fetch(`file://${fullPath}`);
         const jsonData = await response.json();
 
-        // 封装格式化时间戳函数
-        function formatTime() {
-            const now = new Date();
-            return [
-                now.getFullYear(),
-                String(now.getMonth() + 1).padStart(2, '0'),
-                String(now.getDate()).padStart(2, '0'),
-                String(now.getHours()).padStart(2, '0'),
-                String(now.getMinutes()).padStart(2, '0'),
-                String(now.getSeconds()).padStart(2, '0')
-            ].join('');
-        }
 
-        // 将日期字符串转换为时间戳
-        function parseDateToTimestamp(dateStr: string): number {
-            if (!dateStr) return 0;
-            // 支持格式：YYYY、YYYY-MM、YYYY-MM-DD
-            const formats = [
-                /^(\d{4})-(\d{1,2})-(\d{1,2})$/, // YYYY-MM-DD
-                /^(\d{4})-(\d{1,2})$/,          // YYYY-MM
-                /^(\d{4})$/,                     // YYYY
-                /^(\d{4})年(\d{1,2})月(\d{1,2})日$/, // 中文日期
-                /^(\d{4})年(\d{1,2})月$/,        // 中文年月
-                /^(\d{4})年$/                    // 中文年
-            ];
-
-            let year = 0, month = 0, day = 0;
-
-            for (const regex of formats) {
-                const match = dateStr.match(regex);
-                if (match) {
-                    year = parseInt(match[1]);
-                    month = match[2] ? parseInt(match[2]) - 1 : 0; // 月份从0开始
-                    day = match[3] ? parseInt(match[3]) : 1;
-                    break;
-                }
+        let uniqueBlockId; // 生成或获取文档ID
+        let isDetached = true; // 用于控制链接到读书笔记
+        if (fullData.addNotes) {
+            // 创建读书笔记文档
+            // 下载封面
+            fullData.cover = await downloadCover(fullData.cover, fullData.title);
+            const sqlresult = await sql(`SELECT * FROM blocks WHERE id = "${fullData.databaseBlockId}"`);
+            const notebookId = sqlresult[0].box;
+            const docPath = sqlresult[0].hpath + "/";
+            const response = await fetchSyncPost('/api/filetree/createDocWithMd', {
+                notebook: notebookId,
+                path: docPath,
+                markdown: fullData.noteTemplate
+                    // 基本元数据
+                    .replace(/{{书名}}/g, fullData.title || '无标题')
+                    .replace(/{{副标题}}/g, fullData.subtitle || '')
+                    .replace(/{{原作名}}/g, fullData.originalTitle || '')
+                    // 作者/译者处理
+                    .replace(/{{作者}}/g, Array.isArray(fullData.authors) ? fullData.authors.join('、') : '')
+                    .replace(/{{译者}}/g, Array.isArray(fullData.translators) ? fullData.translators.join('、') : '')
+                    // 出版信息
+                    .replace(/{{出版社}}/g, fullData.publisher || '未知出版社')
+                    .replace(/{{出版年}}/g, fullData.publishDate || '未知日期')
+                    .replace(/{{出品方}}/g, fullData.producer || '')
+                    // ISBN和装帧
+                    .replace(/{{ISBN}}/g, fullData.ISBN || '')
+                    .replace(/{{装帧}}/g, fullData.binding || '平装')
+                    // 丛书系列
+                    .replace(/{{丛书}}/g, fullData.series || '')
+                    // 豆瓣数据
+                    .replace(/{{豆瓣评分}}/g, fullData.rating ? `${fullData.rating}/10` : '无评分')
+                    .replace(/{{评分人数}}/g, fullData.ratingCount ? `${fullData.ratingCount}人评价` : '暂无评价')
+                    // 物理信息
+                    .replace(/{{页数}}/g, fullData.pages ? `${fullData.pages}页` : '')
+                    .replace(/{{定价}}/g, fullData.price ? `¥${fullData.price}` : '')
+                    // 阅读信息
+                    .replace(/{{我的评分}}/g, fullData.myRating || '未评分')
+                    .replace(/{{书籍分类}}/g, fullData.bookCategory || '默认分类')
+                    .replace(/{{阅读状态}}/g, fullData.readingStatus || '未读')
+                    .replace(/{{开始日期}}/g, fullData.startDate || '未开始')
+                    .replace(/{{读完日期}}/g, fullData.finishDate || '未完成')
+                    // 封面图片
+                    .replace(/{{封面}}/g, fullData.cover || '')
+            });
+            if (response.code !== 0) {
+                throw new Error(response.msg || "创建读书笔记失败");
             }
-
-            // 如果都没匹配到，返回当前时间戳
-            if (!year) return 0;
-
-            return new Date(year, month, day).getTime();
+            uniqueBlockId = response.data;
+            // 重命名文档标题
+            await fetchSyncPost('/api/filetree/renameDocByID', {
+                id: uniqueBlockId,
+                title: fullData.title,
+            });
+            if (response.code !== 0) {
+                throw new Error(`重命名失败: ${response.msg}`);
+            }
+            isDetached = false;
+        } else {
+            // 下载封面
+            fullData.cover = await downloadCover(fullData.cover, fullData.title);
+            uniqueBlockId = generateUniqueBlocked();
         }
 
-        // 将字符串中的数字提取出来（保留小数点）
-        function cleanNumberString(numStr: string): number {
-            if (!numStr) return 0;
-            // 允许数字和小数点，替换所有非数字和小数点字符
-            const cleaned = numStr.replace(/[^\d.]/g, '');
-            // 处理多个小数点的情况（如 "12.34.56" → "12.34"）
-            const validNumber = cleaned.replace(/\.+$/, '').replace(/^\.+/, '')
-                .replace(/\.(?=.*\.)/g, '');
-            return parseFloat(validNumber) || 0;
-        }
 
-        // 封装随机字符生成函数
-        function generateRandomId(length = 7) {
-            const chars = '0123456789abcdefghijklmnopqrstuvwxyz';
-            return Array.from({ length }, () =>
-                chars[Math.floor(Math.random() * chars.length)]
-            ).join('');
-        }
-
-        function generateUniqueBlocked() {
-            const timestamp = formatTime(); // 使用格式化时间戳
-            const randomId = generateRandomId(); // 使用随机字符生成
-            return `${timestamp}-${randomId}`; // 拼接成唯一ID 
-        }
-
-        // 生成此刻日期字符串
-        const uniqueBlockId = generateUniqueBlocked();
 
         // 将书籍ID添加到rowIds数组
         if (!jsonData.views[0].table.rowIds) {
@@ -124,7 +190,7 @@ export async function loadAVData(avID: string, fullData: any) {
                 keyID: jsonData.keyValues[0].key.id,
                 blockID: uniqueBlockId,
                 type: "block",
-                isDetached: true,
+                isDetached: isDetached,
                 createdAt: Date.now(),
                 updatedAt: Date.now(),
                 block: {
@@ -275,8 +341,6 @@ export async function loadAVData(avID: string, fullData: any) {
 
         // 导入封面
         async function addCover() {
-            // 下载封面
-            fullData.cover = await downloadCover(fullData.cover, fullData.title);
             // 检查是否有"封面"列
             const coverColumn = jsonData.keyValues.find(item => item.key.name === "封面");
             // 如果没有"封面"列，创建新列
