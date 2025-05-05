@@ -578,7 +578,7 @@
             <!-- 第三个标签页 - 关于插件 -->
             <div class="about">
                 <div class="about-header">
-                    <h3>📚 豆瓣书籍插件 v1.0.3</h3>
+                    <h3>📚 豆瓣书籍插件 v1.0.4</h3>
                     <p class="motto">让阅读管理更优雅</p>
                 </div>
 
