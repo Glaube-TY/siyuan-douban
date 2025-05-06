@@ -1065,9 +1065,9 @@ export async function loadAVData(avID: string, fullData: any) {
                 });
             }
             // 检查是否有"书籍分类"列的options数组
-            if (!jsonData.keyValues.find(item => item.key.name === "书籍分类").key.options.find(item => item.name === fullData.myRating)) {
+            if (!jsonData.keyValues.find(item => item.key.name === "书籍分类").key.options.find(item => item.name === fullData.bookCategory)) {
                 jsonData.keyValues.find(item => item.key.name === "书籍分类").key.options.push({
-                    name: fullData.myRating,
+                    name: fullData.bookCategory,
                     color: "",
                     desc: "",
                 })
@@ -1122,9 +1122,9 @@ export async function loadAVData(avID: string, fullData: any) {
                 });
             }
             // 检查是否有"阅读状态"列的options数组
-            if (!jsonData.keyValues.find(item => item.key.name === "阅读状态").key.options.find(item => item.name === fullData.myRating)) {
+            if (!jsonData.keyValues.find(item => item.key.name === "阅读状态").key.options.find(item => item.name === fullData.readingStatus)) {
                 jsonData.keyValues.find(item => item.key.name === "阅读状态").key.options.push({
-                    name: fullData.myRating,
+                    name: fullData.readingStatus,
                     color: "",
                     desc: "",
                 })
