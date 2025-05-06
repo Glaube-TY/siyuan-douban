@@ -544,12 +544,12 @@
                 </div>
                 <div class="form-row">
                     <label
-                        style="display: inline-flex; align-items: center; gap: 8px;"
+                        style="display: inline-flex; align-items: center; gap: 5px;"
                     >
                         <input
                             type="checkbox"
                             bind:checked={addNotes1}
-                            style="margin-right: 6px;"
+                            style="margin-right: 5px;"
                         />默认生成读书笔记</label
                     >
                     <button
@@ -599,7 +599,7 @@
             <!-- 第三个标签页 - 关于插件 -->
             <div class="about">
                 <div class="about-header">
-                    <h3>📚 豆瓣书籍插件 v1.1.1</h3>
+                    <h3>📚 豆瓣书籍插件 v1.1.2</h3>
                     <p class="motto">让阅读管理更优雅</p>
                 </div>
 
