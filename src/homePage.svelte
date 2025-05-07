@@ -567,13 +567,13 @@
                     on:click={async () => {
                         // 将临时变量转换为数组
                         customRatings = tempRatings
-                            .split(/[，,]/) // 修改为同时匹配中英文逗号
+                            .split(/[，,]/)
                             .map((s) => s.trim());
                         customCategories = tempCategories
-                            .split(/[，,]/) // 修改为同时匹配中英文逗号
+                            .split(/[，,]/)
                             .map((s) => s.trim());
                         customReadingStatuses = tempStatuses
-                            .split(/[，,]/) // 修改为同时匹配中英文逗号
+                            .split(/[，,]/)
                             .map((s) => s.trim());
 
                         try {
@@ -583,6 +583,7 @@
                                 statuses: customReadingStatuses,
                                 addNotes: addNotes1,
                                 bookDatabaseID: bookDatabassID,
+                                noteTemplate: noteTemplate, // 新增模板字段
                             });
                             showMessage("✅ 设置保存成功", 3000);
                             await validateDatabaseID();
@@ -599,7 +600,7 @@
             <!-- 第三个标签页 - 关于插件 -->
             <div class="about">
                 <div class="about-header">
-                    <h3>📚 豆瓣书籍插件 v1.1.2</h3>
+                    <h3>📚 豆瓣书籍插件 v1.1.3</h3>
                     <p class="motto">让阅读管理更优雅</p>
                 </div>
 

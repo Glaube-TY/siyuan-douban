@@ -55,6 +55,10 @@
     <div style="margin: 1.5em 0; padding: 1.5em; background: white; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.05);">
         <h2 style="color: #2d8cf0; margin: 0 0 1em;">📆 更新日志</h2>
         <div style="padding: 12px; background: #f8f9fa; border-radius: 6px;">
+            <span style="display: inline-block; padding: 4px 12px; background: #19be6b; color: white; border-radius: 20px;">2025-05-07 v1.1.3</span>
+            <p style="margin: 0.5em 0;">修复保存笔记模板后再次点击设置页面的保存按钮会清空模板的问题</p>
+        </div>
+        <div style="padding: 12px; background: #f8f9fa; border-radius: 6px;">
             <span style="display: inline-block; padding: 4px 12px; background: #19be6b; color: white; border-radius: 20px;">2025-05-06 v1.1.2</span>
             <p style="margin: 0.5em 0;">去除读书笔记模板某些书籍元数据的自带内容</p>
         </div>
@@ -62,9 +66,6 @@
             <span style="display: inline-block; padding: 4px 12px; background: #19be6b; color: white; border-radius: 20px;">2025-05-06 v1.1.1</span>
             <p style="margin: 0.5em 0;">修复书籍分类和阅读状态的选项添加错误</p>
         </div>
-        <div style="padding: 12px; background: #f8f9fa; border-radius: 6px;">
-            <span style="display: inline-block; padding: 4px 12px; background: #19be6b; color: white; border-radius: 20px;">2025-05-05 v1.1.0</span>
-            <p style="margin: 0.5em 0;">✨增加根据模板生成读书笔记的功能</p>
         </div>
         <a href="https://cooperative-ferry-4dc.notion.site/1e5c50d8b56c803ab385f6670661d48d" 
            style="display: inline-flex;

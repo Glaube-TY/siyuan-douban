@@ -2,7 +2,7 @@
   "name": "siyuan-douban",
   "author": "Glaube-TY",
   "url": "https://github.com/Glaube-TY/siyuan-douban",
-  "version": "1.1.2",
+  "version": "1.1.3",
   "minAppVersion": "3.0.12",
   "backends": [
     "windows",
@@ -26,7 +26,7 @@
   },
   "description": {
     "en_US": "Get book information from Douban and import it into the book database",
-    "zh_CN": "快速获取豆瓣书籍信息并导入书籍数据库"
+    "zh_CN": "快速获取豆瓣书籍信息导入书籍数据库，并可通过自定义模板生成读书笔记"
   },
   "readme": {
     "en_US": "README.md",
@@ -41,6 +41,11 @@
     "豆瓣读书",
     "douban",
     "书籍",
-    "book"
+    "book",
+    "读书笔记",
+    "笔记",
+    "read",
+    "note",
+    "booknote"
   ]
 }
