@@ -59,101 +59,58 @@ const extractInfo = (doc: Document, label: string): string | null => {
     return span?.nextSibling?.textContent?.replace(/^[:：\s]+/, "")?.trim() || null;
 };
 
-/**
- * 预定义的搜索引擎URL集合，按类别分组
- * 
- * 包含国际通用引擎、中文市场常用引擎以及注重隐私保护的引擎，
- * 用于统一处理搜索功能时提供基础URL配置
- * 
- * 结构说明：
- * - 国际引擎: Google, Bing, Yandex, Naver
- * - 中文引擎: 百度，搜狗
- * - 隐私引擎: DuckDuckGo, Startpage
- */
-const SEARCH_ENGINES = [
-    // 国际引擎
-    'https://www.google.com',
-    'https://www.bing.com',
-    'https://yandex.com',
-    'https://search.naver.com',
-    // 中文引擎
-    'https://www.baidu.com',
-    'https://www.sogou.com',
-    // 隐私引擎
-    'https://duckduckgo.com',
-    'https://startpage.com'
-];
-
-/**
- * 通过豆瓣图书API获取书籍详细信息（需注意豆瓣反爬机制）
- * @param isbn - 国际标准书号，用于精准匹配图书
- * @returns Promise包装的图书信息对象，包含书名、作者、出版社等核心元数据
- */
-export async function fetchDoubanBook(isbn: string): Promise<BookInfo> {
-    // 创建中断控制器用于实现请求超时
-    const controller = new AbortController();
-    // 设置10秒超时定时器
-    const timeoutId = setTimeout(() => controller.abort(), 10000);
-
+export async function fetchDoubanBook(html: string): Promise<BookInfo> {
     try {
-        // 发起图书信息请求
-        const response = await fetch(`https://douban.com/isbn/${isbn}`, {
-            headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36 Edg/124.0.0.0',
-                'Referer': 'https://www.douban.com/',
-                'Accept-Language': 'zh-CN,zh;q=0.9',
-                'Accept-Encoding': 'gzip, deflate, br',
-                'Connection': 'keep-alive'
-            },
-            credentials: 'omit',  // 不携带cookie避免身份追踪
-            signal: controller.signal,  // 绑定中断信号
-            mode: 'no-cors',  // 绕过CORS限制
-            referrer: SEARCH_ENGINES[Math.floor(Math.random() * SEARCH_ENGINES.length)] // 随机来源降低封禁风险
-        });
-
-        clearTimeout(timeoutId);  // 清除已触发的定时器
-
-        // 处理非200状态码
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}`);
-        }
-
-        // 解析HTML文档结构
-        const html = await response.text();
         const parser = new DOMParser();
         const doc = parser.parseFromString(html, "text/html");
 
+        const title = doc.querySelector("h1")?.textContent?.trim();
+        const isSubjectPage = html.includes('/subject/'); // 通过URL判断
+        const hasBookInfo = !!doc.querySelector('#info'); // 通过信息区块判断
+        if (!isSubjectPage || !hasBookInfo || !title) {
+            throw new Error("无效的书籍页面，请确认访问的是豆瓣书籍详情页");
+        }
+
         return {
-            // 核心信息提取区块
-            title: doc.querySelector("h1")?.textContent?.trim() || "未知书名", // 主标题必填项
-            // 使用XPath和备用方案获取副标题
+
+            title: doc.querySelector("h1")?.textContent?.trim() || "未知书名",
+
             subtitle: document.evaluate(
-                '//div[@id="info"]/span[text()="副标题:"]/following-sibling::text()[1]', // XPath定位副标题文本节点
+                '//div[@id="info"]/span[text()="副标题:"]/following-sibling::text()[1]',
                 doc,
                 null,
                 XPathResult.FIRST_ORDERED_NODE_TYPE,
                 null
-            ).singleNodeValue?.nodeValue?.trim() || extractInfo(doc, "副标题"), // 备用CSS选择器方案
+            ).singleNodeValue?.nodeValue?.trim() || extractInfo(doc, "副标题"),
 
             originalTitle: document.evaluate('//div[@id="info"]/span[contains(text(),"原作名")]/following-sibling::text()[1]', doc, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue?.nodeValue?.trim() || extractInfo(doc, "原作名"),
+
             authors: Array.from(doc.querySelectorAll("span.pl"))
                 .filter((span) => span.textContent?.trim() === "作者")
                 .flatMap((span) =>
                     Array.from(span.parentElement?.querySelectorAll("a") || [])
                         .map((a) => a.textContent?.replace(/【.*?】/g, "")?.trim())
                 ),
+
             translators: Array.from(doc.querySelectorAll('span.pl'))
                 .filter(span => span.textContent?.trim() === '译者')
                 .flatMap(span =>
                     Array.from(span.parentElement?.querySelectorAll('a') || [])
                         .map(a => a.textContent?.trim())
                 ).filter(Boolean) as string[],
+
             publisher: document.evaluate('//div[@id="info"]/span[text()="出版社:"]/following-sibling::a', doc, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue?.textContent?.trim() || extractInfo(doc, "出版社"),
-            isbn,
+
+            isbn: extractInfo(doc, "ISBN")?.replace(/[^0-9X]/g, "") || "",
+
             publishDate: extractInfo(doc, "出版年")?.replace(/年$/, ""),
+
             pages: extractInfo(doc, "页数")?.replace(/页$/, ""),
+
             price: extractInfo(doc, "定价")?.match(/[\d.]+/)?.[0],
+
             cover: doc.querySelector("#mainpic img")?.getAttribute("src")?.replace(/^http:/, "https:"),
+
             series: document.evaluate(
                 '//div[@id="info"]/span[contains(text(),"丛书")]/following-sibling::a',
                 doc,
@@ -161,6 +118,7 @@ export async function fetchDoubanBook(isbn: string): Promise<BookInfo> {
                 XPathResult.FIRST_ORDERED_NODE_TYPE,
                 null
             ).singleNodeValue?.textContent?.trim() || extractInfo(doc, "丛书"),
+
             binding: document.evaluate(
                 '//div[@id="info"]/span[text()="装帧:"]/following-sibling::text()[1]',
                 doc,
@@ -168,8 +126,11 @@ export async function fetchDoubanBook(isbn: string): Promise<BookInfo> {
                 XPathResult.FIRST_ORDERED_NODE_TYPE,
                 null
             ).singleNodeValue?.nodeValue?.trim() || extractInfo(doc, "装帧"),
+
             producer: document.evaluate('//div[@id="info"]/span[text()="出品方:"]/following-sibling::a', doc, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue?.textContent?.trim() || extractInfo(doc, "出品方"),
+
             rating: doc.querySelector(".rating_num")?.textContent?.trim(),
+
             ratingCount: doc.querySelector(".rating_people span")?.textContent?.match(/\d+/)?.[0] // 使用正则提取纯数字评分人数
         };
     } catch (error) {
