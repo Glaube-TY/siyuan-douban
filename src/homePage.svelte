@@ -4,7 +4,7 @@
     import { sql } from "./api";
     import { fetchDoubanBook } from "./utils/fetchDouban";
     import "./homePage.scss";
-    import { loadAVData } from "./addBook";
+    import { loadAVData } from "./utils/addBook";
 
     export let app;
     export let i18n: I18N;
@@ -636,7 +636,7 @@
             <!-- 第三个标签页 - 关于插件 -->
             <div class="about">
                 <div class="about-header">
-                    <h3>📚 豆瓣书籍插件 v1.2.0</h3>
+                    <h3>📚 豆瓣书籍插件 v1.2.1</h3>
                     <p class="motto">让阅读管理更优雅</p>
                 </div>
 
@@ -651,27 +651,33 @@
                             >
                         </div>
                         <span class="icon">&nbsp;&nbsp;&nbsp;</span>
-                        <span class="icon">✒</span>
+                        <span class="icon">📜</span>
                         <div>
                             <p class="label">插件教程：</p>
                             <a
-                                href="https://cooperative-ferry-4dc.notion.site/SY-1e3c50d8b56c809bae91e6e059c87e82"
-                                class="link">插件教程</a
+                                href="https://ttl8ygt82u.feishu.cn/wiki/VZdjwDNxWi4j0jkdyxMcOg2VnFf"
+                                class="link">飞书文档（主要）</a
                             >
+                            <p>
+                                <a
+                                    href="https://cooperative-ferry-4dc.notion.site/SY-1e3c50d8b56c809bae91e6e059c87e82"
+                                    class="link">Notion（辅助）</a
+                                >
+                            </p>
                         </div>
                     </div>
 
                     <div class="about-card">
-                        <span class="icon">👨💻</span>
+                        <span class="icon">👨</span>
                         <div>
-                            <p class="label">开发者：</p>
+                            <p class="label">开发者：Glaube-TY</p>
                             <a href="https://github.com/Glaube-TY" class="link"
-                                >Glaube-TY</a
+                                >Github 主页</a
                             >
                             <p>
                                 <a
-                                    href="https://cooperative-ferry-4dc.notion.site/Glaube-TY-1d9c50d8b56c80fdb67aefe123efb849"
-                                    class="link">Glaube-TY 个人主页</a
+                                    href="https://ld246.com/member/GlaubeTY"
+                                    class="link">链滴主页</a
                                 >
                             </p>
                         </div>
@@ -690,7 +696,7 @@
                         <div>
                             <p class="label">支持开发者：</p>
                             <a
-                                href="https://cooperative-ferry-4dc.notion.site/SY-1e3c50d8b56c809bae91e6e059c87e82"
+                                href="https://ttl8ygt82u.feishu.cn/wiki/VZdjwDNxWi4j0jkdyxMcOg2VnFf?from=from_copylink"
                                 class="link">🌹 请作者喝咖啡</a
                             >
                         </div>
@@ -700,12 +706,12 @@
                             <p class="label">反馈&建议：</p>
                             <a
                                 href="https://github.com/Glaube-TY/siyuan-douban/issues"
-                                class="link">反馈地址1</a
+                                class="link">Github Issues</a
                             >
                             <p>
                                 <a
                                     href="https://pd.qq.com/s/724c4lpoc"
-                                    class="link">反馈地址2</a
+                                    class="link">腾讯频道</a
                                 >
                             </p>
                         </div>

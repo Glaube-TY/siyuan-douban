@@ -1,5 +1,5 @@
 import { fetchSyncPost } from "siyuan";
-import { sql } from "./api";
+import { sql } from "../api";
 
 export async function loadAVData(avID: string, fullData: any) {
     const fs = require('fs');
