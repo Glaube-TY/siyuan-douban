@@ -1,5 +1,5 @@
 import { fetchSyncPost } from "siyuan";
-import { sql } from "../api";
+import { sql, setBlockAttrs } from "../api";
 
 export async function loadAVData(avID: string, fullData: any) {
     const fs = require('fs');
@@ -137,6 +137,10 @@ export async function loadAVData(avID: string, fullData: any) {
             if (response.code !== 0) {
                 throw new Error(`重命名失败: ${response.msg}`);
             }
+            // 设置关联数据库属性
+            await setBlockAttrs(uniqueBlockId, {
+                'custom-avs': avID
+            });
             isDetached = false;
         } else {
             // 下载封面

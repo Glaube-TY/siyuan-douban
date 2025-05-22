@@ -28,7 +28,7 @@
            onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 6px rgba(45,140,240,0.1)'"
            onmousedown="this.style.transform='translateY(1px)'"
            onmouseup="this.style.transform='translateY(-2px)'">
-            📖 查看详细教程
+            📖 查看详细教程（重要）
         </a>
     </div>
     <div style="margin: 1.5em 0; padding: 1.5em; background: #fff9f2; border-left: 4px solid #ffc107; border-radius: 8px;">
@@ -55,16 +55,17 @@
     <div style="margin: 1.5em 0; padding: 1.5em; background: white; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.05);">
         <h2 style="color: #2d8cf0; margin: 0 0 1em;">📅 更新日志</h2>
         <div style="padding: 12px; background: #f8f9fa; border-radius: 6px;">
+            <span style="display: inline-block; padding: 4px 12px; background: #19be6b; color: white; border-radius: 20px;">2025-05-22 v1.2.2</span>
+            <p style="margin: 0.5em 0;">给新建读书笔记添加 custom-avs 属性以链接到书籍数据库</p>
+            <p style="margin: 0.5em 0;">添加书名搜索时的等待提示</p>
+        </div>
+        <div style="padding: 12px; background: #f8f9fa; border-radius: 6px;">
             <span style="display: inline-block; padding: 4px 12px; background: #19be6b; color: white; border-radius: 20px;">2025-05-17 v1.2.1</span>
             <p style="margin: 0.5em 0;">更新文档及优化显示</p>
         </div>
         <div style="padding: 12px; background: #f8f9fa; border-radius: 6px;">
             <span style="display: inline-block; padding: 4px 12px; background: #19be6b; color: white; border-radius: 20px;">2025-05-16 v1.2.0</span>
             <p style="margin: 0.5em 0;">✨增加书名（关键词）搜索添加的新功能</p>
-        </div>
-        <div style="padding: 12px; background: #f8f9fa; border-radius: 6px;">
-            <span style="display: inline-block; padding: 4px 12px; background: #19be6b; color: white; border-radius: 20px;">2025-05-07 v1.1.3</span>
-            <p style="margin: 0.5em 0;">修复保存笔记模板后再次点击设置页面的保存按钮会清空模板的问题</p>
         </div>
         <div>
         <a href="https://ttl8ygt82u.feishu.cn/wiki/KbpBw3NoCiCeyqkRb0iceTRtnKh?from=from_copylink" 

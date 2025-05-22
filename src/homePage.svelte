@@ -237,7 +237,7 @@
                     <input
                         type="text"
                         bind:value={inputVales}
-                        placeholder="输入ISBN号或书名（回车确认）"
+                        placeholder="输入书名或ISBN号（回车确认）"
                         on:keydown={handleKeyDown}
                         style="width: 15em; min-width: 10em;"
                     />
@@ -828,6 +828,12 @@
                         <span>🔍</span>
                         <p class="b3-dialog__title">
                             书籍搜索 - 《{decodeURIComponent(searchKeyword)}》
+                        </p>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <span>⚠</span>
+                        <p class="b3-dialog__title">
+                            页面加载需要一段时间，请耐心等待。
                         </p>
                     </div>
                     <div style="display: flex; gap: 8px;">
