@@ -4,7 +4,7 @@
     import { sql } from "./api";
     import { fetchDoubanBook } from "./utils/fetchDouban";
     import "./homePage.scss";
-    import { loadAVData } from "./utils/addBook";
+    import { loadAVData } from "./utils/addBooks/index";
 
     export let app;
     export let i18n: I18N;
