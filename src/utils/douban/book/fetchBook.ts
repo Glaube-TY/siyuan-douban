@@ -1,22 +1,3 @@
-/**
- * 豆瓣图书信息获取模块
- * 
- * 核心功能：
- * - 通过ISBN号从豆瓣获取完整的图书元数据
- * - 实现HTML解析与数据清洗
- * - 提供反爬虫策略和安全重试机制
- * 
- * 主要包含：
- * 1. BookInfo 数据结构接口
- * 2. 基于DOM解析的信息提取工具函数
- * 3. 支持随机请求头和安全超时的网络请求实现
- * 
- * 关键技术：
- * - 使用XPath和CSS选择器混合解析方案
- * - 移动端UA模拟和请求来源随机化
- * - 兼容服务端渲染的DOM解析技术
- */
-
 interface BookInfo {
     title: string;
     subtitle?: string;
@@ -36,18 +17,6 @@ interface BookInfo {
     cover?: string;
 }
 
-/**
- * 从HTML文档中提取指定标签后的关联信息
- * 
- * @param doc - 被解析的HTML文档对象，用于执行DOM查询操作
- * @param label - 需要匹配的标签文本（支持中英文冒号自动匹配）
- * @returns 提取到的信息内容（自动去除首部冒号和空格），未找到时返回null
- * 
- * 实现逻辑：
- * 1. 在文档中查找所有包含指定类名的span元素
- * 2. 定位第一个文本内容匹配目标标签的元素（支持中英文冒号格式）
- * 3. 获取相邻兄弟节点的文本内容并清理格式
- */
 const extractInfo = (doc: Document, label: string): string | null => {
     // 定位所有候选元素并找到首个匹配标签的span
     const span = Array.from(doc.querySelectorAll("span.pl")).find((el) => {

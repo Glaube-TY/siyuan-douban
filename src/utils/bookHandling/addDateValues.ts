@@ -1,6 +1,8 @@
-import { generateUniqueBlocked } from '../characterOp/formatOp';
+import { generateUniqueBlocked, parseDateToTimestamp } from '../core/formatOp';
 
-export async function addSelectColumn(jsonData: any, columnName: string, selectedValue: string, uniqueBlockId: string) {
+export async function addDateColumn(jsonData: any, columnName: string, dateStr: string, uniqueBlockId: string) {
+    if (!dateStr) return jsonData;
+
     // 查找或创建列定义
     let column = jsonData.keyValues.find(item => item.key.name === columnName);
     if (!column) {
@@ -8,16 +10,15 @@ export async function addSelectColumn(jsonData: any, columnName: string, selecte
             key: {
                 id: generateUniqueBlocked(),
                 name: columnName,
-                type: "select",
+                type: "date",
                 icon: "",
                 desc: "",
-                options: [],
                 numberFormat: "",
                 template: ""
             }
         };
         jsonData.keyValues.push(newKey);
-
+        
         // 添加列到视图
         jsonData.views[0].table.columns.push({
             id: newKey.key.id,
@@ -28,34 +29,30 @@ export async function addSelectColumn(jsonData: any, columnName: string, selecte
         });
     }
 
-    // 添加选项
-    const targetColumn = jsonData.keyValues.find(item => item.key.name === columnName);
-    const existingOption = targetColumn.key.options.find(opt => opt.name === selectedValue);
-    if (!existingOption) {
-        targetColumn.key.options.push({
-            name: selectedValue,
-            color: "", // 默认无颜色
-            desc: ""
-        });
-    }
-
     // 初始化values数组
+    const targetColumn = jsonData.keyValues.find(item => item.key.name === columnName);
     if (!targetColumn.values) {
         targetColumn.values = [];
     }
 
     // 创建新数据项
+    const timestamp = parseDateToTimestamp(dateStr) || Date.now();
     const newItem = {
         id: generateUniqueBlocked(),
         keyID: targetColumn.key.id,
         blockID: uniqueBlockId,
-        type: "select",
+        type: "date",
         createdAt: Date.now(),
         updatedAt: Date.now(),
-        mSelect: [{
-            content: selectedValue,
-            color: existingOption?.color || targetColumn.key.options.find(opt => opt.name === selectedValue)?.color || ""
-        }]
+        date: {
+            content: timestamp,
+            isNotEmpty: true,
+            hasEndDate: false,
+            isNotTime: true,
+            content2: 0,
+            isNotEmpty2: false,
+            formattedContent: ""
+        }
     };
 
     targetColumn.values.push(newItem);

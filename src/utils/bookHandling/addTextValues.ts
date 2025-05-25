@@ -1,11 +1,6 @@
-import { generateUniqueBlocked, cleanNumberString } from '../characterOp/formatOp';
+import { generateUniqueBlocked } from '../core/formatOp';
 
-export async function addNumberColumn(jsonData: any, columnName: string, value: string, uniqueBlockId: string) {
-    // 处理空值情况
-    if (!value) {
-        value = "0"; // 设置默认值
-    }
-
+export function addTextColumn(jsonData: any, columnName: string, value: string, uniqueBlockId: string) {
     // 查找或创建列定义
     let column = jsonData.keyValues.find(item => item.key.name === columnName);
     if (!column) {
@@ -13,7 +8,7 @@ export async function addNumberColumn(jsonData: any, columnName: string, value: 
             key: {
                 id: generateUniqueBlocked(),
                 name: columnName,
-                type: "number",
+                type: "text",
                 icon: "",
                 desc: "",
                 numberFormat: "",
@@ -21,7 +16,7 @@ export async function addNumberColumn(jsonData: any, columnName: string, value: 
             }
         };
         jsonData.keyValues.push(newKey);
-
+        
         // 添加列到视图
         jsonData.views[0].table.columns.push({
             id: newKey.key.id,
@@ -43,15 +38,10 @@ export async function addNumberColumn(jsonData: any, columnName: string, value: 
         id: generateUniqueBlocked(),
         keyID: targetColumn.key.id,
         blockID: uniqueBlockId,
-        type: "number",
+        type: "text",
         createdAt: Date.now(),
         updatedAt: Date.now(),
-        number: {
-            content: cleanNumberString(value),
-            isNotEmpty: true,
-            format: "",
-            formattedContent: value || "0"
-        }
+        text: { content: value || '' }
     };
 
     targetColumn.values.push(newItem);

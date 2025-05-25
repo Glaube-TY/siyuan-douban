@@ -1,10 +1,11 @@
 <script lang="ts">
     import { onMount } from "svelte";
     import { I18N, showMessage, fetchPost } from "siyuan";
-    import { sql } from "./api";
-    import { fetchDoubanBook } from "./utils/fetchDouban";
-    import "./homePage.scss";
-    import { loadAVData } from "./utils/addBooks/index";
+    import { sql } from "../../api";
+    import { fetchDoubanBook, fetchBookHtml } from "../../utils/douban/book";
+    import "../styles/main.scss";
+    import { loadAVData } from "../../utils/bookHandling";
+    import SearchBookDialog from "../common/searchBookDialog.svelte";
 
     export let app;
     export let i18n: I18N;
@@ -26,7 +27,7 @@
     let databaseStatusMessage = "";
     let avID = "";
 
-    let myRatingIndex = 0; // 新增索引变量
+    let myRatingIndex = 0;
     let bookCategoryIndex = 0;
     let readingStatusIndex = 0;
 
@@ -65,58 +66,6 @@
         startDate?: string;
         finishDate?: string;
         addNotes?: boolean;
-    }
-
-    async function fetchBookHtml(isbn: string) {
-        const SEARCH_ENGINES = [
-            // 国际引擎
-            "https://www.google.com",
-            "https://www.bing.com",
-            "https://yandex.com",
-            "https://search.naver.com",
-            // 中文引擎
-            "https://www.baidu.com",
-            "https://www.sogou.com",
-            // 隐私引擎
-            "https://duckduckgo.com",
-            "https://startpage.com",
-        ];
-        // 创建中断控制器用于实现请求超时
-        const controller = new AbortController();
-        // 设置10秒超时定时器
-        const timeoutId = setTimeout(() => controller.abort(), 10000);
-        try {
-            statusMessage = "获取书籍信息中...";
-            const response = await fetch(`https://douban.com/isbn/${isbn}`, {
-                headers: {
-                    "User-Agent":
-                        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36 Edg/124.0.0.0",
-                    Referer: "https://www.douban.com/",
-                    "Accept-Language": "zh-CN,zh;q=0.9",
-                    "Accept-Encoding": "gzip, deflate, br",
-                    Connection: "keep-alive",
-                },
-                credentials: "omit", // 不携带cookie避免身份追踪
-                signal: controller.signal, // 绑定中断信号
-                mode: "no-cors", // 绕过CORS限制
-                referrer:
-                    SEARCH_ENGINES[
-                        Math.floor(Math.random() * SEARCH_ENGINES.length)
-                    ], // 随机来源降低封禁风险
-            });
-
-            clearTimeout(timeoutId); // 清除已触发的定时器
-
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}`);
-            }
-
-            bookHtml = await response.text();
-            statusMessage = "书籍信息获取成功";
-            return bookHtml;
-        } catch (error) {
-            throw new Error(`通过ISBN获取豆瓣书籍失败: ${error.message}`);
-        }
     }
 
     async function fetchBookData() {
@@ -303,6 +252,16 @@
 
                 {#if bookInfo}
                     <div class="book-layout">
+                        <div
+                            class="loading-status"
+                            style="color: var(--b3-theme-primary); padding: 10px;"
+                        >
+                            {#if !bookInfo.title}
+                                正在解析书籍信息，请稍候...
+                            {:else}
+                                成功加载《{bookInfo.title}》的信息
+                            {/if}
+                        </div>
                         <!-- 上部区域 -->
                         <div class="book-top-area">
                             <!-- 封面列 -->
@@ -808,75 +767,20 @@
     </div>
 {/if}
 
-{#if showSearchDialog}
-    <div class="b3-dialog-container" style="z-index: 9999;">
-        <div
-            class="b3-dialog-scrim"
-            role="button"
-            tabindex="0"
-            on:click|self={() => (showSearchDialog = false)}
-            on:keydown={(e) =>
-                (e.key === "Enter" || e.key === " ") &&
-                (showSearchDialog = false)}
-        ></div>
-        <div class="b3-dialog-card" style="width: 90vw; max-width: 1200px;">
-            <div class="b3-dialog__header">
-                <div
-                    style="display: flex; justify-content: space-between; align-items: center; width: 100%;"
-                >
-                    <div style="display: flex; align-items: center; gap: 8px;">
-                        <span>🔍</span>
-                        <p class="b3-dialog__title">
-                            书籍搜索 - 《{decodeURIComponent(searchKeyword)}》
-                        </p>
-                    </div>
-                    <div style="display: flex; align-items: center; gap: 8px;">
-                        <span>⚠</span>
-                        <p class="b3-dialog__title">
-                            页面加载需要一段时间，请耐心等待。
-                        </p>
-                    </div>
-                    <div style="display: flex; gap: 8px;">
-                        <button
-                            class="b3-button dialog-btn"
-                            on:click={async () => {
-                                // 改为异步函数
-                                try {
-                                    bookHtml =
-                                        await webviewRef.executeJavaScript(
-                                            "document.documentElement.outerHTML;",
-                                            { userGesture: true },
-                                        );
-                                    bookInfo = await fetchDoubanBook(bookHtml);
-                                    bookInfo.addNotes = addNotes1;
-                                    inputVales = bookInfo.isbn;
-                                    showSearchDialog = false;
-                                } catch (error) {
-                                    showMessage(
-                                        "❌ 页面内容获取失败：" + error.message,
-                                        5000,
-                                    );
-                                }
-                            }}>选择书籍</button
-                        >
-                        <button
-                            class="b3-button dialog-btn"
-                            on:click={() => (showSearchDialog = false)}
-                            >关闭</button
-                        >
-                    </div>
-                </div>
-            </div>
-            <div class="b3-dialog__body" style="height: 80vh; padding: 0;">
-                <webview
-                    bind:this={webviewRef}
-                    src={`https://search.douban.com/book/subject_search?search_text=${searchKeyword}&cat=1001`}
-                    style="width: 100%; height: 100%; border: none;"
-                    webpreferences="javascript=yes"
-                    nodeintegration
-                    disablewebsecurity
-                ></webview>
-            </div>
-        </div>
-    </div>
-{/if}
+<SearchBookDialog
+    bind:showSearchDialog
+    bind:searchKeyword
+    bind:webviewRef
+    on:close={() => (showSearchDialog = false)}
+    on:select={async ({ detail: html }) => {
+        try {
+            bookInfo = await fetchDoubanBook(html);
+            bookInfo.addNotes = addNotes1;
+            inputVales = bookInfo.isbn;
+            showMessage(`✅ 成功获取《${bookInfo.title}》的信息`, 3000);
+        } catch (error) {
+            showMessage(`❌ 解析失败: ${error.message}`, 5000);
+            console.error("书籍解析失败:", error);
+        }
+    }}
+/>

@@ -1,4 +1,4 @@
-import { formatTime, generateUniqueBlocked } from '../characterOp/formatOp';
+import { formatTime, generateUniqueBlocked } from '../core/formatOp';
 const fs = require('fs');
 const path = require('path');
 const https = require('https');

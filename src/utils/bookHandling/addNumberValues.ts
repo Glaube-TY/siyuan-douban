@@ -1,7 +1,10 @@
-import { generateUniqueBlocked, parseDateToTimestamp } from '../characterOp/formatOp';
+import { generateUniqueBlocked, cleanNumberString } from '../core/formatOp';
 
-export async function addDateColumn(jsonData: any, columnName: string, dateStr: string, uniqueBlockId: string) {
-    if (!dateStr) return jsonData;
+export async function addNumberColumn(jsonData: any, columnName: string, value: string, uniqueBlockId: string) {
+    // 处理空值情况
+    if (!value) {
+        value = "0"; // 设置默认值
+    }
 
     // 查找或创建列定义
     let column = jsonData.keyValues.find(item => item.key.name === columnName);
@@ -10,7 +13,7 @@ export async function addDateColumn(jsonData: any, columnName: string, dateStr: 
             key: {
                 id: generateUniqueBlocked(),
                 name: columnName,
-                type: "date",
+                type: "number",
                 icon: "",
                 desc: "",
                 numberFormat: "",
@@ -18,7 +21,7 @@ export async function addDateColumn(jsonData: any, columnName: string, dateStr: 
             }
         };
         jsonData.keyValues.push(newKey);
-        
+
         // 添加列到视图
         jsonData.views[0].table.columns.push({
             id: newKey.key.id,
@@ -36,22 +39,18 @@ export async function addDateColumn(jsonData: any, columnName: string, dateStr: 
     }
 
     // 创建新数据项
-    const timestamp = parseDateToTimestamp(dateStr) || Date.now();
     const newItem = {
         id: generateUniqueBlocked(),
         keyID: targetColumn.key.id,
         blockID: uniqueBlockId,
-        type: "date",
+        type: "number",
         createdAt: Date.now(),
         updatedAt: Date.now(),
-        date: {
-            content: timestamp,
+        number: {
+            content: cleanNumberString(value),
             isNotEmpty: true,
-            hasEndDate: false,
-            isNotTime: true,
-            content2: 0,
-            isNotEmpty2: false,
-            formattedContent: ""
+            format: "",
+            formattedContent: value || "0"
         }
     };
 

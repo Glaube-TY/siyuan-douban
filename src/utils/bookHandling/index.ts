@@ -1,7 +1,7 @@
 import { fetchSyncPost } from "siyuan";
 import { sql, setBlockAttrs } from "../../api";
 import { addTitleBlock } from './addBlockValues';
-import { generateUniqueBlocked } from '../characterOp/formatOp';
+import { generateUniqueBlocked } from '../core/formatOp';
 import { addTextColumn } from './addTextValues';
 import { downloadCover, addCover } from './addmAssetValues';
 import { addDateColumn } from './addDateValues';

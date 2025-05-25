@@ -1,4 +1,4 @@
-import { generateUniqueBlocked } from '../characterOp/formatOp';
+import { generateUniqueBlocked } from '../core/formatOp';
 
 export function addTitleBlock(jsonData: any, uniqueBlockId: string, isDetached: boolean, fullData: any) {
     const mainKey = jsonData.keyValues.find(item => item.key.type === "block");
