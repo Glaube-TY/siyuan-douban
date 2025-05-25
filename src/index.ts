@@ -1,5 +1,5 @@
 import { Plugin, showMessage, IModel, } from "siyuan";
-import setPage from "./components/homePage/index.svelte";
+import setPage from "./components/index.svelte";
 import { svelteDialog } from "./libs/dialog";
 
 const STORAGE_NAME = "menu-config";

@@ -31,6 +31,6 @@ export async function fetchBookHtml(isbn: string) {
         clearTimeout(timeoutId);
         return await response.text();
     } catch (error) {
-        throw new Error(`通过ISBN获取豆瓣书籍失败: ${error.message}`);
+        throw new Error(`通过ISBN号获取豆瓣书籍失败: ${error.message}`);
     }
 }
