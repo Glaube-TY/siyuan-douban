@@ -194,22 +194,15 @@
         plugin.loadData("settings.json").then(async (savedSettings) => {
             if (savedSettings) {
                 noteTemplate = savedSettings.noteTemplate || ``;
-                customRatings = savedSettings.ratings || [
-                    "⭐",
-                    "⭐⭐",
-                    "⭐⭐⭐",
-                ];
-                customCategories = savedSettings.categories || ["默认分类"];
-                customReadingStatuses = savedSettings.statuses || [
-                    "未读",
-                    "已读",
-                ];
+                customRatings = savedSettings.ratings;
+                customCategories = savedSettings.categories;
+                customReadingStatuses = savedSettings.statuses;
                 addNotes1 = savedSettings.addNotes ?? true;
                 bookDatabassID = savedSettings.bookDatabaseID || "";
 
-                tempRatings = customRatings.join(", ");
-                tempCategories = customCategories.join(", ");
-                tempStatuses = customReadingStatuses.join(", ");
+                tempRatings = customRatings.join(", ") || "";
+                tempCategories = customCategories.join(", ") || "";
+                tempStatuses = customReadingStatuses.join(", ") || "";
 
                 if (bookDatabassID) {
                     await validateDatabaseID();
