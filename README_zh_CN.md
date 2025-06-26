@@ -10,6 +10,7 @@
             <li style="margin: 0.5em 0; padding: 8px 12px; background: #f8fafc; border-radius: 6px;">🔍 ISBN 或关键词（书名）快速查询</li>
             <li style="margin: 0.5em 0; padding: 8px 12px; background: #f8fafc; border-radius: 6px;">📥 自动填充书籍元数据到数据库</li>
             <li style="margin: 0.5em 0; padding: 8px 12px; background: #f8fafc; border-radius: 6px;">📝 基于模板生成读书笔记</li>
+            <li style="margin: 0.5em 0; padding: 8px 12px; background: #f8fafc; border-radius: 6px;">📗 自动同步微信读书笔记（v2.0.0支持）</li>
         </ul>
         <div style="margin: 1.5em 0; border-top: 1px solid #eee;"></div>
         <a href="https://ttl8ygt82u.feishu.cn/wiki/VZdjwDNxWi4j0jkdyxMcOg2VnFf?from=from_copylink" 
@@ -56,6 +57,10 @@
     <div style="margin: 1.5em 0; padding: 1.5em; background: white; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.05);">
         <h2 style="color: #2d8cf0; margin: 0 0 1em;">📅 更新日志</h2>
         <div style="padding: 12px; background: #f8f9fa; border-radius: 6px;">
+            <span style="display: inline-block; padding: 4px 12px; background: #19be6b; color: white; border-radius: 20px;">2025-06-26 v2.0.0</span>
+            <p style="margin: 0.5em 0;">新增微信读书笔记同步！！！</p>
+        </div>
+        <div style="padding: 12px; background: #f8f9fa; border-radius: 6px;">
             <span style="display: inline-block; padding: 4px 12px; background: #19be6b; color: white; border-radius: 20px;">2025-05-24 v1.2.4</span>
             <p style="margin: 0.5em 0;">修复导入单选属性数据时没有背景颜色的bug</p>
             <p style="margin: 0.5em 0;">进行代码重构，优化项目结构</p>
@@ -63,11 +68,6 @@
                 <div style="padding: 12px; background: #f8f9fa; border-radius: 6px;">
             <span style="display: inline-block; padding: 4px 12px; background: #19be6b; color: white; border-radius: 20px;">2025-05-22 v1.2.3</span>
             <p style="margin: 0.5em 0;">优化显示</p>
-        </div>
-        <div style="padding: 12px; background: #f8f9fa; border-radius: 6px;">
-            <span style="display: inline-block; padding: 4px 12px; background: #19be6b; color: white; border-radius: 20px;">2025-05-22 v1.2.2</span>
-            <p style="margin: 0.5em 0;">给新建读书笔记添加 custom-avs 属性以链接到书籍数据库</p>
-            <p style="margin: 0.5em 0;">添加书名搜索时的等待提示</p>
         </div>
         <div>
         <a href="https://ttl8ygt82u.feishu.cn/wiki/KbpBw3NoCiCeyqkRb0iceTRtnKh?from=from_copylink" 
@@ -94,6 +94,7 @@
         <ul style="margin: 0.5em 0; padding-left: 1.2em; color: #666;">
             <li style="margin: 0.5em 0;">本插件数据来源于豆瓣公开数据，开发者不保证数据的准确性和完整性</li>
             <li style="margin: 0.5em 0;">使用者应遵守豆瓣网的相关使用条款</li>
+            <li style="margin: 0.5em 0;">对于微信读书笔记同步需要基于 Cookie 远程获取个人信息，但都是在本地进行，如果介意慎用</li>
             <li style="margin: 0.5em 0;">本插件数据仅用于个人书籍数据管理，禁止用于商业用途等违规行为</li>
             <li style="margin: 0.5em 0;">开发者对使用本插件造成的任何损失不承担责任</li>
         </ul>

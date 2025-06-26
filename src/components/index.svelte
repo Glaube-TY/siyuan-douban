@@ -9,11 +9,12 @@
     import TemplateEditorDialog from "./common/templateEditorDialog.svelte";
     import BookSearchTab from "./tabs/BookSearchTab.svelte";
     import UserSettingsTab from "./tabs/UserSettingsTab.svelte";
+    import WereadTab from "./tabs/WereadTab.svelte";
     import AboutTab from "./tabs/AboutTab.svelte";
 
     export let app;
     export let i18n: I18N;
-    export let plugin;
+    export let plugin: any;
 
     let inputVales = "";
     let bookInfo: BookInfo | null = null;
@@ -43,7 +44,12 @@
     let searchKeyword = "";
     let webviewRef: any;
 
-    const tabs = ["📚 书籍查询", "⚙️ 用户设置", "ℹ️ 关于插件"];
+    const tabs = [
+        "📚 书籍查询",
+        "⚙️ 用户设置",
+        "📖 微信读书设置",
+        "ℹ️ 关于插件",
+    ];
     let activeTab = tabs[0];
 
     interface BookInfo {
@@ -100,7 +106,6 @@
         }
     }
 
-    // 修改 handleAddBook 方法
     async function handleAddBook() {
         if (!bookInfo) return;
 
@@ -131,7 +136,6 @@
         }
     }
 
-    // 添加保存设置处理方法
     async function handleSaveSettings() {
         // 将临时变量转换为数组
         customRatings = tempRatings.split(/[，,]/).map((s) => s.trim());
@@ -176,14 +180,13 @@
                 throw new Error("该块不是有效的属性视图数据库块");
             }
 
-            // 保存真实数据库ID
             avID = avDivMatch[1];
             databaseStatusMessage = "数据库验证通过 ✅";
         } catch (error) {
             showMessage(`❌ 数据库验证失败: ${error.message}`, 5000);
             databaseStatusMessage = `验证失败: ${error.message}`;
             bookDatabassID = "";
-            avID = ""; // 清空真实ID
+            avID = "";
         }
     }
 
@@ -262,6 +265,9 @@
                     showTemplateEditor = true;
                 }}
             />
+            <!-- 第三个标签页 - 微信读书设置-->
+        {:else if activeTab === tabs[2]}
+            <WereadTab bind:plugin />
 
             <!-- 最后一个标签页 - 关于插件 -->
         {:else}

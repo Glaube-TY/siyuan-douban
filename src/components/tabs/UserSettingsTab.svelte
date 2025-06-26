@@ -19,48 +19,42 @@
             bind:value={bookDatabassID}
             placeholder="请输入书籍数据库块ID"
         />
-    </div>
-    <div class="database-status" style="padding-bottom: 10px;">
         {databaseStatusMessage}
     </div>
-    
+
     <h3>偏好设置</h3>
     <div class="form-row custom-options">
-        <label>评分等级（逗号分隔）：
+        <label
+            >评分等级（逗号分隔）：
             <input bind:value={tempRatings} />
         </label>
     </div>
-    
+
     <div class="form-row custom-options">
-        <label>书籍分类（逗号分隔）：
+        <label
+            >书籍分类（逗号分隔）：
             <input bind:value={tempCategories} />
         </label>
     </div>
-    
+
     <div class="form-row custom-options">
-        <label>阅读状态（逗号分隔）：
+        <label
+            >阅读状态（逗号分隔）：
             <input bind:value={tempStatuses} />
         </label>
     </div>
-    
-    <div class="form-row">
-        <label style="display: inline-flex; align-items: center; gap: 5px;">
-            <input
-                type="checkbox"
-                bind:checked={addNotes1}
-                style="margin-right: 5px;"
-            />
+
+    <div class="form-row template">
+        <label>
+            <input type="checkbox" bind:checked={addNotes1} />
             默认生成读书笔记
         </label>
-        <button
-            class="b3-button"
-            on:click={() => dispatch('openTemplate')}
-            style="margin-left: 12px; padding: 8px 12px; font-size: 14px;"
-        >📝 设置模板</button>
+        <button class="b3-button" on:click={() => dispatch("openTemplate")}
+            >📝 设置模板</button
+        >
     </div>
-    
-    <button 
-        class="primary" 
-        on:click={() => dispatch('save')}
-    >保存设置</button>
+
+    <div class="saveButton">
+        <button on:click={() => dispatch("save")}>保存设置</button>
+    </div>
 </div>

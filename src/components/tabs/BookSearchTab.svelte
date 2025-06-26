@@ -11,7 +11,6 @@
     export let bookCategoryIndex: number;
     export let readingStatusIndex: number;
 
-    // 定义事件类型
     const dispatch = createEventDispatcher<{
         fetchBookData: void;
         addBook: void;
@@ -26,21 +25,11 @@
             placeholder="输入书名或ISBN号（回车确认）"
             on:keydown={(e) => e.key === "Enter" && dispatch("fetchBookData")}
         />
-        <button
-            on:click={() => dispatch("fetchBookData")}
-            style="justify-content: center;">🔍查询</button
-        >
-        <div
-            class="waiting"
-            style="text-align: center; justify-content: center; items: center;"
-        >
-            <div class="loading-spinner">{statusMessage}</div>
-        </div>
-        <div class="action-buttons">
-            <button class="primary" on:click={() => dispatch("addBook")}>
-                ✅添加书籍
-            </button>
-        </div>
+        <button on:click={() => dispatch("fetchBookData")}>🔍</button>
+        <div class="loading-spinner">{statusMessage}</div>
+        <button class="addBookButton" on:click={() => dispatch("addBook")}>
+            ✅添加书籍
+        </button>
     </div>
 
     {#if bookInfo}

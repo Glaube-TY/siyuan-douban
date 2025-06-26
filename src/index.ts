@@ -1,12 +1,16 @@
 import { Plugin, showMessage, IModel, } from "siyuan";
 import setPage from "./components/index.svelte";
 import { svelteDialog } from "./libs/dialog";
+import * as sdk from "@siyuan-community/siyuan-sdk";
+import { syncWereadNotes } from "./utils/weread/syncWereadNotes";
 
 const STORAGE_NAME = "menu-config";
 
 export default class PluginSample extends Plugin {
 
     customTab: () => IModel;
+
+    client = new sdk.Client(undefined, 'fetch');
 
     async onload() {
         this.data[STORAGE_NAME] = { readonlyText: "Readonly" };
@@ -25,6 +29,16 @@ export default class PluginSample extends Plugin {
                 this.showDialog();
             }
         });
+    }
+
+    async onLayoutReady() { 
+        const wereadSetting = await this.loadData("weread_settings");
+        const autoSync = wereadSetting.autoSync;
+        const savedCookie = await this.loadData("weread_cookie");
+
+        if (autoSync) {
+            await syncWereadNotes(this, savedCookie,true);
+        }
     }
 
     async onunload() {

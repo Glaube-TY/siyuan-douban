@@ -1,0 +1,54 @@
+.settings {
+    width: fit-content;
+    padding: 20px;
+
+    h3 {
+        color: var(--b3-theme-primary);
+        margin-bottom: 10px;
+        padding-bottom: 12px;
+        border-bottom: 2px solid var(--b3-theme-primary);
+    }
+
+    .form-row.custom-options {
+        flex-direction: column;
+        align-items: stretch;
+        margin-bottom: 20px;
+
+        label {
+            flex: none;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: var(--b3-theme-text);
+            font-size: 14px;
+        }
+
+        input {
+            width: 100%;
+        }
+    }
+
+    .template {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+
+        .b3-button {
+            color: var(--b3-theme-text);
+        }
+
+    }
+
+    .saveButton {
+        width: 100%;
+        display: flex;
+        justify-content: center;
+        margin-top: 20px;
+
+        button {
+            background: var(--b3-theme-primary);
+            font-size: large;
+            color: var(--b3-theme-text);
+
+        }
+    }
+}

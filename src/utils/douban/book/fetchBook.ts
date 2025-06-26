@@ -18,13 +18,10 @@ interface BookInfo {
 }
 
 const extractInfo = (doc: Document, label: string): string | null => {
-    // 定位所有候选元素并找到首个匹配标签的span
     const span = Array.from(doc.querySelectorAll("span.pl")).find((el) => {
         const text = el.textContent?.trim();
         return text?.startsWith(label) || text === `${label}：`;
     });
-
-    // 处理兄弟节点文本：移除开头的冒号/空格并返回有效内容
     return span?.nextSibling?.textContent?.replace(/^[:：\s]+/, "")?.trim() || null;
 };
 
@@ -34,8 +31,8 @@ export async function fetchDoubanBook(html: string): Promise<BookInfo> {
         const doc = parser.parseFromString(html, "text/html");
 
         const title = doc.querySelector("h1")?.textContent?.trim();
-        const isSubjectPage = html.includes('/subject/'); // 通过URL判断
-        const hasBookInfo = !!doc.querySelector('#info'); // 通过信息区块判断
+        const isSubjectPage = html.includes('/subject/');
+        const hasBookInfo = !!doc.querySelector('#info');
         if (!isSubjectPage || !hasBookInfo || !title) {
             throw new Error("无效的书籍页面，请确认访问的是豆瓣书籍详情页");
         }
