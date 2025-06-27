@@ -100,24 +100,21 @@ export async function syncWereadNotes(plugin: any, cookies: string, isupdate: bo
 # {{notebookTitle}}
 **最后同步时间**: {{updateTime}}
 
+## 书评
+> 💬 {{globalComments}}
+
 {{#chapters}}
 ## {{chapterTitle}}
-
 ### 重点笔记
 {{#notes}}
-{{notes}}
+- {{highlightText}}
+> 💬 {{highlightComment}}
 {{/notes}}
-
 {{#chapterComments}}
-### 我的章节思考
-{{chapterComments}}
+### 章节思考
+> 💬 {{chapterComments}}
 {{/chapterComments}}
 {{/chapters}}
-
-{{#globalComments}}
-## 全书评论
-{{globalComments}}
-{{/globalComments}}
     `;
 
     if (newBooksToImport.length > 0) {
@@ -332,9 +329,7 @@ export async function syncWereadNotes(plugin: any, cookies: string, isupdate: bo
                                         )
                                 ).join('\n');
                             })
-                            .replace(/\{\{#globalComments\}\}([\s\S]*?)\{\{\/globalComments\}\}/g, (_, section) =>
-                                variables.globalComments ? section.replace(/\{\{globalComments\}\}/g, variables.globalComments) : ''
-                            )
+                            .replace(/\{\{globalComments\}\}/g, variables.globalComments || '')
                             .replace(/\{\{(\w+)\}\}/g, (_, key) => variables[key] || '');
                     };
 

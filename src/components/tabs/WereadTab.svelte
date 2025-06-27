@@ -142,12 +142,20 @@
                 并在<span class="count">${notebookdata.totalBookCount}</span>本书中做了<span class="count">${totalNotes}</span>条笔记~
             </div>
         `;
-
-
     });
 </script>
 
 <div class="wereadSetting">
+    <p style="margin-bottom: 0.5rem;">
+        该功能处于初步试用阶段，功能可能存在问题，建议先使用备用数据库测试。
+    </p>
+    <label for="tutorial" style="margin-bottom: 0.5rem;"
+        >使用前请先看教程：<a
+            id="tutorial"
+            href="https://ttl8ygt82u.feishu.cn/wiki/TVR2wczSKiy2HSk7PyQcMGuNnyc"
+            >微信读书笔记同步教程</a
+        ></label
+    >
     <div class="cookie-weread-setting">
         <button
             on:click={createWereadDialog(cookies, (newCookies) => {
@@ -229,7 +237,7 @@
                 title="是否启动软件自动同步"
                 bind:checked={autoSync}
                 on:change={() => {
-                    plugin.saveData("weread_settings", {autoSync});
+                    plugin.saveData("weread_settings", { autoSync });
                 }}
             />
             启动同步

@@ -2,7 +2,7 @@
   "name": "siyuan-douban",
   "author": "Glaube-TY",
   "url": "https://github.com/Glaube-TY/siyuan-douban",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "minAppVersion": "3.0.12",
   "backends": [
     "windows",
@@ -20,8 +20,8 @@
     "desktop-window"
   ],
   "displayName": {
-    "en_US": "Douban Book",
-    "zh_CN": "豆瓣书籍"
+    "en_US": "Reading Notes",
+    "zh_CN": "读书笔记"
   },
   "description": {
     "en_US": "Obtain Douban book information and add it to the database & synchronize weread notes.",

@@ -6,6 +6,7 @@
         author: "https://github.com/Glaube-TY",
         ld246: "https://ld246.com/member/GlaubeTY",
         douban: "https://book.douban.com/",
+        weread: "https://weread.qq.com/",
         issues: "https://github.com/Glaube-TY/siyuan-douban/issues",
         tencent: "https://pd.qq.com/s/724c4lpoc"
     };
@@ -13,7 +14,7 @@
 
 <div class="about">
     <div class="about-header">
-        <h3>📚 豆瓣书籍插件</h3>
+        <h3>📚 读书笔记插件</h3>
         <p class="motto">让阅读管理更优雅</p>
     </div>
 
@@ -28,8 +29,7 @@
             <span class="icon">📜</span>
             <div>
                 <p class="label">插件教程：</p>
-                <a href={LINKS.feishu} class="link">飞书文档（主要）</a>
-                <p><a href={LINKS.notion} class="link">Notion（辅助）</a></p>
+                <a href={LINKS.feishu} class="link">飞书文档</a>
             </div>
         </div>
 
@@ -45,6 +45,7 @@
             <div>
                 <p class="label">数据来源：</p>
                 <a href={LINKS.douban} class="link">豆瓣读书</a>
+                <p><a href={LINKS.weread} class="link">微信读书</a></p>
             </div>
         </div>
 
