@@ -85,6 +85,7 @@
     </div>
     <div style="margin: 1.5em 0; padding: 1.5em; background: #f0f9ff; border-left: 4px solid #2d8cf0; border-radius: 8px;">
         <h2 style="color: #2d8cf0; margin: 0 0 1em;">💬 加入讨论</h2>
+        <p style="margin: 0.5em 0;">目前我在开发的插件有主页、读书笔记、空文档清理、彩色图标，所以统一用一个频道了，方便查看管理~</p>
         <div style="margin: 1em 0; text-align: center;">
             <img src="https://tc.z.wiki/autoupload/YjFouVX7uB9I7ine7AuN0NiO_OyvX7mIgxFBfDMDErs/20250624/Itmc/1159X1818/TCQR.jpg"
                  alt="TCQR"

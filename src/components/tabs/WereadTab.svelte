@@ -18,10 +18,12 @@
 
     export let plugin: any;
     export let cookies = "";
-    let autoSync = false;
+
     export let wereadTemplates = "";
     export let wereadPositionMark = "";
 
+    let autoSync = false;
+    let isSyncing = false;
     let wrVid = "";
     let userVid = "";
     let isChecking = false;
@@ -149,7 +151,7 @@
     <p style="margin-bottom: 0.5rem;">
         该功能处于初步试用阶段，功能可能存在问题，建议先使用备用数据库测试。
     </p>
-    <label for="tutorial" style="margin-bottom: 0.5rem;"
+    <label for="tutorial"
         >使用前请先看教程：<a
             id="tutorial"
             href="https://ttl8ygt82u.feishu.cn/wiki/TVR2wczSKiy2HSk7PyQcMGuNnyc"
@@ -185,17 +187,27 @@
         {/if}
     </div>
     <div class="weread-notebooks-info">
-        {@html notebooksInfo}
-        <div class="booksinfo-button">
-            {#if notebooksList.length > 0}
-                <button on:click={createNotebooksDialog(notebooksList)}
-                    >有笔记书籍</button
-                >
+        {#if checkMessage.includes("✅")}
+            {#if notebooksInfo}
+                {@html notebooksInfo}
+                <div class="booksinfo-button">
+                    {#if notebooksList.length > 0}
+                        <button on:click={createNotebooksDialog(notebooksList)}
+                            >有笔记书籍</button
+                        >
+                        <button on:click={createBookShelfDialog(bookShelfList)}
+                            >书架图书</button
+                        >
+                    {/if}
+                </div>
+            {:else}
+                <div class="loading-notice">⌛ 正在获取书籍信息，请稍候...</div>
             {/if}
-            <button on:click={createBookShelfDialog(bookShelfList)}
-                >书架图书</button
-            >
-        </div>
+        {:else}
+            <div class="cookie-warning">
+                🔑 请先填写有效的微信读书Cookie以查看书籍信息
+            </div>
+        {/if}
     </div>
     <div class="weread-notes-template">
         <button
@@ -223,12 +235,24 @@
     <div class="sync-setting">
         <button
             on:click={async () => {
+                if (!checkMessage.includes("✅")) {
+                    showMessage("❌请先填写有效的微信读书Cookie再进行同步");
+                    return;
+                }
+                isSyncing = true;
                 await syncWereadNotes(plugin, cookies, false);
+                isSyncing = false;
             }}>全部同步</button
         >
         <button
             on:click={async () => {
+                if (!checkMessage.includes("✅")) {
+                    showMessage("❌请先填写有效的微信读书Cookie再进行同步");
+                    return;
+                }
+                isSyncing = true;
                 await syncWereadNotes(plugin, cookies, true);
+                isSyncing = false;
             }}>更新同步</button
         >
         <label>
@@ -243,4 +267,10 @@
             启动同步
         </label>
     </div>
+    {#if isSyncing}
+        <div class="syncing-notice">
+            <span class="syncing-title">⏳ 正在同步微信读书笔记...</span>
+            <span class="tip">（若书籍比较多，则所需时间会加长）</span>
+        </div>
+    {/if}
 </div>
