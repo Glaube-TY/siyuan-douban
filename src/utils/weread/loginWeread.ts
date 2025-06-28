@@ -35,7 +35,7 @@ export const createWereadNotesTemplateDialog = (onConfirm: (newWereadTemplates: 
     };
 };
 
-export const createBookShelfDialog = (books: any[]) => {
+export const createBookShelfDialog = (books: any) => {
     return () => {
         svelteDialog({
             title: "微信读书书架列表",

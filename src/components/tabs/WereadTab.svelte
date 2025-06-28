@@ -33,7 +33,7 @@
     let latestSyncTime = "";
     let notebooksInfo = "";
     let notebooksList = [];
-    let bookShelfList = [];
+    let loadingBookShelf = false;
 
     onMount(async () => {
         const savedCookie = await plugin.loadData("weread_cookie");
@@ -72,12 +72,14 @@
         latestSyncTime = `${syncDate.toLocaleDateString()} ${syncDate.toLocaleTimeString()}`;
 
         const basicBooks = notebookdata.books;
+
         notebooksList = await Promise.all(
             basicBooks.map(async (b: any) => {
                 const details = await getBook(plugin, cookies, b.bookId);
                 return {
                     noteCount: b.noteCount,
                     reviewCount: b.reviewCount,
+                    updatedTime: b.sort,
                     bookID: details.bookId,
                     title: details.title,
                     author: details.author || "未知作者",
@@ -96,41 +98,12 @@
                 };
             }),
         );
+
+        await plugin.saveData("temporary_weread_notebooksList", notebooksList);
 
         const totalNotes = notebooksList.reduce(
             (sum, book) => sum + book.noteCount,
             0,
-        );
-
-        const bookShelfInfo = await getBookShelf(plugin, cookies, userVid);
-        const basicshelf = bookShelfInfo.books;
-        bookShelfList = await Promise.all(
-            basicshelf.map(async (b: any) => {
-                const details = await getBook(plugin, cookies, b.bookId);
-                return {
-                    noteCount:
-                        notebooksList.find((n) => n.bookID === details.bookId)
-                            ?.noteCount || 0,
-                    reviewCount:
-                        notebooksList.find((n) => n.bookID === details.bookId)
-                            ?.reviewCount || 0,
-                    bookID: details.bookId,
-                    title: details.title,
-                    author: details.author || "未知作者",
-                    cover: details.cover,
-                    format: details.format === "epub" ? "电子书" : "纸质书",
-                    price: details.price,
-                    introduction: details.intro,
-                    publishTime: details.publishTime,
-                    category: details.category || "未分类",
-                    isbn: details.isbn,
-                    publisher: details.publisher || "未知出版社",
-                    totalWords: details.totalWords,
-                    star: details.newRating,
-                    ratingCount: details.ratingCount,
-                    AISummary: details.AISummary,
-                };
-            }),
         );
 
         notebooksInfo = `
@@ -138,13 +111,57 @@
                 截止<span class="time">${latestSyncTime}</span>
             </div>
             <div class="summary-info">
-                您的微信读书书架上共有<span class="count">${bookShelfInfo.bookCount}</span>本书，
-            </div>
-            <div class="summary-info">
-                并在<span class="count">${notebookdata.totalBookCount}</span>本书中做了<span class="count">${totalNotes}</span>条笔记~
+                你在<span class="count">${notebookdata.totalBookCount}</span>本书中做了<span class="count">${totalNotes}</span>条笔记~
             </div>
         `;
     });
+
+    async function openBookShelf() {
+        loadingBookShelf = true;
+        try {
+            const bookShelfInfo = await getBookShelf(plugin, cookies, userVid);
+            const basicshelf = bookShelfInfo.books;
+
+            const shelfList = await Promise.all(
+                basicshelf.map(async (b: any) => {
+                    const details = await getBook(plugin, cookies, b.bookId);
+                    return {
+                        noteCount:
+                            notebooksList.find(
+                                (n) => n.bookID === details.bookId,
+                            )?.noteCount || 0,
+                        reviewCount:
+                            notebooksList.find(
+                                (n) => n.bookID === details.bookId,
+                            )?.reviewCount || 0,
+                        bookID: details.bookId,
+                        title: details.title,
+                        author: details.author || "未知作者",
+                        cover: details.cover,
+                        format: details.format === "epub" ? "电子书" : "纸质书",
+                        price: details.price,
+                        introduction: details.intro,
+                        publishTime: details.publishTime,
+                        category: details.category || "未分类",
+                        isbn: details.isbn,
+                        publisher: details.publisher || "未知出版社",
+                        totalWords: details.totalWords,
+                        star: details.newRating,
+                        ratingCount: details.ratingCount,
+                        AISummary: details.AISummary,
+                    };
+                }),
+            );
+
+            const showDialog = createBookShelfDialog(shelfList);
+            showDialog();
+        } catch (error) {
+            console.error("获取书架信息失败", error);
+            showMessage("❌ 获取书架信息失败，请检查网络或Cookie有效性");
+        } finally {
+            loadingBookShelf = false;
+        }
+    }
 </script>
 
 <div class="wereadSetting">
@@ -195,13 +212,15 @@
                         <button on:click={createNotebooksDialog(notebooksList)}
                             >有笔记书籍</button
                         >
-                        <button on:click={createBookShelfDialog(bookShelfList)}
-                            >书架图书</button
-                        >
+                        <button on:click={openBookShelf}>书架图书</button>
                     {/if}
                 </div>
+                {#if loadingBookShelf}
+                    <div class="loading-notice">⌛ 正在加载书架信息...</div>
+                {/if}
             {:else}
                 <div class="loading-notice">⌛ 正在获取书籍信息，请稍候...</div>
+                <div class="loading-notice">（若书籍比较多，所需时间会加长）</div>
             {/if}
         {:else}
             <div class="cookie-warning">
@@ -234,9 +253,10 @@
     </div>
     <div class="sync-setting">
         <button
+            disabled={!notebooksInfo}
             on:click={async () => {
                 if (!checkMessage.includes("✅")) {
-                    showMessage("❌请先填写有效的微信读书Cookie再进行同步");
+                    showMessage("❌请先填写有效的微信读书 Cookie 再进行同步");
                     return;
                 }
                 isSyncing = true;
@@ -245,9 +265,10 @@
             }}>全部同步</button
         >
         <button
+            disabled={!notebooksInfo}
             on:click={async () => {
                 if (!checkMessage.includes("✅")) {
-                    showMessage("❌请先填写有效的微信读书Cookie再进行同步");
+                    showMessage("❌请先填写有效的微信读书 Cookie 再进行同步");
                     return;
                 }
                 isSyncing = true;
@@ -270,7 +291,7 @@
     {#if isSyncing}
         <div class="syncing-notice">
             <span class="syncing-title">⏳ 正在同步微信读书笔记...</span>
-            <span class="tip">（若书籍比较多，则所需时间会加长）</span>
+            <span class="tip">（若书籍比较多，所需时间会加长）</span>
         </div>
     {/if}
 </div>
