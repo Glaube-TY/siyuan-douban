@@ -1,6 +1,11 @@
 import { generateUniqueBlocked } from '../core/formatOp';
 
 export async function addSelectColumn(jsonData: any, columnName: string, selectedValue: string, uniqueBlockId: string) {
+    // 添加空值处理
+    if (!selectedValue) {
+        selectedValue = "未设置"; // 默认值
+    }
+    
     // 查找或创建列定义
     let column = jsonData.keyValues.find(item => item.key.name === columnName);
     if (!column) {

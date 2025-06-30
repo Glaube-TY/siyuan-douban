@@ -27,7 +27,12 @@
         />
         <button on:click={() => dispatch("fetchBookData")}>🔍</button>
         <div class="loading-spinner">{statusMessage}</div>
-        <button class="addBookButton" on:click={() => dispatch("addBook")}>
+        <button
+            class="addBookButton"
+            on:click={() => {
+                dispatch("addBook");
+            }}
+        >
             ✅添加书籍
         </button>
     </div>

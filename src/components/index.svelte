@@ -113,9 +113,9 @@
             ...bookInfo,
             ISBN: inputVales,
             databaseBlockId: bookDatabassID,
-            myRating: customRatings[myRatingIndex] || "未评分",
-            bookCategory: customCategories[bookCategoryIndex] || "默认分类",
-            readingStatus: customReadingStatuses[readingStatusIndex] || "未读",
+            myRating: customRatings[myRatingIndex],
+            bookCategory: customCategories[bookCategoryIndex],
+            readingStatus: customReadingStatuses[readingStatusIndex],
             startDate: bookInfo.startDate || "",
             finishDate: bookInfo.finishDate || "",
             publishDate: bookInfo.publishDate || "",
@@ -241,9 +241,9 @@
                 {customRatings}
                 {customCategories}
                 {customReadingStatuses}
-                {myRatingIndex}
-                {bookCategoryIndex}
-                {readingStatusIndex}
+                bind:myRatingIndex
+                bind:bookCategoryIndex
+                bind:readingStatusIndex
                 on:fetchBookData={fetchBookData}
                 on:addBook={handleAddBook}
             />
