@@ -37,66 +37,6 @@ export async function syncWereadNotes(plugin: any, cookies: string, isupdate: bo
     const ISBNKey = database.keyValues.find((item: any) => item.key.name === "ISBN");
     const ISBNColumn = ISBNKey?.values || [];
 
-    let oldNotebookMap = new Map();
-
-    if (isupdate) {
-        const oldNotebooks = await plugin.loadData("weread_notebooks");
-        const existingIsbnsInDB = new Set(
-            ISBNKey?.values.map(item => item.number?.content?.toString()).filter(Boolean) || []
-        );
-
-        if (!oldNotebooks) {
-            await plugin.saveData("weread_notebooks", personalNotebooks);
-        } else {
-            oldNotebookMap = new Map(oldNotebooks.map(book => [book.isbn, book]));
-            oldNotebooks.forEach(book => oldNotebookMap.set(book.isbn, book));
-
-            const updatedNotebooks = personalNotebooks.filter(newBook => {
-                const oldBook = oldNotebookMap.get(newBook.isbn);
-                const isInLocalDB = existingIsbnsInDB.has(newBook.isbn?.toString());
-                return (oldBook && oldBook.updatedTime !== newBook.updatedTime) || !isInLocalDB;
-            });
-
-            const mergedNotebooks = updatedNotebooks.map(newBook => {
-                const oldBook = oldNotebookMap.get(newBook.isbn);
-                return oldBook ?
-                    { ...newBook, blockID: oldBook.blockID } :
-                    newBook;
-            });
-
-            await plugin.saveData("weread_notebooks", [
-                ...oldNotebooks.filter(oldBook =>
-                    !mergedNotebooks.some(newBook => newBook.isbn === oldBook.isbn)
-                ),
-                ...mergedNotebooks
-            ]);
-
-            personalNotebooks.length = 0;
-            personalNotebooks.push(...mergedNotebooks);
-
-            if (personalNotebooks.length == 0) {
-                showMessage("微信读书没有新笔记~");
-            }
-        }
-    } else {
-        await plugin.saveData("weread_notebooks", personalNotebooks);
-    }
-
-    const isbnBlockMap = new Map();
-    if (ISBNKey) {
-        ISBNColumn.forEach(item => {
-            const isbn = item.number?.content?.toString();
-            if (isbn) isbnBlockMap.set(isbn, item.blockID);
-        });
-    }
-
-    const enhancedNotebooks = personalNotebooks.map(notebook => ({
-        ...notebook,
-        blockID: ISBNKey ? isbnBlockMap.get(notebook.isbn?.toString()) || null : null
-    }));
-
-    const newBooksToImport = enhancedNotebooks.filter(notebook => notebook.blockID === null);
-
     const template = await plugin.loadData("weread_templates") || `
 # {{notebookTitle}}
 **最后同步时间**: {{updateTime}}
@@ -118,96 +58,278 @@ export async function syncWereadNotes(plugin: any, cookies: string, isupdate: bo
 {{/chapters}}
     `;
 
-    if (newBooksToImport.length > 0) {
-        const dialog = svelteDialog({
-            title: "新书籍确认",
-            constructor: (containerEl: HTMLElement) => {
-                return new WereadNewBooks({
-                    target: containerEl,
-                    props: {
-                        books: newBooksToImport,
-                        // 添加确认回调
-                        onConfirm: async (selectedBooks) => {
-                            try {
-                                dialog.close();
-                                showMessage("⏳ 正在导入选中书籍...");
-                                const settingConfig = await plugin.loadData("settings.json");
-                                const noteTemplate = settingConfig?.noteTemplate || "";
-                                for (const book of selectedBooks) {
-                                    try {
-                                        const html = await fetchBookHtml(book.isbn);
-                                        const bookInfo = await fetchDoubanBook(html);
+    if (isupdate) {
+        const oldNotebooks = await plugin.loadData("weread_notebooks");
+        if (!oldNotebooks) {
+            showMessage("❌请先进行一次全部同步后再更新同步");
+            return;
+        } else {
+            // 获取数据库实际存在的ISBN集合
+            const existingIsbnsInDB = new Set(
+                ISBNKey?.values.map(item => item.number?.content?.toString()).filter(Boolean) || []
+            );
 
-                                        await loadAVData(avID, {
-                                            ...bookInfo,
-                                            ISBN: book.isbn,
-                                            addNotes: true,
-                                            databaseBlockId: ViewID,
-                                            noteTemplate: noteTemplate,
-                                            myRating: "",
-                                            bookCategory: "",
-                                            readingStatus: "",
-                                            startDate: "",
-                                            finishDate: ""
+            // 过滤旧书数据（只保留数据库存在的记录）
+            const validOldNotebooks = oldNotebooks.filter(oldBook =>
+                existingIsbnsInDB.has(oldBook.isbn?.toString())
+            );
+
+            // 从最新书单中筛选出数据库存在的书籍
+            const latestBooksInDB = personalNotebooks.filter(newBook =>
+                existingIsbnsInDB.has(newBook.isbn?.toString())
+            );
+
+            // 生成需要更新的书籍列表
+            const updatedNotebooks = latestBooksInDB.filter(newBook => {
+                const oldBook = validOldNotebooks.find(b => b.isbn === newBook.isbn);
+                return !oldBook || oldBook.updatedTime !== newBook.updatedTime;
+            });
+
+            // 合并需要处理的书籍
+            let finalSyncBooks = [...updatedNotebooks];
+            let finalSaveBooks = [...latestBooksInDB];
+
+            // 处理新书逻辑（当数据库存在但本地记录没有的情况）
+            const newBooksInDB = latestBooksInDB.filter(newBook =>
+                !validOldNotebooks.some(old => old.isbn === newBook.isbn)
+            );
+            if (newBooksInDB.length > 0) {
+                finalSyncBooks = finalSyncBooks.concat(newBooksInDB);
+            }
+
+            // 重建映射关系（从数据库获取实际blockID）
+            const isbnBlockMap = new Map();
+            ISBNColumn.forEach(item => {
+                const isbn = item.number?.content?.toString();
+                if (isbn) isbnBlockMap.set(isbn, item.blockID);
+            });
+
+            // 增强笔记本数据
+            const enhancedNotebooks = finalSyncBooks.map(notebook => ({
+                ...notebook,
+                blockID: isbnBlockMap.get(notebook.isbn?.toString()) || null
+            }));
+
+            const newBooksToImport = personalNotebooks
+                .filter(newBook =>
+                    !existingIsbnsInDB.has(newBook.isbn?.toString()) // 数据库不存在
+                )
+                .map(notebook => ({
+                    ...notebook,
+                    blockID: null // 新书尚未导入，blockID设为null
+                }));
+            if (newBooksToImport.length > 0) {
+                const dialog = svelteDialog({
+                    title: "新书籍确认",
+                    constructor: (containerEl: HTMLElement) => {
+                        return new WereadNewBooks({
+                            target: containerEl,
+                            props: {
+                                books: newBooksToImport,
+                                // 确认回调
+                                onConfirm: async (selectedBooks) => {
+                                    try {
+                                        dialog.close();
+                                        showMessage("⏳ 正在导入选中书籍...");
+                                        const settingConfig = await plugin.loadData("settings.json");
+                                        const noteTemplate = settingConfig?.noteTemplate || "";
+                                        for (const book of selectedBooks) {
+                                            try {
+                                                const html = await fetchBookHtml(book.isbn);
+                                                const bookInfo = await fetchDoubanBook(html);
+
+                                                await loadAVData(avID, {
+                                                    ...bookInfo,
+                                                    ISBN: book.isbn,
+                                                    addNotes: true,
+                                                    databaseBlockId: ViewID,
+                                                    noteTemplate: noteTemplate,
+                                                    myRating: "",
+                                                    bookCategory: "",
+                                                    readingStatus: "",
+                                                    startDate: "",
+                                                    finishDate: ""
+                                                });
+
+                                                showMessage(`✅ 成功导入《${book.title}》`, 3000);
+                                                await fetchPost("/api/ui/reloadAttributeView", { id: avID });
+                                            } catch (error) {
+                                                console.error(`导入书籍 ${book.title} 失败:`, error);
+                                            }
+                                        }
+
+                                        const updatedDatabase = await fetchSyncPost('/api/av/getAttributeView', { "id": avID });
+                                        const newISBNColumn = updatedDatabase.data.av.keyValues.find((item: any) => item.key.name === "ISBN").values;
+
+                                        const newIsbnBlockMap = new Map();
+                                        newISBNColumn.forEach(item => {
+                                            const isbn = item.number?.content?.toString();
+                                            if (isbn) newIsbnBlockMap.set(isbn, item.blockID);
                                         });
 
-                                        showMessage(`✅ 成功导入《${book.title}》`, 3000);
-                                        await fetchPost("/api/ui/reloadAttributeView", { id: avID });
+                                        const updatedNotebooks = personalNotebooks
+                                            .filter(notebook => newIsbnBlockMap.has(notebook.isbn?.toString()))
+                                            .map(notebook => ({
+                                                ...notebook,
+                                                blockID: newIsbnBlockMap.get(notebook.isbn?.toString())
+                                            }));
+
+                                        showMessage(`✅ 成功导入 ${selectedBooks.length} 本书籍`);
+                                        const mergedSaveBooks = [
+                                            ...finalSaveBooks,
+                                            ...selectedBooks.map(book => ({
+                                                ...book,
+                                                blockID: newIsbnBlockMap.get(book.isbn?.toString())
+                                            }))
+                                        ];
+                                        await plugin.saveData("weread_notebooks", mergedSaveBooks);
+                                        showMessage("⌛开始同步微信读书笔记……");
+                                        await syncNotesProcess(updatedNotebooks)
                                     } catch (error) {
-                                        console.error(`导入书籍 ${book.title} 失败:`, error);
+                                        console.error("批量导入失败:", error);
+                                        showMessage("批量导入失败，请检查控制台日志", 3000);
                                     }
-                                }
-
-                                const updatedDatabase = await fetchSyncPost('/api/av/getAttributeView', { "id": avID });
-                                const newISBNColumn = updatedDatabase.data.av.keyValues.find((item: any) => item.key.name === "ISBN").values;
-
-                                // 重建映射关系
-                                const newIsbnBlockMap = new Map();
-                                newISBNColumn.forEach(item => {
-                                    const isbn = item.number?.content?.toString();
-                                    if (isbn) newIsbnBlockMap.set(isbn, item.blockID);
-                                });
-
-                                // 更新笔记本数据
-                                const updatedNotebooks = personalNotebooks.map(notebook => ({
-                                    ...notebook,
-                                    blockID: newIsbnBlockMap.get(notebook.isbn?.toString()) || null
-                                }));
-
-                                showMessage(`✅ 成功导入 ${selectedBooks.length} 本书籍`);
-                                await plugin.saveData("weread_notebooks", updatedNotebooks);
-                                showMessage("⌛开始同步微信读书笔记……");
-                                await syncNotesProcess(updatedNotebooks)
-                            } catch (error) {
-                                console.error("批量导入失败:", error);
-                                showMessage("批量导入失败，请检查控制台日志", 3000);
-                            }
-                        },
-                        onContinue: async () => {
-                            try {
-                                dialog.close();
-                                const updatedBooks = enhancedNotebooks.filter(n =>
-                                    n.blockID && n.updatedTime !== oldNotebookMap.get(n.isbn)?.updatedTime
-                                )
-                                if (updatedBooks.length == 0) {
-                                    showMessage("微信读书没有新笔记~");
-                                } else {
-                                    await syncNotesProcess(updatedBooks);
-                                }
-                            } catch (error) {
-                                console.error("同步失败:", error);
-                                showMessage("同步失败，请检查控制台日志", 3000);
-                            }
-                        },
-                        onCancel: () => {
-                            dialog.close();
-                        },
-                    },
+                                },
+                                onContinue: async () => {
+                                    try {
+                                        dialog.close();
+                                        if (enhancedNotebooks.length == 0) {
+                                            await plugin.saveData("weread_notebooks", finalSaveBooks);
+                                            showMessage("微信读书没有新笔记~");
+                                        } else {
+                                            await plugin.saveData("weread_notebooks", finalSaveBooks);
+                                            await syncNotesProcess(enhancedNotebooks);
+                                        }
+                                    } catch (error) {
+                                        console.error("同步失败:", error);
+                                        showMessage("同步失败，请检查控制台日志", 3000);
+                                    }
+                                },
+                                onCancel: () => {
+                                    dialog.close();
+                                },
+                            },
+                        });
+                    }
                 });
+            } else {
+                await syncNotesProcess(enhancedNotebooks);
             }
-        });
+        }
     } else {
-        await syncNotesProcess(enhancedNotebooks);
+        const isbnBlockMap = new Map();
+        if (ISBNKey) {
+            ISBNColumn.forEach(item => {
+                const isbn = item.number?.content?.toString();
+                if (isbn) isbnBlockMap.set(isbn, item.blockID);
+            });
+        }
+
+        const enhancedNotebooks = personalNotebooks.map(notebook => ({
+            ...notebook,
+            blockID: ISBNKey ? isbnBlockMap.get(notebook.isbn?.toString()) || null : null
+        }));
+
+        const newBooksToImport = enhancedNotebooks.filter(notebook => notebook.blockID === null);
+
+        if (newBooksToImport.length > 0) {
+            const dialog = svelteDialog({
+                title: "新书籍确认",
+                constructor: (containerEl: HTMLElement) => {
+                    return new WereadNewBooks({
+                        target: containerEl,
+                        props: {
+                            books: newBooksToImport,
+                            // 添加确认回调
+                            onConfirm: async (selectedBooks) => {
+                                try {
+                                    dialog.close();
+                                    showMessage("⏳ 正在导入选中书籍...");
+                                    const settingConfig = await plugin.loadData("settings.json");
+                                    const noteTemplate = settingConfig?.noteTemplate || "";
+                                    for (const book of selectedBooks) {
+                                        try {
+                                            const html = await fetchBookHtml(book.isbn);
+                                            const bookInfo = await fetchDoubanBook(html);
+
+                                            await loadAVData(avID, {
+                                                ...bookInfo,
+                                                ISBN: book.isbn,
+                                                addNotes: true,
+                                                databaseBlockId: ViewID,
+                                                noteTemplate: noteTemplate,
+                                                myRating: "",
+                                                bookCategory: "",
+                                                readingStatus: "",
+                                                startDate: "",
+                                                finishDate: ""
+                                            });
+
+                                            showMessage(`✅ 成功导入《${book.title}》`, 3000);
+                                            await fetchPost("/api/ui/reloadAttributeView", { id: avID });
+                                        } catch (error) {
+                                            console.error(`导入书籍 ${book.title} 失败:`, error);
+                                        }
+                                    }
+
+                                    const updatedDatabase = await fetchSyncPost('/api/av/getAttributeView', { "id": avID });
+                                    const newISBNColumn = updatedDatabase.data.av.keyValues.find((item: any) => item.key.name === "ISBN").values;
+
+                                    const newIsbnBlockMap = new Map();
+                                    newISBNColumn.forEach(item => {
+                                        const isbn = item.number?.content?.toString();
+                                        if (isbn) newIsbnBlockMap.set(isbn, item.blockID);
+                                    });
+
+                                    const updatedNotebooks = personalNotebooks
+                                        .filter(notebook => newIsbnBlockMap.has(notebook.isbn?.toString()))
+                                        .map(notebook => ({
+                                            ...notebook,
+                                            blockID: newIsbnBlockMap.get(notebook.isbn?.toString())
+                                        }));
+
+                                    showMessage(`✅ 成功导入 ${selectedBooks.length} 本书籍`);
+                                    await plugin.saveData("weread_notebooks", updatedNotebooks);
+                                    showMessage("⌛开始同步微信读书笔记……");
+                                    await syncNotesProcess(updatedNotebooks)
+                                } catch (error) {
+                                    console.error("批量导入失败:", error);
+                                    showMessage("批量导入失败，请检查控制台日志", 3000);
+                                }
+                            },
+                            onContinue: async () => {
+                                try {
+                                    dialog.close();
+                                    // 直接使用数据库中的书籍列表
+                                    const existingIsbns = new Set(ISBNColumn.map(item => item.number?.content?.toString()));
+                                    let oldNotebookMap = new Map();
+                                    const updatedBooks = enhancedNotebooks.filter(n =>
+                                        existingIsbns.has(n.isbn?.toString()) &&
+                                        n.updatedTime !== oldNotebookMap.get(n.isbn)?.updatedTime
+                                    );
+
+                                    if (updatedBooks.length == 0) {
+                                        showMessage("微信读书没有新笔记~");
+                                    } else {
+                                        // 新增保存操作
+                                        await plugin.saveData("weread_notebooks", updatedBooks);
+                                        await syncNotesProcess(updatedBooks);
+                                    }
+                                } catch (error) {
+                                    console.error("同步失败:", error);
+                                    showMessage("同步失败，请检查控制台日志", 3000);
+                                }
+                            },
+                            onCancel: () => {
+                                dialog.close();
+                            },
+                        },
+                    });
+                }
+            });
+        } else {
+            await syncNotesProcess(enhancedNotebooks);
+        }
     }
 
     async function syncNotesProcess(notebooks: any): Promise<void> {

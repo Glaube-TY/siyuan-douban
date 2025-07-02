@@ -31,35 +31,26 @@ export async function loadAVData(avID: string, fullData: any) {
                 notebook: notebookId,
                 path: docPath,
                 markdown: fullData.noteTemplate
-                    // 基本元数据
                     .replace(/{{书名}}/g, fullData.title || '无书名')
                     .replace(/{{副标题}}/g, fullData.subtitle || '')
                     .replace(/{{原作名}}/g, fullData.originalTitle || '')
-                    // 作者/译者处理
                     .replace(/{{作者}}/g, Array.isArray(fullData.authors) ? fullData.authors.join('、') : '')
                     .replace(/{{译者}}/g, Array.isArray(fullData.translators) ? fullData.translators.join('、') : '')
-                    // 出版信息
                     .replace(/{{出版社}}/g, fullData.publisher || '未知出版社')
                     .replace(/{{出版年}}/g, fullData.publishDate || '未知日期')
                     .replace(/{{出品方}}/g, fullData.producer || '')
-                    // ISBN和装帧
                     .replace(/{{ISBN}}/g, fullData.ISBN || '')
                     .replace(/{{装帧}}/g, fullData.binding || '')
-                    // 丛书系列
                     .replace(/{{丛书}}/g, fullData.series || '')
-                    // 豆瓣数据
                     .replace(/{{豆瓣评分}}/g, fullData.rating ? `${fullData.rating}` : '无评分')
                     .replace(/{{评分人数}}/g, fullData.ratingCount ? `${fullData.ratingCount}` : '暂无评价')
-                    // 物理信息
                     .replace(/{{页数}}/g, fullData.pages ? `${fullData.pages}` : '')
                     .replace(/{{定价}}/g, fullData.price ? `${fullData.price}` : '')
-                    // 阅读信息
                     .replace(/{{我的评分}}/g, fullData.myRating || '未评分')
                     .replace(/{{书籍分类}}/g, fullData.bookCategory || '默认分类')
                     .replace(/{{阅读状态}}/g, fullData.readingStatus || '未读')
                     .replace(/{{开始日期}}/g, fullData.startDate || '未开始')
                     .replace(/{{读完日期}}/g, fullData.finishDate || '未完成')
-                    // 封面图片
                     .replace(/{{封面}}/g, fullData.cover || '')
             });
             if (response.code !== 0) {
