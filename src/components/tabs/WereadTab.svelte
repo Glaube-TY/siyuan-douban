@@ -1,6 +1,7 @@
 <script lang="ts">
     import { showMessage } from "siyuan";
     import { onMount } from "svelte";
+    import { svelteDialog } from "@/libs/dialog";
     import {
         createWereadDialog,
         createNotebooksDialog,
@@ -15,6 +16,9 @@
         getBookShelf,
     } from "@/utils/weread/wereadInterface";
     import { syncWereadNotes } from "@/utils/weread/syncWereadNotes";
+
+    import wereadManageISBN from "@/components/common/wereadManageISBN.svelte";
+    import wereadIgnoredBooksDialog from "@/components/common/wereadIgnoredBooksDialog.svelte";
 
     export let plugin: any;
     export let cookies = "";
@@ -162,12 +166,66 @@
             loadingBookShelf = false;
         }
     }
+
+    async function createManageISBNDialog() {
+        const customISBNBooks = await plugin.loadData("weread_customBooksISBN");
+
+        if (customISBNBooks.length === 0) {
+            showMessage("❌ 未找到自定义 ISBN 书籍");
+            return;
+        }
+
+        const dialog = svelteDialog({
+            title: "自定义ISBN书籍管理",
+            constructor: (containerEl: HTMLElement) => {
+                return new wereadManageISBN({
+                    target: containerEl,
+                    props: {
+                        plugin,
+                        customISBNBooks: customISBNBooks,
+                        onConfirm: () => {
+                            dialog.close();
+                        },
+                        onCancel: () => {
+                            dialog.close();
+                        },
+                    },
+                });
+            },
+        });
+    }
+
+    async function createIgnoredBooksDialog() {
+        const ignoredBooks = await plugin.loadData("weread_ignoredBooks");
+
+        if (ignoredBooks.length == 0) {
+            showMessage("❌ 未找到已忽略的书籍");
+            return;
+        }
+
+        const dialog = svelteDialog({
+            title: "忽略书籍管理",
+            constructor: (containerEl: HTMLElement) => {
+                return new wereadIgnoredBooksDialog({
+                    target: containerEl,
+                    props: {
+                        plugin,
+                        ignoredBooks: ignoredBooks,
+                        onConfirm: () => {
+                            dialog.close();
+                        },
+                        onCancel: () => {
+                            dialog.close();
+                        },
+                    },
+                });
+            },
+        });
+    }
 </script>
 
 <div class="wereadSetting">
-    <p style="margin-bottom: 0.5rem;">
-        该功能处于初步试用阶段，功能可能存在问题，建议先使用备用数据库测试。
-    </p>
+    <p>v2.3.0 中书评 globalComments 变量格式有变化</p>
     <label for="tutorial"
         >使用前请先看教程：<a
             id="tutorial"
@@ -220,13 +278,19 @@
                 {/if}
             {:else}
                 <div class="loading-notice">⌛ 正在获取书籍信息，请稍候...</div>
-                <div class="loading-notice">（若书籍比较多，所需时间会加长）</div>
+                <div class="loading-notice">
+                    （若书籍比较多，所需时间会加长）
+                </div>
             {/if}
         {:else}
             <div class="cookie-warning">
                 🔑 请先填写有效的微信读书Cookie以查看书籍信息
             </div>
         {/if}
+    </div>
+    <div class="weread-custom-books">
+        <button on:click={createManageISBNDialog}>管理自定义ISBN书籍</button>
+        <button on:click={createIgnoredBooksDialog}>管理忽略书籍</button>
     </div>
     <div class="weread-notes-template">
         <button

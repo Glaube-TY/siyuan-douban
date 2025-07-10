@@ -35,7 +35,7 @@
         <h2 style="color: #ff9f00; margin: 0 0 1em;">🌹 支持开发</h2>
         <p style="margin: 0.5em 0;">如果这个插件对你有帮助，欢迎给作者点个赞或打赏一杯咖啡，这将鼓励作者更新制作更多有用的插件：</p>
         <div style="margin: 1em 0; text-align: center;">
-            <img src="https://tc.z.wiki/autoupload/7ld0SKOqoByVzszlkeHfxhBoTCZ2-MO4orDcDjaY2fmyl5f0KlZfm6UsKj-HyTuv/20250624/gxI4/2119X1382/ReQR.png"
+            <img src="https://glaube-ty.oss-cn-chengdu.aliyuncs.com/img/ReQR.png"
                  alt="TCQR"
                  style="width: 600px; border-radius: 8px; margin-bottom: 1em;">
         </div>
@@ -87,7 +87,7 @@
         <h2 style="color: #2d8cf0; margin: 0 0 1em;">💬 加入讨论</h2>
         <p style="margin: 0.5em 0;">目前我在开发的插件有主页、读书笔记、空文档清理、彩色图标，所以统一用一个频道了，方便查看管理~</p>
         <div style="margin: 1em 0; text-align: center;">
-            <img src="https://tc.z.wiki/autoupload/YjFouVX7uB9I7ine7AuN0NiO_OyvX7mIgxFBfDMDErs/20250624/Itmc/1159X1818/TCQR.jpg"
+            <img src="https://glaube-ty.oss-cn-chengdu.aliyuncs.com/img/TCQR.jpg"
                  alt="TCQR"
                  style="width: 200px; border-radius: 8px; margin-bottom: 1em;">
         </div>
@@ -114,6 +114,27 @@
                 <span style="font-weight: 500; letter-spacing: 0.5px;">加入腾讯讨论频道</span>
             </a>
         </div>
+    </div>
+    <div style="margin: 1.5em 0; padding: 1.5em; background: #f8f5ff; border-left: 4px solid #8a3ffc; border-radius: 8px;">
+        <h2 style="color: #8a3ffc; margin: 0 0 1em;">🔮 参考项目</h2>
+        <p style="margin: 0.5em 0; color: black;">本插件部分功能参考了以下优秀项目：</p>
+        <ul style="margin: 0; padding-left: 1.2em;">
+            <li style="margin: 0.5em 0; padding: 12px; background: #f3f0ff; border-radius: 6px;">
+                <a href="https://github.com/zhaohongxuan/obsidian-weread-plugin" 
+                   style="color: #8a3ffc; 
+                          text-decoration: none;
+                          font-weight: 500;
+                          display: block;
+                          margin-bottom: 4px;"
+                   onmouseover="this.style.textDecoration='underline'"
+                   onmouseout="this.style.textDecoration='none'">
+                    obsidian-weread-plugin
+                </a>
+                <span style="color: #666; display: block; line-height: 1.5;">
+                    微信读书笔记同步功能参考了其微信官方 API 接口。
+                </span>
+            </li>
+        </ul>
     </div>
     <div style="margin: 1.5em 0; padding: 1.5em; background: #fff5f5; border-left: 4px solid #ff4d4f; border-radius: 8px;">
         <h2 style="color: #ff4d4f; margin: 0 0 1em;">⚠️ 免责声明</h2>

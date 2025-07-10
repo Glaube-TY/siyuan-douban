@@ -37,27 +37,6 @@ export async function syncWereadNotes(plugin: any, cookies: string, isupdate: bo
     const ISBNKey = database.keyValues.find((item: any) => item.key.name === "ISBN");
     const ISBNColumn = ISBNKey?.values || [];
 
-    const template = await plugin.loadData("weread_templates") || `
-# {{notebookTitle}}
-**最后同步时间**: {{updateTime}}
-
-## 书评
-> 💬 {{globalComments}}
-
-{{#chapters}}
-## {{chapterTitle}}
-### 重点笔记
-{{#notes}}
-- {{highlightText}}
-> 💬 {{highlightComment}}
-{{/notes}}
-{{#chapterComments}}
-### 章节思考
-> 💬 {{chapterComments}}
-{{/chapterComments}}
-{{/chapters}}
-    `;
-
     if (isupdate) {
         const oldNotebooks = await plugin.loadData("weread_notebooks");
         if (!oldNotebooks) {
@@ -112,7 +91,7 @@ export async function syncWereadNotes(plugin: any, cookies: string, isupdate: bo
 
             const newBooksToImport = personalNotebooks
                 .filter(newBook =>
-                    !existingIsbnsInDB.has(newBook.isbn?.toString()) // 数据库不存在
+                    !existingIsbnsInDB.has(newBook.isbn?.toString())
                 )
                 .map(notebook => ({
                     ...notebook,
@@ -126,9 +105,10 @@ export async function syncWereadNotes(plugin: any, cookies: string, isupdate: bo
                             target: containerEl,
                             props: {
                                 books: newBooksToImport,
-                                // 确认回调
-                                onConfirm: async (selectedBooks) => {
+                                onConfirm: async (selectedBooks, ignoredBooks) => {
                                     try {
+                                        await saveCustomBooksISBN(plugin, selectedBooks, personalNotebooks);
+                                        await saveIgnoredBooks(plugin, ignoredBooks);
                                         dialog.close();
                                         showMessage("⏳ 正在导入选中书籍...");
                                         const settingConfig = await plugin.loadData("settings.json");
@@ -184,21 +164,23 @@ export async function syncWereadNotes(plugin: any, cookies: string, isupdate: bo
                                         ];
                                         await plugin.saveData("weread_notebooks", mergedSaveBooks);
                                         showMessage("⌛开始同步微信读书笔记……");
-                                        await syncNotesProcess(updatedNotebooks)
+                                        await syncNotesProcess(plugin, cookies, updatedNotebooks)
+
                                     } catch (error) {
                                         console.error("批量导入失败:", error);
                                         showMessage("批量导入失败，请检查控制台日志", 3000);
                                     }
                                 },
-                                onContinue: async () => {
+                                onContinue: async (ignoredBooks) => {
                                     try {
+                                        await saveIgnoredBooks(plugin, ignoredBooks);
                                         dialog.close();
                                         if (enhancedNotebooks.length == 0) {
                                             await plugin.saveData("weread_notebooks", finalSaveBooks);
                                             showMessage("微信读书没有新笔记~");
                                         } else {
                                             await plugin.saveData("weread_notebooks", finalSaveBooks);
-                                            await syncNotesProcess(enhancedNotebooks);
+                                            await syncNotesProcess(plugin, cookies, enhancedNotebooks);
                                         }
                                     } catch (error) {
                                         console.error("同步失败:", error);
@@ -213,7 +195,7 @@ export async function syncWereadNotes(plugin: any, cookies: string, isupdate: bo
                     }
                 });
             } else {
-                await syncNotesProcess(enhancedNotebooks);
+                await syncNotesProcess(plugin, cookies, enhancedNotebooks);
             }
         }
     } else {
@@ -240,9 +222,10 @@ export async function syncWereadNotes(plugin: any, cookies: string, isupdate: bo
                         target: containerEl,
                         props: {
                             books: newBooksToImport,
-                            // 添加确认回调
-                            onConfirm: async (selectedBooks) => {
+                            onConfirm: async (selectedBooks, ignoredBooks) => {
                                 try {
+                                    await saveCustomBooksISBN(plugin, selectedBooks, personalNotebooks);
+                                    await saveIgnoredBooks(plugin, ignoredBooks);
                                     dialog.close();
                                     showMessage("⏳ 正在导入选中书籍...");
                                     const settingConfig = await plugin.loadData("settings.json");
@@ -291,16 +274,16 @@ export async function syncWereadNotes(plugin: any, cookies: string, isupdate: bo
                                     showMessage(`✅ 成功导入 ${selectedBooks.length} 本书籍`);
                                     await plugin.saveData("weread_notebooks", updatedNotebooks);
                                     showMessage("⌛开始同步微信读书笔记……");
-                                    await syncNotesProcess(updatedNotebooks)
+                                    await syncNotesProcess(plugin, cookies, updatedNotebooks)
                                 } catch (error) {
                                     console.error("批量导入失败:", error);
                                     showMessage("批量导入失败，请检查控制台日志", 3000);
                                 }
                             },
-                            onContinue: async () => {
+                            onContinue: async (ignoredBooks) => {
                                 try {
+                                    await saveIgnoredBooks(plugin, ignoredBooks);
                                     dialog.close();
-                                    // 直接使用数据库中的书籍列表
                                     const existingIsbns = new Set(ISBNColumn.map(item => item.number?.content?.toString()));
                                     let oldNotebookMap = new Map();
                                     const updatedBooks = enhancedNotebooks.filter(n =>
@@ -311,9 +294,8 @@ export async function syncWereadNotes(plugin: any, cookies: string, isupdate: bo
                                     if (updatedBooks.length == 0) {
                                         showMessage("微信读书没有新笔记~");
                                     } else {
-                                        // 新增保存操作
                                         await plugin.saveData("weread_notebooks", updatedBooks);
-                                        await syncNotesProcess(updatedBooks);
+                                        await syncNotesProcess(plugin, cookies, updatedBooks);
                                     }
                                 } catch (error) {
                                     console.error("同步失败:", error);
@@ -328,183 +310,221 @@ export async function syncWereadNotes(plugin: any, cookies: string, isupdate: bo
                 }
             });
         } else {
-            await syncNotesProcess(enhancedNotebooks);
+            await syncNotesProcess(plugin, cookies, enhancedNotebooks);
         }
-    }
-
-    async function syncNotesProcess(notebooks: any): Promise<void> {
-        const enhancedNotebooks = await Promise.all(
-            notebooks.map(async (notebook: any) => ({
-                ...notebook,
-                highlights: await getBookHighlights(plugin, cookies, notebook.bookID),
-                comments: await getBookComments(plugin, cookies, notebook.bookID)
-            }))
-        );
-        const updatePromises = enhancedNotebooks
-            .filter(notebook => notebook.blockID)
-            .map(async notebook => {
-                try {
-                    const highlights = notebook.highlights;
-                    const chapterMap = new Map();
-                    if (highlights.chapters && Array.isArray(highlights.chapters)) {
-                        highlights.chapters.forEach(chapter => {
-                            chapterMap.set(chapter.chapterUid, {
-                                title: chapter.title,
-                                chapterIdx: chapter.chapterIdx
-                            });
-                        });
-                    }
-
-                    const highlightsByChapter = new Map();
-                    if (highlights?.updated && Array.isArray(highlights.updated)) {
-                        highlights.updated.forEach(h => {
-                            const chapterUid = h.chapterUid;
-                            if (!highlightsByChapter.has(chapterUid)) {
-                                highlightsByChapter.set(chapterUid, []);
-                            }
-                            highlightsByChapter.get(chapterUid).push(h);
-                        });
-                    }
-
-                    const comments = notebook.comments?.reviews;
-                    const chapterComments = new Map();
-                    const highlightComments = new Map();
-                    comments.forEach(comment => {
-                        const review = comment.review;
-                        const key = `${review.chapterUid}_${review.range}`;
-                        if (review.abstract) {
-                            if (!highlightComments.has(key)) {
-                                highlightComments.set(key, []);
-                            }
-                            highlightComments.get(key).push(review);
-                        } else {
-                            if (!chapterComments.has(review.chapterUid)) {
-                                chapterComments.set(review.chapterUid, []);
-                            }
-                            chapterComments.get(review.chapterUid).push(review);
-                        }
-                    });
-
-                    const chaptersData: ChapterContent[] = Array.from(chapterMap.entries())
-                        .sort((a, b) => a[1].chapterIdx - b[1].chapterIdx)
-                        .map(([chapterUid, chapterInfo]) => {
-                            const chapterHighlights = highlightsByChapter.get(chapterUid) || [];
-                            const sortedHighlights = chapterHighlights.sort((a, b) => {
-                                const getStart = (range) => parseInt((range || '').split('-')[0]) || 0;
-                                return getStart(a.range) - getStart(b.range);
-                            });
-
-                            const chapterEndComments = (chapterComments.get(chapterUid) || [])
-                                .map(c => c.content);
-
-                            const notesTemplateMatch = template.match(/\{\{#notes\}\}([\s\S]*?)\{\{\/notes\}\}/);
-
-                            const notesTemplate = notesTemplateMatch ? notesTemplateMatch[1] : `- {{markText}}\n> 💬 {{content}}`;
-
-                            const notesData = sortedHighlights.flatMap(h => {
-                                const comments = highlightComments.get(`${h.chapterUid}_${h.range}`) || [];
-
-                                const effectiveComments = comments.length > 0 ? comments : [{}];
-
-                                return effectiveComments.map((c: any) => {
-                                    const lines = notesTemplate.split('\n');
-                                    const renderedLines = lines
-                                        .map(line => {
-                                            if (!c || !c.content) {
-                                                if (line.includes('{{highlightComment}}')) {
-                                                    return null;
-                                                }
-                                                return line.replace(/{{highlightText}}/g, h.markText);
-                                            }
-
-                                            return line
-                                                .replace(/{{highlightText}}/g, h.markText)
-                                                .replace(/{{highlightComment}}/g, c.content);
-                                        })
-                                        .filter(line => line !== null && line.trim() !== '');
-
-                                    const renderedNote = renderedLines.join('\n');
-
-                                    return { formattedNote: renderedNote };
-                                });
-                            });
-
-                            return {
-                                chapterTitle: chapterInfo.title,
-                                notes: notesData,
-                                chapterComments: chapterEndComments.join('')
-                            };
-                        });
-
-                    const variables: TemplateVariables = {
-                        notebookTitle: notebook.title,
-                        isbn: notebook.isbn,
-                        updateTime: new Date(notebook.updatedTime * 1000).toLocaleString(),
-                        chapters: chaptersData,
-                        globalComments: comments
-                            .filter(c => !c.review.abstract && !c.review.contextAbstract)
-                            .map(c => `${c.review.content}`)
-                            .join('\n')
-                    };
-
-                    const renderTemplate = (tpl: string) => {
-                        return tpl
-                            .replace(/\{\{#chapters\}\}([\s\S]*?)\{\{\/chapters\}\}/g, (_, section) => {
-                                return variables.chapters.map(chapter =>
-                                    section
-                                        .replace(/\{\{chapterTitle\}\}/g, chapter.chapterTitle)
-                                        .replace(/\{\{#notes\}\}([\s\S]*?)\{\{\/notes\}\}/g, () => {
-                                            return chapter.notes
-                                                .map(note => note.formattedNote)
-                                                .join('\n');
-                                        })
-                                        .replace(/\{\{#chapterComments\}\}([\s\S]*?)\{\{\/chapterComments\}\}/g, (_, commentsTpl) =>
-                                            chapter.chapterComments ? commentsTpl.replace(/\{\{chapterComments\}\}/g, chapter.chapterComments) : ''
-                                        )
-                                ).join('\n');
-                            })
-                            .replace(/\{\{globalComments\}\}/g, variables.globalComments || '')
-                            .replace(/\{\{(\w+)\}\}/g, (_, key) => variables[key] || '');
-                    };
-
-                    const noteContent = renderTemplate(template);
-
-                    const wereadPositionMark = await plugin.loadData("weread_position_mark");
-                    await updateEndBlocks(
-                        plugin,
-                        notebook.blockID,
-                        wereadPositionMark,
-                        noteContent
-                    );
-
-                    showMessage(`✅ 已同步《${notebook.title}》`, 2000);
-                } catch (error) {
-                    showMessage(`❌ 同步《${notebook.title}》失败`, 2000);
-                    console.error(`更新失败:`, error);
-                }
-            });
-
-        return Promise.all(updatePromises).then(() => {
-            showMessage(`✅ 全部同步完成`, 2000);
-        });
     }
 }
 
-export async function getPersonalNotebooks(plugin: any) {
-    const notebooksList = await plugin.loadData("temporary_weread_notebooksList");
+async function syncNotesProcess(plugin: any, cookies: string, notebooks: any): Promise<void> {
+    const template = await plugin.loadData("weread_templates") || `
+# {{notebookTitle}}
+**最后同步时间**: {{updateTime}}
 
-    // 只获取基础信息
-    const basicNotebooks = notebooksList.map((book: any) => ({
-        isbn: book.isbn,
-        bookID: book.bookID,
-        title: book.title,
-        updatedTime: book.updatedTime
-    }));
+## 书评
+> 💬 {{globalComments}}
+
+{{#chapters}}
+## {{chapterTitle}}
+### 重点笔记
+{{#notes}}
+- {{highlightText}}
+> 💬 {{highlightComment}}
+{{/notes}}
+{{#chapterComments}}
+### 章节思考
+> 💬 {{chapterComments}}
+{{/chapterComments}}
+{{/chapters}}
+    `;
+    const enhancedNotebooks = await Promise.all(
+        notebooks.map(async (notebook: any) => ({
+            ...notebook,
+            highlights: await getBookHighlights(plugin, cookies, notebook.bookID),
+            comments: await getBookComments(plugin, cookies, notebook.bookID)
+        }))
+    );
+    const updatePromises = enhancedNotebooks
+        .filter(notebook => notebook.blockID)
+        .map(async notebook => {
+            try {
+                const highlights = notebook.highlights;
+                const chapterMap = new Map();
+                if (highlights.chapters && Array.isArray(highlights.chapters)) {
+                    highlights.chapters.forEach(chapter => {
+                        chapterMap.set(chapter.chapterUid, {
+                            title: chapter.title,
+                            chapterIdx: chapter.chapterIdx
+                        });
+                    });
+                }
+
+                const highlightsByChapter = new Map();
+                if (highlights?.updated && Array.isArray(highlights.updated)) {
+                    highlights.updated.forEach(h => {
+                        const chapterUid = h.chapterUid;
+                        if (!highlightsByChapter.has(chapterUid)) {
+                            highlightsByChapter.set(chapterUid, []);
+                        }
+                        highlightsByChapter.get(chapterUid).push(h);
+                    });
+                }
+
+                const comments = notebook.comments?.reviews;
+                const chapterComments = new Map();
+                const highlightComments = new Map();
+                comments.forEach(comment => {
+                    const review = comment.review;
+                    const key = `${review.chapterUid}_${review.range}`;
+                    if (review.abstract) {
+                        if (!highlightComments.has(key)) {
+                            highlightComments.set(key, []);
+                        }
+                        highlightComments.get(key).push(review);
+                    } else {
+                        if (!chapterComments.has(review.chapterUid)) {
+                            chapterComments.set(review.chapterUid, []);
+                        }
+                        chapterComments.get(review.chapterUid).push(review);
+                    }
+                });
+
+                const chaptersData: ChapterContent[] = Array.from(chapterMap.entries())
+                    .sort((a, b) => a[1].chapterIdx - b[1].chapterIdx)
+                    .map(([chapterUid, chapterInfo]) => {
+                        const chapterHighlights = highlightsByChapter.get(chapterUid) || [];
+                        const sortedHighlights = chapterHighlights.sort((a, b) => {
+                            const getStart = (range) => parseInt((range || '').split('-')[0]) || 0;
+                            return getStart(a.range) - getStart(b.range);
+                        });
+
+                        const chapterEndComments = (chapterComments.get(chapterUid) || [])
+                            .map(c => c.content);
+
+                        const notesTemplateMatch = template.match(/\{\{#notes\}\}([\s\S]*?)\{\{\/notes\}\}/);
+
+                        const notesTemplate = notesTemplateMatch ? notesTemplateMatch[1] : `- {{markText}}\n> 💬 {{content}}`;
+
+                        const notesData = sortedHighlights.flatMap(h => {
+                            const comments = highlightComments.get(`${h.chapterUid}_${h.range}`) || [];
+
+                            const effectiveComments = comments.length > 0 ? comments : [{}];
+
+                            return effectiveComments.map((c: any) => {
+                                const lines = notesTemplate.split('\n');
+                                const renderedLines = lines
+                                    .map(line => {
+                                        if (!c || !c.content) {
+                                            if (line.includes('{{highlightComment}}')) {
+                                                return null;
+                                            }
+                                            return line.replace(/{{highlightText}}/g, h.markText);
+                                        }
+
+                                        return line
+                                            .replace(/{{highlightText}}/g, h.markText)
+                                            .replace(/{{highlightComment}}/g, c.content);
+                                    })
+                                    .filter(line => line !== null && line.trim() !== '');
+
+                                const renderedNote = renderedLines.join('\n');
+
+                                return { formattedNote: renderedNote };
+                            });
+                        });
+
+                        return {
+                            chapterTitle: chapterInfo.title,
+                            notes: notesData,
+                            chapterComments: chapterEndComments.join('')
+                        };
+                    });
+
+                const variables: TemplateVariables = {
+                    notebookTitle: notebook.title,
+                    isbn: notebook.isbn,
+                    updateTime: new Date(notebook.updatedTime * 1000).toLocaleString(),
+                    chapters: chaptersData,
+                    globalComments: comments
+                        .filter(c => !c.review.abstract && !c.review.contextAbstract)
+                        .map(c => `${c.review.content}`)
+                        .join('\n')
+                };
+
+                const renderTemplate = (tpl: string) => {
+                    return tpl
+                        .replace(/\{\{#chapters\}\}([\s\S]*?)\{\{\/chapters\}\}/g, (_, section) => {
+                            return variables.chapters.map(chapter =>
+                                section
+                                    .replace(/\{\{chapterTitle\}\}/g, chapter.chapterTitle)
+                                    .replace(/\{\{#notes\}\}([\s\S]*?)\{\{\/notes\}\}/g, () => {
+                                        return chapter.notes
+                                            .map(note => note.formattedNote)
+                                            .join('\n');
+                                    })
+                                    .replace(/\{\{#chapterComments\}\}([\s\S]*?)\{\{\/chapterComments\}\}/g, (_, commentsTpl) =>
+                                        chapter.chapterComments ? commentsTpl.replace(/\{\{chapterComments\}\}/g, chapter.chapterComments) : ''
+                                    )
+                            ).join('\n');
+                        })
+                        .replace(/\{\{globalComments\}\}/g, variables.globalComments || '')
+                        .replace(/\{\{(\w+)\}\}/g, (_, key) => variables[key] || '');
+                };
+
+                const noteContent = renderTemplate(template);
+
+                const wereadPositionMark = await plugin.loadData("weread_position_mark");
+                await updateEndBlocks(
+                    plugin,
+                    notebook.blockID,
+                    wereadPositionMark,
+                    noteContent
+                );
+
+                showMessage(`✅ 已同步《${notebook.title}》`, 2000);
+            } catch (error) {
+                showMessage(`❌ 同步《${notebook.title}》失败`, 2000);
+                console.error(`更新失败:`, error);
+            }
+        });
+
+    return Promise.all(updatePromises).then(() => {
+        showMessage(`✅ 全部同步完成`, 2000);
+    });
+}
+
+async function getPersonalNotebooks(plugin: any) {
+    const notebooksList = await plugin.loadData("temporary_weread_notebooksList");
+    const ignoredBooks = await plugin.loadData('weread_ignoredBooks') || [];
+    const ignoredIsbns = new Set(ignoredBooks.map(b => b.isbn?.toString()));
+
+    const filteredNotebooks = notebooksList.filter((book: any) =>
+        !ignoredIsbns.has(book.isbn?.toString())
+    );
+
+    const customISBNMap = new Map<string, string>();
+    const customBooks = await plugin.loadData("weread_customBooksISBN") || [];
+    customBooks.forEach((item: any) => {
+        if (item.bookID && item.customISBN) {
+            customISBNMap.set(item.bookID.toString(), item.customISBN);
+        }
+    });
+
+    const basicNotebooks = filteredNotebooks.map((book: any) => {
+        const hasISBN = book.isbn && book.isbn.trim() !== "";
+        const resolvedISBN = hasISBN ? book.isbn : customISBNMap.get(book.bookID?.toString()) || "";
+
+        return {
+            isbn: resolvedISBN,
+            bookID: book.bookID,
+            title: book.title,
+            updatedTime: book.updatedTime
+        };
+    });
 
     return basicNotebooks;
 }
 
-export async function updateEndBlocks(plugin: any, blockID: string, wereadPositionMark: string, noteContent: any) {
+async function updateEndBlocks(plugin: any, blockID: string, wereadPositionMark: string, noteContent: any) {
     const childBlocks = await plugin.client.getChildBlocks({
         id: blockID,
     });
@@ -538,4 +558,39 @@ export async function updateEndBlocks(plugin: any, blockID: string, wereadPositi
         dataType: "markdown",
         previousID: targetBlockID,
     });
+}
+
+async function saveIgnoredBooks(plugin: any, newIgnoredBooks: any[]) {
+    const existingIgnored = await plugin.loadData('weread_ignoredBooks') || [];
+    const merged = [...existingIgnored, ...newIgnoredBooks];
+    const uniqueMap = new Map();
+    merged.forEach(book => {
+        const bookID = book.bookID?.toString();
+        if (bookID) uniqueMap.set(bookID, book);
+    });
+
+    await plugin.saveData('weread_ignoredBooks', Array.from(uniqueMap.values()));
+}
+
+async function saveCustomBooksISBN(plugin: any, selectedBooks: any[], personalNotebooks: any[]) {
+    const customBooks = selectedBooks
+        .filter(book =>
+            personalNotebooks.some(original =>
+                original.bookID === book.bookID &&
+                original.isbn === "" &&
+                book.isbn !== ""
+            )
+        )
+        .map(({ title, isbn, bookID }) => ({
+            title,
+            customISBN: isbn,
+            bookID: bookID,
+        }));
+
+    if (customBooks.length > 0) {
+        const existingCustom = await plugin.loadData("weread_customBooksISBN") || [];
+        const merged = [...existingCustom, ...customBooks];
+        const customMap = new Map(merged.map(item => [item.bookID, item]));
+        await plugin.saveData("weread_customBooksISBN", Array.from(customMap.values()));
+    }
 }

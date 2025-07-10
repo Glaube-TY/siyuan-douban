@@ -46,6 +46,16 @@
         }
     }
 
+    .weread-custom-books {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
+        padding: 10px;
+        gap: 10px;
+        border-bottom: 1px solid var(--b3-border-color);
+    }
+
     .weread-notes-template,
     .sync-setting {
         display: flex;

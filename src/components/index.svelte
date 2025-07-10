@@ -44,12 +44,7 @@
     let searchKeyword = "";
     let webviewRef: any;
 
-    const tabs = [
-        "🔍 书籍查询",
-        "⚙️ 用户设置",
-        "📗 微信读书",
-        "ℹ️ 关于插件",
-    ];
+    const tabs = ["🔍 书籍查询", "⚙️ 用户设置", "📗 微信读书", "ℹ️ 关于插件"];
     let activeTab = tabs[0];
 
     interface BookInfo {

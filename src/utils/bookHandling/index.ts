@@ -7,23 +7,25 @@ import { downloadCover, addCover } from './addmAssetValues';
 import { addDateColumn } from './addDateValues';
 import { addNumberColumn } from './addNumberValues';
 import { addSelectColumn } from './addSelectValues';
+import { getImage } from "@/utils/core/getImg";
 
 export async function loadAVData(avID: string, fullData: any) {
-    const fs = require('fs');
-    const workspacePath = window.siyuan.config.system.workspaceDir;
-
     try {
         // 读取原始数据库文件
-        const fullPath = `${workspacePath}/data/storage/av/${avID}.json`;
-        const response = await fetch(`file://${fullPath}`);
-        const jsonData = await response.json();
+        const jsonData = await fetchSyncPost('/api/file/getFile', {
+            path: `/data/storage/av/${avID}.json`
+        }) as unknown as {
+            views: Array<{ table: { rowIds?: string[] } }>;
+            keyValues: any[];
+        };
 
         let uniqueBlockId; // 生成或获取文档ID
         let isDetached = true; // 用于控制链接到读书笔记
         if (fullData.addNotes) {
             // 创建读书笔记文档
             // 下载封面
-            fullData.cover = await downloadCover(fullData.cover, fullData.title, workspacePath);
+            const base64Data = await getImage(fullData.cover);
+            fullData.cover = await downloadCover(base64Data, fullData.title);
             const sqlresult = await sql(`SELECT * FROM blocks WHERE id = "${fullData.databaseBlockId}"`);
             const notebookId = sqlresult[0].box;
             const docPath = sqlresult[0].hpath + "/";
@@ -72,7 +74,8 @@ export async function loadAVData(avID: string, fullData: any) {
             isDetached = false;
         } else {
             // 下载封面
-            fullData.cover = await downloadCover(fullData.cover, fullData.title, workspacePath);
+            const base64Data = await getImage(fullData.cover);
+            fullData.cover = await downloadCover(base64Data, fullData.title);
             uniqueBlockId = generateUniqueBlocked();
         }
 
@@ -105,7 +108,19 @@ export async function loadAVData(avID: string, fullData: any) {
         await addDateColumn(jsonData, "开始日期", fullData.startDate, uniqueBlockId);
         await addDateColumn(jsonData, "读完日期", fullData.finishDate, uniqueBlockId);
 
-        fs.writeFileSync(fullPath, JSON.stringify(jsonData, null, 2), 'utf-8');
+        const formData = new FormData();
+        formData.append("path", `/data/storage/av/${avID}.json`);
+        formData.append("file", new File(
+            [JSON.stringify(jsonData, null, 2)],
+            `${avID}.json`,
+            { type: 'application/json' }
+        ));
+
+        const putResponse = await fetchSyncPost('/api/file/putFile', formData);
+
+        if (putResponse.code !== 0) {
+            throw new Error(putResponse.msg || "保存数据库文件失败");
+        }
     } catch (error) {
         return {
             code: 1,

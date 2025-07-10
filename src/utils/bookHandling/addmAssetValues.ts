@@ -1,42 +1,42 @@
 import { formatTime, generateUniqueBlocked } from '../core/formatOp';
-const fs = require('fs');
-const path = require('path');
-const https = require('https');
+import { fetchSyncPost } from "siyuan";
 
-export async function downloadCover(url: string, title: string, workspacePath: string) {
-    if (!url || !url.startsWith('https://')) {
-        throw new Error('仅支持 HTTPS 协议下载封面');
+export async function downloadCover(base64Data: string, title: string,) {
+    // 从base64数据中提取MIME类型
+    const matches = base64Data.match(/^data:(image\/\w+);base64,/);
+    if (!matches || matches.length < 2) {
+        throw new Error('无效的Base64图片数据');
     }
 
+    const mimeType = matches[1];
+    const fileExt = mimeType.split('/')[1] || 'jpg';
     const cleanTitle = title.replace(/[^\w\u4e00-\u9fa5]/g, '_');
     const timestamp = formatTime();
 
-    // 创建封面存储目录
-    const coverDir = path.join(workspacePath, 'data/assets/covers');
-    if (!fs.existsSync(coverDir)) {
-        fs.mkdirSync(coverDir, { recursive: true });
+    // 生成文件名（保持与原逻辑一致）
+    const fileName = `${cleanTitle}_${timestamp}.${fileExt}`;
+    const filePath = `/data/assets/covers/${fileName}`;
+
+    // 创建文件对象
+    const byteString = atob(base64Data.split(',')[1]);
+    const arrayBuffer = new ArrayBuffer(byteString.length);
+    const uint8Array = new Uint8Array(arrayBuffer);
+    for (let i = 0; i < byteString.length; i++) {
+        uint8Array[i] = byteString.charCodeAt(i);
+    }
+    const imageFile = new File([uint8Array], fileName, { type: mimeType });
+
+    // 使用思源 API 上传文件
+    const formData = new FormData();
+    formData.append("path", filePath);
+    formData.append("file", imageFile);
+    const response = await fetchSyncPost('/api/file/putFile', formData);
+
+    if (response.code !== 0) {
+        throw new Error(response.msg || "封面保存失败");
     }
 
-    // 生成带扩展名的文件名
-    const fileExt = url.split('.').pop()?.split(/[#?]/)[0] || 'jpg';
-    const coverPath = path.join(coverDir, `${cleanTitle}_${timestamp}.${fileExt}`);
-
-    return new Promise((resolve, reject) => {
-        https.get(url, {
-            headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-            }
-        }, (response) => {
-            const fileStream = fs.createWriteStream(coverPath);
-            response.pipe(fileStream);
-            fileStream.on('finish', () => {
-                fileStream.close();
-                resolve(`assets/covers/${cleanTitle}_${timestamp}.${fileExt}`);
-            });
-        }).on('error', (err) => {
-            reject(err);
-        });
-    });
+    return `assets/covers/${fileName}`;
 }
 
 export function addCover(jsonData: any, uniqueBlockId: string, coverUrl: string) {
@@ -55,7 +55,7 @@ export function addCover(jsonData: any, uniqueBlockId: string, coverUrl: string)
             }
         };
         jsonData.keyValues.push(newKey);
-        
+
         // 添加列到视图
         jsonData.views[0].table.columns.push({
             id: newKey.key.id,

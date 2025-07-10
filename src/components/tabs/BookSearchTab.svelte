@@ -1,5 +1,7 @@
 <script lang="ts">
     import { createEventDispatcher } from "svelte";
+    import { getImage } from "@/utils/core/getImg";
+
 
     export let inputVales: string;
     export let bookInfo: any;
@@ -15,6 +17,19 @@
         fetchBookData: void;
         addBook: void;
     }>();
+
+    let coverData = "";
+
+    $: if (bookInfo?.cover) {
+        (async () => {
+            try {
+                coverData = await getImage(bookInfo.cover);
+            } catch (error) {
+                console.error("封面加载失败:", error);
+                coverData = "";
+            }
+        })();
+    }
 </script>
 
 <div class="b3-dialog__content book-info">
@@ -45,9 +60,10 @@
                 <div class="cover-column" style="center">
                     {#if bookInfo.cover}
                         <img
-                            src={bookInfo.cover}
+                            src={coverData}
                             alt="书籍封面"
                             class="book-cover"
+                            style={!coverData ? "display: none;" : ""}
                         />
                     {/if}
                 </div>
