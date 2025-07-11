@@ -320,8 +320,10 @@ async function syncNotesProcess(plugin: any, cookies: string, notebooks: any): P
 # {{notebookTitle}}
 **最后同步时间**: {{updateTime}}
 
+{{#globalComments}}
 ## 书评
 > 💬 {{globalComments}}
+{{/globalComments}}
 
 {{#chapters}}
 ## {{chapterTitle}}
@@ -466,7 +468,9 @@ async function syncNotesProcess(plugin: any, cookies: string, notebooks: any): P
                                     )
                             ).join('\n');
                         })
-                        .replace(/\{\{globalComments\}\}/g, variables.globalComments || '')
+                        .replace(/\{\{#globalComments\}\}([\s\S]*?)\{\{\/globalComments\}\}/g, (_, section) => {
+                            return variables.globalComments ? section : '';
+                        })
                         .replace(/\{\{(\w+)\}\}/g, (_, key) => variables[key] || '');
                 };
 
