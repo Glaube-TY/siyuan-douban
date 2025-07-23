@@ -4,6 +4,7 @@
     import { svelteDialog } from "@/libs/dialog";
     import {
         createWereadDialog,
+        createWereadQRCodeDialog,
         createNotebooksDialog,
         createBookShelfDialog,
         createWereadNotesTemplateDialog,
@@ -28,7 +29,6 @@
 
     let autoSync = false;
     let isSyncing = false;
-    let wrVid = "";
     let userVid = "";
     let isChecking = false;
     let checkMessage = "";
@@ -47,9 +47,8 @@
         autoSync = wereadSetting.autoSync;
 
         if (savedCookie) {
-            cookies = savedCookie;
-            const result = checkWrVid(savedCookie);
-            wrVid = result.wrVid;
+            cookies = savedCookie.cookies;
+            const result = checkWrVid(cookies);
             userVid = result.userVid;
             checkMessage = `<span class="${result.checkMessage.includes("✅") ? "success" : "error"}">${result.checkMessage}</span>`;
 
@@ -61,6 +60,30 @@
                     userVid,
                 );
                 checkMessage = verifyResult.message;
+
+                if (verifyResult.loginDue) {
+                    isChecking = false;
+                    checkMessage = "登录已过期，正在更新登录信息……";
+                    const autoCookies = await createWereadQRCodeDialog(false);
+                    const savedata = {
+                        cookies: autoCookies,
+                        isQRCode: true,
+                    };
+                    plugin.saveData("weread_cookie", savedata);
+
+                    const result = checkWrVid(autoCookies);
+                    userVid = result.userVid;
+
+                    if (userVid) {
+                        isChecking = true;
+                        verifyCookie(plugin, autoCookies, userVid).then(
+                            (verifyResult) => {
+                                checkMessage = verifyResult.message;
+                                isChecking = false;
+                            },
+                        );
+                    }
+                }
                 isChecking = false;
             }
         }
@@ -235,12 +258,39 @@
     >
     <div class="cookie-weread-setting">
         <button
+            class="scan-qrcode"
+            on:click={async () => {
+                const autoCookies = await createWereadQRCodeDialog(true);
+                const savedata = {
+                    cookies: autoCookies,
+                    isQRCode: true,
+                };
+                plugin.saveData("weread_cookie", savedata);
+
+                const result = checkWrVid(autoCookies);
+                userVid = result.userVid;
+
+                if (userVid) {
+                    isChecking = true;
+                    verifyCookie(plugin, autoCookies, userVid).then(
+                        (verifyResult) => {
+                            checkMessage = verifyResult.message;
+                            isChecking = false;
+                        },
+                    );
+                }
+            }}>扫码登录</button
+        >
+        <button
             on:click={createWereadDialog(cookies, (newCookies) => {
                 cookies = newCookies;
-                plugin.saveData("weread_cookie", newCookies);
+                const savedata = {
+                    cookies: newCookies,
+                    isQRCode: false,
+                };
+                plugin.saveData("weread_cookie", savedata);
 
                 const result = checkWrVid(newCookies);
-                wrVid = result.wrVid;
                 userVid = result.userVid;
                 checkMessage = `<span class="${result.checkMessage.includes("✅") ? "success" : "error"}">${result.checkMessage}</span>`;
 
