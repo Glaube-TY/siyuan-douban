@@ -50,8 +50,8 @@
     interface BookInfo {
         title: string;
         subtitle?: string;
-        authors: string[];
-        translators: string[];
+        authors?: string[];
+        translators?: string[];
         isbn: string;
         publisher?: string;
         publishDate?: string;
@@ -120,9 +120,9 @@
 
         try {
             const result = await loadAVData(avID, fullData);
-            if (result) {
+            if (result.code === 1) {
                 showMessage(`❌ 保存失败: ${result.msg}`, 5000);
-            } else {
+            } else if (result.code === 0) {
                 showMessage(`✅《${bookInfo.title}》已加入书库`, 3000);
                 await fetchPost("/api/ui/reloadAttributeView", { id: avID });
             }
@@ -155,9 +155,10 @@
         }
     }
 
+    // 验证数据库ID
     async function validateDatabaseID() {
         if (!bookDatabassID) {
-            showMessage("⚠️ 请输入数据库块ID", 3000); // 新增空值提示
+            showMessage("⚠️ 请输入数据库块ID", 3000);
             return;
         }
 
@@ -167,7 +168,7 @@
             const result = await sql(query);
 
             if (result.length === 0 || !result[0]?.markdown) {
-                throw new Error("未找到对应的数据库块");
+                throw new Error("未找到对应的数据库块，请输入数据库视图块ID");
             }
 
             const avDivMatch = result[0].markdown.match(/data-av-id="([^"]+)"/);

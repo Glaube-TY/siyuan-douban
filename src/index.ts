@@ -4,18 +4,13 @@ import { svelteDialog } from "./libs/dialog";
 import * as sdk from "@siyuan-community/siyuan-sdk";
 import { syncWereadNotes } from "./utils/weread/syncWereadNotes";
 import {
-    createWereadDialog,
     createWereadQRCodeDialog,
-    createNotebooksDialog,
-    createBookShelfDialog,
-    createWereadNotesTemplateDialog,
     checkWrVid,
     verifyCookie,
 } from "@/utils/weread/loginWeread";
 import {
     getNotebooks,
     getBook,
-    getBookShelf,
 } from "@/utils/weread/wereadInterface";
 
 const STORAGE_NAME = "menu-config";

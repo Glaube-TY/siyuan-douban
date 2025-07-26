@@ -26,26 +26,33 @@ type TemplateVariables = {
 };
 
 export async function syncWereadNotes(plugin: any, cookies: string, isupdate: boolean) {
-    const personalNotebooks = await getPersonalNotebooks(plugin);
+    const personalNotebooks = await getPersonalNotebooks(plugin); // 获取预加载的书籍笔记列表
+
+    // 获取插件配置并提取数据库ID
     const settingConfig = await plugin.loadData("settings.json");
     const ViewID = settingConfig?.bookDatabaseID;
     const query = `SELECT * FROM blocks WHERE id = "${ViewID}"`;
     const result = await sql(query);
     const avID = result[0].markdown.match(/data-av-id="([^"]+)"/)[1];
+
+    // 获取原始数据库完整信息
     const getdatabase = await fetchSyncPost('/api/av/getAttributeView', { "id": avID });
     const database = getdatabase.data.av;
-    const ISBNKey = database.keyValues.find((item: any) => item.key.name === "ISBN");
-    const ISBNColumn = ISBNKey?.values || [];
+    const ISBNKey = database.keyValues.find((item: any) => item.key.name === "ISBN"); // 获取ISBN列内容
+    const ISBNColumn = ISBNKey?.values || []; // 获取ISBN列所有行内容
 
+    // 根据是否更新同步进行不同处理
     if (isupdate) {
-        const oldNotebooks = await plugin.loadData("weread_notebooks");
+        // 更新同步逻辑
+        const oldNotebooks = await plugin.loadData("weread_notebooks"); // 获取上一次的同步数据
+        // 若没有同步过则要求进行一次完整同步
         if (!oldNotebooks) {
             showMessage("❌请先进行一次全部同步后再更新同步");
             return;
         } else {
-            // 获取数据库实际存在的ISBN集合
+            // 获取数据库中的ISBN集合
             const existingIsbnsInDB = new Set(
-                ISBNKey?.values.map(item => item.number?.content?.toString()).filter(Boolean) || []
+                ISBNColumn.map(item => item.number?.content?.toString()).filter(Boolean) || []
             );
 
             // 过滤旧书数据（只保留数据库存在的记录）
@@ -59,21 +66,17 @@ export async function syncWereadNotes(plugin: any, cookies: string, isupdate: bo
             );
 
             // 生成需要更新的书籍列表
-            const updatedNotebooks = latestBooksInDB.filter(newBook => {
+            let updatedNotebooks = latestBooksInDB.filter(newBook => {
                 const oldBook = validOldNotebooks.find(b => b.isbn === newBook.isbn);
                 return !oldBook || oldBook.updatedTime !== newBook.updatedTime;
             });
 
-            // 合并需要处理的书籍
-            let finalSyncBooks = [...updatedNotebooks];
-            let finalSaveBooks = [...latestBooksInDB];
-
-            // 处理新书逻辑（当数据库存在但本地记录没有的情况）
+            // 处理当数据库存在但本地记录没有的情况
             const newBooksInDB = latestBooksInDB.filter(newBook =>
                 !validOldNotebooks.some(old => old.isbn === newBook.isbn)
             );
             if (newBooksInDB.length > 0) {
-                finalSyncBooks = finalSyncBooks.concat(newBooksInDB);
+                updatedNotebooks = updatedNotebooks.concat(newBooksInDB);
             }
 
             // 重建映射关系（从数据库获取实际blockID）
@@ -84,7 +87,7 @@ export async function syncWereadNotes(plugin: any, cookies: string, isupdate: bo
             });
 
             // 增强笔记本数据
-            const enhancedNotebooks = finalSyncBooks.map(notebook => ({
+            const enhancedNotebooks = updatedNotebooks.map(notebook => ({
                 ...notebook,
                 blockID: isbnBlockMap.get(notebook.isbn?.toString()) || null
             }));
@@ -147,24 +150,27 @@ export async function syncWereadNotes(plugin: any, cookies: string, isupdate: bo
                                             if (isbn) newIsbnBlockMap.set(isbn, item.blockID);
                                         });
 
-                                        const updatedNotebooks = personalNotebooks
-                                            .filter(notebook => newIsbnBlockMap.has(notebook.isbn?.toString()))
-                                            .map(notebook => ({
-                                                ...notebook,
-                                                blockID: newIsbnBlockMap.get(notebook.isbn?.toString())
-                                            }));
-
                                         showMessage(`✅ 成功导入 ${selectedBooks.length} 本书籍`);
+                                        
                                         const mergedSaveBooks = [
-                                            ...finalSaveBooks,
+                                            ...latestBooksInDB,
                                             ...selectedBooks.map(book => ({
                                                 ...book,
                                                 blockID: newIsbnBlockMap.get(book.isbn?.toString())
                                             }))
                                         ];
+                                        // 在新书导入完成后，创建一个只包含需要同步的书籍列表
+                                        const booksToSync = [
+                                            ...enhancedNotebooks, // 已经更新的书籍
+                                            ...selectedBooks.map(book => ({
+                                                ...book,
+                                                blockID: newIsbnBlockMap.get(book.isbn?.toString())
+                                            })) // 新导入的书籍
+                                        ];
+
                                         await plugin.saveData("weread_notebooks", mergedSaveBooks);
                                         showMessage("⌛开始同步微信读书笔记……");
-                                        await syncNotesProcess(plugin, cookies, updatedNotebooks)
+                                        await syncNotesProcess(plugin, cookies, booksToSync); // 只同步需要同步的书籍
 
                                     } catch (error) {
                                         console.error("批量导入失败:", error);
@@ -176,10 +182,10 @@ export async function syncWereadNotes(plugin: any, cookies: string, isupdate: bo
                                         await saveIgnoredBooks(plugin, ignoredBooks);
                                         dialog.close();
                                         if (enhancedNotebooks.length == 0) {
-                                            await plugin.saveData("weread_notebooks", finalSaveBooks);
+                                            await plugin.saveData("weread_notebooks", latestBooksInDB);
                                             showMessage("微信读书没有新笔记~");
                                         } else {
-                                            await plugin.saveData("weread_notebooks", finalSaveBooks);
+                                            await plugin.saveData("weread_notebooks", latestBooksInDB);
                                             await syncNotesProcess(plugin, cookies, enhancedNotebooks);
                                         }
                                     } catch (error) {
