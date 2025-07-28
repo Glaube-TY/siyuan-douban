@@ -2,6 +2,7 @@
     import { createEventDispatcher } from "svelte";
     const dispatch = createEventDispatcher();
 
+    export let plugin: any;
     export let showTemplateEditor: boolean;
     export let noteTemplate: string;
 </script>
@@ -24,18 +25,21 @@
                 >
                     <div style="display: flex; align-items: center; gap: 8px;">
                         <span>📝</span>
-                        <p class="b3-dialog__title">自定义读书笔记模板</p>
+                        <p class="b3-dialog__title">
+                            {plugin.i18n.customNoteTemplate}
+                        </p>
                     </div>
                     <div style="display: flex; gap: 8px;">
                         <button
                             class="b3-button dialog-btn"
-                            on:click={() => dispatch("close")}>取消</button
+                            on:click={() => dispatch("close")}
+                            >{plugin.i18n.cancel}</button
                         >
                         <button
                             class="b3-button dialog-btn primary-btn"
                             on:click={() => dispatch("save")}
                         >
-                            保存模板
+                            {plugin.i18n.confirm}
                         </button>
                     </div>
                 </div>
@@ -55,7 +59,7 @@
                         color: var(--b3-theme-text);
                         transition: background-color 0.2s ease;
                         box-sizing: border-box;"
-                    placeholder="在此输入你的笔记模板..."
+                    placeholder={plugin.i18n.placeholder2}
                 ></textarea>
             </div>
         </div>

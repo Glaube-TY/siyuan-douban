@@ -1,4 +1,8 @@
 <script lang="ts">
+    import { I18N } from "siyuan";
+
+    export let i18n: I18N;
+
     export let books: Array<{
         title: string;
         isbn: string;
@@ -58,15 +62,15 @@
         <button
             class="confirm-btn"
             on:click={() => onConfirm(selectedBooks, ignoredBooks)}
-            >确认选择</button
+            >{i18n.confirmSelect}</button
         >
         <button class="continue-btn" on:click={() => onContinue(ignoredBooks)}
-            >继续同步</button
+            >{i18n.continueSync}</button
         >
         <button class="cancel-btn" on:click={() => onCancel()}>取消同步</button>
     </div>
     <p style="text-align: center;">
-        选择想要同步笔记的书籍，其中没有ISBN的可以手动填写以使其与数据库匹配。
+        {i18n.selectBooksTip}
     </p>
     <table class="book-table">
         <thead>
@@ -74,15 +78,15 @@
                 <th>
                     <input
                         type="checkbox"
-                        title="全选/取消全选"
+                        title={i18n.selectAll}
                         on:change={toggleAllBooks}
                         checked={allSelected}
                     />
-                    选择
+                    {i18n.select}
                 </th>
-                <th class="book-title">书名</th>
-                <th class="book-isbn">ISBN</th>
-                <th class="ignore-column">忽略</th>
+                <th class="book-title">{i18n.bookTitle1}</th>
+                <th class="book-isbn">{i18n.bookIsbn1}</th>
+                <th class="ignore-column">{i18n.ignore}</th>
             </tr>
         </thead>
         <tbody>
@@ -106,12 +110,12 @@
                             class="isbn-input"
                             disabled={originalISBNs.get(book.bookID) !== ""}
                             placeholder={originalISBNs.get(book.bookID)
-                                ? "已存在ISBN"
+                                ? i18n.bookIsbnExist
                                 : book.isbn
                                   ? isValidISBN(book.isbn)
-                                      ? "有效ISBN"
-                                      : "ISBN格式错误"
-                                  : "手动输入ISBN"}
+                                      ? i18n.bookIsbnValid
+                                      : i18n.bookIsbnInvalid
+                                  : i18n.bookIsbnManual}
                             class:invalid={!isValidISBN(book.isbn) &&
                                 book.isbn !== ""}
                         />

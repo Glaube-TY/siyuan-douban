@@ -1,6 +1,8 @@
 <script lang="ts">
     import { createEventDispatcher } from "svelte";
     const dispatch = createEventDispatcher();
+
+    export let plugin: any;
     export let showSearchDialog: boolean;
     export let searchKeyword: string;
     export let webviewRef: any;
@@ -24,13 +26,15 @@
                     <div style="display: flex; align-items: center; gap: 8px;">
                         <span>🔍</span>
                         <p class="b3-dialog__title">
-                            书籍搜索 - 《{decodeURIComponent(searchKeyword)}》
+                            {plugin.i18n.searchBook} - 《{decodeURIComponent(
+                                searchKeyword,
+                            )}》
                         </p>
                     </div>
                     <div style="display: flex; align-items: center; gap: 8px;">
                         <span>⚠</span>
                         <p class="b3-dialog__title">
-                            页面加载需要一段时间，请耐心等待。
+                            {plugin.i18n.searchBookLoading}
                         </p>
                     </div>
                     <div style="display: flex; gap: 8px;">
@@ -46,13 +50,18 @@
                                     dispatch("select", html);
                                     dispatch("close");
                                 } catch (error) {
-                                    console.error("页面内容获取失败:", error);
+                                    console.error(
+                                        "Page content failed to obtain:",
+                                        error,
+                                    );
                                 }
-                            }}>选择书籍</button
+                            }}>{plugin.i18n.confirm}</button
                         >
+
                         <button
                             class="b3-button dialog-btn"
-                            on:click={() => dispatch("close")}>关闭</button
+                            on:click={() => dispatch("close")}
+                            >{plugin.i18n.cancel}</button
                         >
                     </div>
                 </div>

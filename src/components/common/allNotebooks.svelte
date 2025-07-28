@@ -1,4 +1,5 @@
 <script lang="ts">
+    export let plugin: any;
     export let books: Array<{
         title: string;
         author: string;
@@ -23,17 +24,17 @@
     <table class="book-table">
         <thead>
             <tr>
-                <th>封面</th>
-                <th>书名</th>
-                <th>作者</th>
-                <th>出版社</th>
-                <th>出版时间</th>
-                <th>ISBN</th>
-                <th>价格</th>
-                <th>字数</th>
-                <th>微信读书评分</th>
-                <th>个人笔记数</th>
-                <th>个人评论数</th>
+                <th>{plugin.i18n.cover1}</th>
+                <th>{plugin.i18n.title1}</th>
+                <th>{plugin.i18n.author1}</th>
+                <th>{plugin.i18n.publisher1}</th>
+                <th>{plugin.i18n.publishTime1}</th>
+                <th>{plugin.i18n.isbn1}</th>
+                <th>{plugin.i18n.price1}</th>
+                <th>{plugin.i18n.totalWords1}</th>
+                <th>{plugin.i18n.star1}</th>
+                <th>{plugin.i18n.noteCount1}</th>
+                <th>{plugin.i18n.reviewCount1}</th>
             </tr>
         </thead>
         <tbody>
@@ -43,7 +44,7 @@
                         ><img
                             src={book.cover}
                             class="book-cover"
-                            alt="封面"
+                            alt={plugin.i18n.cover1}
                         /></td
                     >
                     <td>{book.title}</td>

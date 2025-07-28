@@ -1,7 +1,9 @@
 <script lang="ts">
+    import type { I18N } from "siyuan";
     import { createEventDispatcher } from "svelte";
     const dispatch = createEventDispatcher();
 
+    export let i18n: I18N;
     export let bookDatabassID: string;
     export let tempRatings: string;
     export let tempCategories: string;
@@ -12,34 +14,34 @@
 </script>
 
 <div class="settings">
-    <h3>书籍数据库块ID</h3>
+    <h3>{i18n.bookDatabaseID}</h3>
     <div class="form-row">
         <input
             type="text"
             bind:value={bookDatabassID}
-            placeholder="请输入书籍数据库块ID"
+            placeholder={i18n.bookDatabaseIDPlaceholder}
         />
         {databaseStatusMessage}
     </div>
 
-    <h3>偏好设置</h3>
+    <h3>{i18n.preferenceSettings}</h3>
     <div class="form-row custom-options">
         <label
-            >评分等级（逗号分隔）：
+            >{i18n.ratingsLevels}
             <input bind:value={tempRatings} />
         </label>
     </div>
 
     <div class="form-row custom-options">
         <label
-            >书籍分类（逗号分隔）：
+            >{i18n.bookCategories}
             <input bind:value={tempCategories} />
         </label>
     </div>
 
     <div class="form-row custom-options">
         <label
-            >阅读状态（逗号分隔）：
+            >{i18n.readingStatuses}
             <input bind:value={tempStatuses} />
         </label>
     </div>
@@ -47,14 +49,14 @@
     <div class="form-row template">
         <label>
             <input type="checkbox" bind:checked={addNotes1} />
-            默认生成读书笔记
+            {i18n.defaultGenerateNotes}
         </label>
         <button class="b3-button" on:click={() => dispatch("openTemplate")}
-            >📝 设置模板</button
+            >📝 {i18n.setTemplate}</button
         >
     </div>
 
     <div class="saveButton">
-        <button on:click={() => dispatch("save")}>保存设置</button>
+        <button on:click={() => dispatch("save")}>{i18n.saveSettings}</button>
     </div>
 </div>

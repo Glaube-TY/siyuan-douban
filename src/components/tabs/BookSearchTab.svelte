@@ -1,7 +1,9 @@
 <script lang="ts">
+    import type { I18N } from "siyuan";
     import { createEventDispatcher } from "svelte";
     import { getImage } from "@/utils/core/getImg";
 
+    export let i18n: I18N;
 
     export let inputVales: string;
     export let bookInfo: any;
@@ -25,7 +27,7 @@
             try {
                 coverData = await getImage(bookInfo.cover);
             } catch (error) {
-                console.error("封面加载失败:", error);
+                console.error("Cover loading failed:", error);
                 coverData = "";
             }
         })();
@@ -37,7 +39,7 @@
         <input
             type="text"
             bind:value={inputVales}
-            placeholder="输入书名或ISBN号（回车确认）"
+            placeholder={i18n.placeholder1}
             on:keydown={(e) => e.key === "Enter" && dispatch("fetchBookData")}
         />
         <button on:click={() => dispatch("fetchBookData")}>🔍</button>
@@ -48,7 +50,7 @@
                 dispatch("addBook");
             }}
         >
-            ✅添加书籍
+            {i18n.addBookButton}
         </button>
     </div>
 
@@ -61,7 +63,7 @@
                     {#if bookInfo.cover}
                         <img
                             src={coverData}
-                            alt="书籍封面"
+                            alt={i18n.bookCover}
                             class="book-cover"
                             style={!coverData ? "display: none;" : ""}
                         />
@@ -70,7 +72,7 @@
                 <div class="info-column">
                     <div class="form-row">
                         <label
-                            >书名：<input
+                            >{i18n.bookTitle}<input
                                 bind:value={bookInfo.title}
                                 style="width: 30em;"
                             /></label
@@ -78,7 +80,7 @@
                     </div>
                     <div class="form-row">
                         <label
-                            >副标题：
+                            >{i18n.bookSubtitle}
                             <input
                                 bind:value={bookInfo.subtitle}
                                 style="width: 29em;"
@@ -87,7 +89,7 @@
                     </div>
                     <div class="form-row">
                         <label
-                            >原作名：
+                            >{i18n.bookOriginalTitle}
                             <input
                                 bind:value={bookInfo.originalTitle}
                                 style="width: 29em;"
@@ -101,7 +103,7 @@
                     >
                         <div style="flex: 1;">
                             <label
-                                >作者：<input
+                                >{i18n.bookAuthors}<input
                                     bind:value={bookInfo.authors}
                                     style="flex: 1;"
                                 /></label
@@ -109,7 +111,7 @@
                         </div>
                         <div>
                             <label
-                                >译者：<input
+                                >{i18n.bookTranslators}<input
                                     bind:value={bookInfo.translators}
                                     style="width: 10em; min-width: 0;"
                                 /></label
@@ -122,7 +124,7 @@
                     >
                         <div style="flex: 1;">
                             <label
-                                >出版社：<input
+                                >{i18n.bookPublishers}<input
                                     bind:value={bookInfo.publisher}
                                     style="flex: 1;"
                                 /></label
@@ -130,7 +132,7 @@
                         </div>
                         <div>
                             <label
-                                >出版年：<input
+                                >{i18n.bookPublishDate}<input
                                     bind:value={bookInfo.publishDate}
                                     style="width: 9em; min-width: 0;"
                                 /></label
@@ -148,7 +150,7 @@
                 >
                     <div>
                         <label
-                            >出品方：<input
+                            >{i18n.bookProducers}<input
                                 bind:value={bookInfo.producer}
                                 style="width: 18em; min-width: 0;"
                             /></label
@@ -156,7 +158,7 @@
                     </div>
                     <div>
                         <label
-                            >丛书：<input
+                            >{i18n.bookSeries}<input
                                 bind:value={bookInfo.series}
                                 style="width: 18em; min-width: 0;"
                             /></label
@@ -170,7 +172,7 @@
                 >
                     <div>
                         <label
-                            >豆瓣评分：<input
+                            >{i18n.bookRating}<input
                                 bind:value={bookInfo.rating}
                                 style="width: 3em; min-width: 0;"
                             /></label
@@ -178,7 +180,7 @@
                     </div>
                     <div>
                         <label
-                            >评分人数：<input
+                            >{i18n.bookRatingCount}<input
                                 bind:value={bookInfo.ratingCount}
                                 style="width: 3em; min-width: 0;"
                             /></label
@@ -186,7 +188,7 @@
                     </div>
                     <div>
                         <label
-                            >定价：<input
+                            >{i18n.bookPrice}<input
                                 bind:value={bookInfo.price}
                                 style="width: 3em; min-width: 0;"
                             /></label
@@ -194,7 +196,7 @@
                     </div>
                     <div class="form-row">
                         <label
-                            >装帧：<input
+                            >{i18n.bookBinding}<input
                                 bind:value={bookInfo.binding}
                                 style="width: 3em; min-width: 0;"
                             /></label
@@ -202,7 +204,7 @@
                     </div>
                     <div>
                         <label
-                            >页数：<input
+                            >{i18n.bookPages}<input
                                 bind:value={bookInfo.pages}
                                 style="width: 3em; min-width: 0;"
                             /></label
@@ -219,7 +221,7 @@
                 >
                     <div>
                         <label>
-                            我的评分：
+                            {i18n.bookMyRating}：
                             <select bind:value={myRatingIndex}>
                                 {#each customRatings as rating, index}
                                     <option value={index}>{rating}</option>
@@ -229,7 +231,7 @@
                     </div>
                     <div>
                         <label>
-                            书籍分类：
+                            {i18n.bookCategory}：
                             <select bind:value={bookCategoryIndex}>
                                 {#each customCategories as category, index}
                                     <option value={index}>{category}</option>
@@ -239,7 +241,7 @@
                     </div>
                     <div>
                         <label>
-                            阅读状态：
+                            {i18n.bookReadingStatus}：
                             <select bind:value={readingStatusIndex}>
                                 {#each customReadingStatuses as status, index}
                                     <option value={index}>{status}</option>
@@ -252,7 +254,7 @@
                             <input
                                 type="checkbox"
                                 bind:checked={bookInfo.addNotes}
-                            />是否生成读书笔记
+                            />{i18n.bookAddNotes}
                         </label>
                     </div>
                 </div>
@@ -263,7 +265,7 @@
                 >
                     <div>
                         <label>
-                            开始日期：
+                            {i18n.bookStartDate}：
                             <input
                                 type="date"
                                 bind:value={bookInfo.startDate}
@@ -272,7 +274,7 @@
                     </div>
                     <div>
                         <label>
-                            读完日期：
+                            {i18n.bookFinishDate}：
                             <input
                                 type="date"
                                 bind:value={bookInfo.finishDate}

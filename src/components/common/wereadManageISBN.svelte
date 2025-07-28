@@ -22,9 +22,9 @@
     <table class="isbn-table">
         <thead>
             <tr>
-                <th>书名</th>
-                <th>ISBN</th>
-                <th>操作</th>
+                <th>{plugin.i18n.bookTitle1}</th>
+                <th>{plugin.i18n.bookIsbn1}</th>
+                <th>{plugin.i18n.operation}</th>
             </tr>
         </thead>
         <tbody>
@@ -35,12 +35,12 @@
                         <input
                             type="text"
                             bind:value={book.customISBN}
-                            placeholder="请输入ISBN"
+                            placeholder={plugin.i18n.bookIsbnManual}
                         />
                     </td>
                     <td>
                         <button on:click={() => handleDelete(book.bookID)}
-                            >删除</button
+                            >{plugin.i18n.delete}</button
                         >
                     </td>
                 </tr>
@@ -53,10 +53,10 @@
             on:click={() => {
                 plugin.saveData("weread_customBooksISBN", localBooks);
                 onConfirm();
-            }}>确认修改</button
+            }}>{plugin.i18n.confirm}</button
         >
 
-        <button on:click={onCancel}>取消</button>
+        <button on:click={onCancel}>{plugin.i18n.cancel}</button>
     </div>
 </div>
 

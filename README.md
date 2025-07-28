@@ -1,15 +1,15 @@
 <div class="sy__outline" style="max-width: 800px; margin: 0 auto;">
     <div style="text-align: center; padding: 2em; background: linear-gradient(135deg, #2d8cf0, #1e6bff); border-radius: 12px;">
-        <h1 style="color: white; margin: 0; font-size: 2.2em;">📚 读书笔记插件</h1>
-        <div style="color: rgba(255,255,255,0.9); margin-top: 0.5em;">让书籍管理更智能、更高效</div>
+        <h1 style="color: white; margin: 0; font-size: 2.2em;">📚 Reading Notes Plugin</h1>
+        <div style="color: rgba(255,255,255,0.9); margin-top: 0.5em;">Make book management smarter and more efficient</div>
     </div>
     <div style="margin-top: 1.5em; padding: 1.5em; background: white; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.05);">
-        <h2 style="color: #2d8cf0; margin: 0 0 1em;">🚀 核心功能</h2>
+        <h2 style="color: #2d8cf0; margin: 0 0 1em;">🚀 Core Features</h2>
         <ul style="margin: 0; padding-left: 1.2em;">
-            <li style="margin: 0.5em 0; padding: 8px 12px; background: #f8fafc; border-radius: 6px;">🔍 ISBN 或关键词（书名）快速查询</li>
-            <li style="margin: 0.5em 0; padding: 8px 12px; background: #f8fafc; border-radius: 6px;">📥 自动填充书籍元数据到数据库</li>
-            <li style="margin: 0.5em 0; padding: 8px 12px; background: #f8fafc; border-radius: 6px;">📝 基于模板生成读书笔记</li>
-            <li style="margin: 0.5em 0; padding: 8px 12px; background: #f8fafc; border-radius: 6px;">📗 自动同步微信读书笔记（v2.0.0支持）</li>
+            <li style="margin: 0.5em 0; padding: 8px 12px; background: #f8fafc; border-radius: 6px;">🔍 ISBN or keyword search</li>
+            <li style="margin: 0.5em 0; padding: 8px 12px; background: #f8fafc; border-radius: 6px;">📥 Auto-fill book metadata</li>
+            <li style="margin: 0.5em 0; padding: 8px 12px; background: #f8fafc; border-radius: 6px;">📝 Generate notes based on templates</li>
+            <li style="margin: 0.5em 0; padding: 8px 12px; background: #f8fafc; border-radius: 6px;">📗 Auto-sync Weread notes (v2.0.0 supported)</li>
         </ul>
         <div style="margin: 1.5em 0; border-top: 1px solid #eee;"></div>
         <a href="https://ttl8ygt82u.feishu.cn/wiki/VZdjwDNxWi4j0jkdyxMcOg2VnFf?from=from_copylink" 
@@ -28,12 +28,12 @@
            onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 6px rgba(45,140,240,0.1)'"
            onmousedown="this.style.transform='translateY(1px)'"
            onmouseup="this.style.transform='translateY(-2px)'">
-            📖 详细使用教程（重要）
+            📖 Detailed usage tutorial (important)
         </a>
     </div>
     <div style="margin: 1.5em 0; padding: 1.5em; background: #fff9f2; border-left: 4px solid #ffc107; border-radius: 8px;">
-        <h2 style="color: #ff9f00; margin: 0 0 1em;">🌹 支持开发</h2>
-        <p style="margin: 0.5em 0;">如果这个插件对你有帮助，欢迎给作者点个赞或打赏一杯咖啡，这将鼓励作者更新制作更多有用的插件：</p>
+        <h2 style="color: #ff9f00; margin: 0 0 1em;">🌹 Support development</h2>
+        <p style="margin: 0.5em 0;">If this plugin is helpful to you, welcome to give the author a like or buy a cup of coffee, which will encourage the author to update and create more useful plugins:</p>
         <div style="margin: 1em 0; text-align: center;">
             <img src="https://glaube-ty.oss-cn-chengdu.aliyuncs.com/img/ReQR.png"
                  alt="TCQR"
@@ -56,13 +56,13 @@
                 onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 6px rgba(255,159,0,0.1)'"
                 onmousedown="this.style.transform='translateY(1px)'"
                 onmouseup="this.style.transform='translateY(-2px)'">
-                💖 特别鸣谢
+                💖 Special thanks
             </a>
         </div>
     </div>
     <div style="margin: 1.5em 0; padding: 1.5em; background: white; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.05);">
-        <h2 style="color: #2d8cf0; margin: 0 0 1em;">📅 更新日志</h2>
-        <p style="margin: 0.5em 0;">此处将不再显示更新日志，请点击下方👇按钮查看完整的更新日志。</p>
+        <h2 style="color: #2d8cf0; margin: 0 0 1em;">📅 Update log</h2>
+        <p style="margin: 0.5em 0;">This section will no longer display the update log. Please click the button below 👇 to view the complete update log.</p>
         <div style="text-align: center;">
         <a href="https://ttl8ygt82u.feishu.cn/wiki/KbpBw3NoCiCeyqkRb0iceTRtnKh" 
            style="display: inline-flex;
@@ -79,13 +79,13 @@
                   margin-top: 1.2em;
                   gap: 8px;">
             <span style="font-size: 1.1em; filter: drop-shadow(0 1px 1px rgba(0,0,0,0.1));">📄</span>
-            <span style="font-weight: 500; letter-spacing: 0.5px;">完整更新日志</span>
+            <span style="font-weight: 500; letter-spacing: 0.5px;">Complete update log</span>
         </a>
         </div>
     </div>
     <div style="margin: 1.5em 0; padding: 1.5em; background: #f0f9ff; border-left: 4px solid #2d8cf0; border-radius: 8px;">
-        <h2 style="color: #2d8cf0; margin: 0 0 1em;">💬 加入讨论</h2>
-        <p style="margin: 0.5em 0;">目前我在开发的插件有主页、读书笔记、空文档清理、彩色图标，所以统一用一个频道了，方便查看管理~</p>
+        <h2 style="color: #2d8cf0; margin: 0 0 1em;">💬 Join discussion</h2>
+        <p style="margin: 0.5em 0;">Since I am developing multiple plugins at the moment, I have unified them into a single channel for easy management and viewing.</p>
         <div style="margin: 1em 0; text-align: center;">
             <img src="https://glaube-ty.oss-cn-chengdu.aliyuncs.com/img/TCQR.jpg"
                  alt="TCQR"
@@ -111,13 +111,13 @@
                 onmousedown="this.style.transform='translateY(1px)'"
                 onmouseup="this.style.transform='translateY(-2px)'">
                 <span style="font-size: 1.1em; filter: drop-shadow(0 1px 1px rgba(0,0,0,0.1));">👥</span>
-                <span style="font-weight: 500; letter-spacing: 0.5px;">加入腾讯讨论频道</span>
+                <span style="font-weight: 500; letter-spacing: 0.5px;">Join Tencent discussion channel</span>
             </a>
         </div>
     </div>
     <div style="margin: 1.5em 0; padding: 1.5em; background: #f8f5ff; border-left: 4px solid #8a3ffc; border-radius: 8px;">
-        <h2 style="color: #8a3ffc; margin: 0 0 1em;">🔮 参考项目</h2>
-        <p style="margin: 0.5em 0; color: black;">本插件部分功能参考了以下优秀项目：</p>
+        <h2 style="color: #8a3ffc; margin: 0 0 1em;">🔮 Reference items</h2>
+        <p style="margin: 0.5em 0; color: black;">Some of the functions of this plugin are based on the following excellent projects:</p>
         <ul style="margin: 0; padding-left: 1.2em;">
             <li style="margin: 0.5em 0; padding: 12px; background: #f3f0ff; border-radius: 6px;">
                 <a href="https://github.com/zhaohongxuan/obsidian-weread-plugin" 
@@ -131,19 +131,34 @@
                     obsidian-weread-plugin
                 </a>
                 <span style="color: #666; display: block; line-height: 1.5;">
-                    微信读书笔记同步功能参考了其微信官方 API 接口。
+                    The Weread notes synchronization function refers to its official WeChat API interface.
+                </span>
+            </li>
+            <li style="margin: 0.5em 0; padding: 12px; background: #f3f0ff; border-radius: 6px;">
+                <a href="https://getquicker.net/sharedaction?code=c9154e53-d422-43de-4832-08dc59347e50" 
+                   style="color: #8a3ffc; 
+                          text-decoration: none;
+                          font-weight: 500;
+                          display: block;
+                          margin-bottom: 4px;"
+                   onmouseover="this.style.textDecoration='underline'"
+                   onmouseout="this.style.textDecoration='none'">
+                    Quicker - 读书笔记
+                </a>
+                <span style="color: #666; display: block; line-height: 1.5;">
+                    This plugin is based on the notes synchronization action developed for Obsidian and other applications in Quicker.
                 </span>
             </li>
         </ul>
     </div>
     <div style="margin: 1.5em 0; padding: 1.5em; background: #fff5f5; border-left: 4px solid #ff4d4f; border-radius: 8px;">
-        <h2 style="color: #ff4d4f; margin: 0 0 1em;">⚠️ 免责声明</h2>
+        <h2 style="color: #ff4d4f; margin: 0 0 1em;">⚠️ Disclaimers</h2>
         <ul style="margin: 0.5em 0; padding-left: 1.2em; color: #666;">
-            <li style="margin: 0.5em 0;">本插件数据来源于豆瓣公开数据，开发者不保证数据的准确性和完整性</li>
-            <li style="margin: 0.5em 0;">使用者应遵守豆瓣网的相关使用条款</li>
-            <li style="margin: 0.5em 0;">对于微信读书笔记同步需要基于 Cookie 远程获取个人信息，但都是在本地进行，如果介意慎用</li>
-            <li style="margin: 0.5em 0;">本插件数据仅用于个人书籍数据管理，禁止用于商业用途等违规行为</li>
-            <li style="margin: 0.5em 0;">开发者对使用本插件造成的任何损失不承担责任</li>
+            <li style="margin: 0.5em 0;">The data of this plugin is based on the public data of Douban, and the developer does not guarantee the accuracy and completeness of the data.</li>
+            <li style="margin: 0.5em 0;">Users should comply with the relevant use terms of the Douban website.</li>
+            <li style="margin: 0.5em 0;">For the synchronization of WeChat读书笔记, it is based on Cookie remote acquisition of personal information, and all are performed locally. If you are uncomfortable with this, please use it with caution.</li>
+            <li style="margin: 0.5em 0;">The data of this plugin is only used for personal book data management, and it is strictly prohibited from being used for commercial purposes or other violation behaviors.</li>
+            <li style="margin: 0.5em 0;">The developer assumes no responsibility for any losses caused by using this plugin.</li>
         </ul>
     </div>
 </div>

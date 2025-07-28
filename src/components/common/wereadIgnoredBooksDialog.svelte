@@ -23,8 +23,8 @@
     <table class="ignored-table">
         <thead>
             <tr>
-                <th>书名</th>
-                <th>操作</th>
+                <th>{plugin.i18n.bookTitle1}</th>
+                <th>{plugin.i18n.operation}</th>
             </tr>
         </thead>
         <tbody>
@@ -33,7 +33,7 @@
                     <td>{book.title}</td>
                     <td>
                         <button on:click={() => handleDelete(book.bookID)}
-                            >删除</button
+                            >{plugin.i18n.delete}</button
                         >
                     </td>
                 </tr>
@@ -47,10 +47,10 @@
                 // 保存修改后的数据
                 plugin.saveData("weread_ignoredBooks", localIgnoredBooks);
                 onConfirm();
-            }}>确认修改</button
+            }}>{plugin.i18n.confirm}</button
         >
 
-        <button on:click={onCancel}>取消</button>
+        <button on:click={onCancel}>{plugin.i18n.cancel}</button>
     </div>
 </div>
 

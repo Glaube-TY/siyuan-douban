@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { showMessage } from "siyuan";
+    import { showMessage, I18N } from "siyuan";
     import { onMount } from "svelte";
     import { svelteDialog } from "@/libs/dialog";
     import {
@@ -21,6 +21,7 @@
     import wereadManageISBN from "@/components/common/wereadManageISBN.svelte";
     import wereadIgnoredBooksDialog from "@/components/common/wereadIgnoredBooksDialog.svelte";
 
+    export let i18n: I18N;
     export let plugin: any;
     export let cookies = "";
 
@@ -63,7 +64,7 @@
 
                 if (verifyResult.loginDue) {
                     isChecking = false;
-                    checkMessage = "登录已过期，正在更新登录信息……";
+                    checkMessage = i18n.checkMessage1;
                     const autoCookies = await createWereadQRCodeDialog(false);
                     const savedata = {
                         cookies: autoCookies,
@@ -135,10 +136,18 @@
 
         notebooksInfo = `
             <div class="summary-info">
-                截止<span class="time">${latestSyncTime}</span>
+                ${i18n.syncTime.replace("{time}", `<span class="time">${latestSyncTime}</span>`)}
             </div>
             <div class="summary-info">
-                你在<span class="count">${notebookdata.totalBookCount}</span>本书中做了<span class="count">${totalNotes}</span>条笔记~
+                ${i18n.notebooksSummary
+                    .replace(
+                        "{bookCount}",
+                        `<span class="count">${notebookdata.totalBookCount}</span>`,
+                    )
+                    .replace(
+                        "{noteCount}",
+                        `<span class="count">${totalNotes}</span>`,
+                    )}
             </div>
         `;
     });
@@ -180,11 +189,11 @@
                 }),
             );
 
-            const showDialog = createBookShelfDialog(shelfList);
+            const showDialog = createBookShelfDialog(plugin, shelfList);
             showDialog();
         } catch (error) {
-            console.error("获取书架信息失败", error);
-            showMessage("❌ 获取书架信息失败，请检查网络或Cookie有效性");
+            console.error("Failed to obtain bookshelf information", error);
+            showMessage(i18n.showMessage11);
         } finally {
             loadingBookShelf = false;
         }
@@ -194,12 +203,12 @@
         const customISBNBooks = await plugin.loadData("weread_customBooksISBN");
 
         if (customISBNBooks.length === 0) {
-            showMessage("❌ 未找到自定义 ISBN 书籍");
+            showMessage(i18n.showMessage12);
             return;
         }
 
         const dialog = svelteDialog({
-            title: "自定义ISBN书籍管理",
+            title: i18n.manageISBNDialogTitle,
             constructor: (containerEl: HTMLElement) => {
                 return new wereadManageISBN({
                     target: containerEl,
@@ -222,12 +231,12 @@
         const ignoredBooks = await plugin.loadData("weread_ignoredBooks");
 
         if (ignoredBooks.length == 0) {
-            showMessage("❌ 未找到已忽略的书籍");
+            showMessage(i18n.showMessage13);
             return;
         }
 
         const dialog = svelteDialog({
-            title: "忽略书籍管理",
+            title: i18n.ignoredBooksDialogTitle,
             constructor: (containerEl: HTMLElement) => {
                 return new wereadIgnoredBooksDialog({
                     target: containerEl,
@@ -248,12 +257,11 @@
 </script>
 
 <div class="wereadSetting">
-    <p>v2.3.0 中书评 globalComments 变量格式有变化</p>
     <label for="tutorial"
-        >使用前请先看教程：<a
+        >{i18n.tutorial}:<a
             id="tutorial"
             href="https://ttl8ygt82u.feishu.cn/wiki/TVR2wczSKiy2HSk7PyQcMGuNnyc"
-            >微信读书笔记同步教程</a
+            >{i18n.tutorialLink}</a
         ></label
     >
     <div class="cookie-weread-setting">
@@ -279,10 +287,10 @@
                         },
                     );
                 }
-            }}>扫码登录</button
+            }}>{i18n.scanQRCodeLogin}</button
         >
         <button
-            on:click={createWereadDialog(cookies, (newCookies) => {
+            on:click={createWereadDialog(plugin, cookies, (newCookies) => {
                 cookies = newCookies;
                 const savedata = {
                     cookies: newCookies,
@@ -303,10 +311,10 @@
                         },
                     );
                 }
-            })}>填写 Cookie</button
+            })}>{i18n.fillCookie}</button
         >
         {#if isChecking}
-            <span class="checking">⌛ 正在验证...</span>
+            <span class="checking">⌛ {i18n.checking}</span>
         {:else}
             {@html checkMessage}
         {/if}
@@ -317,40 +325,46 @@
                 {@html notebooksInfo}
                 <div class="booksinfo-button">
                     {#if notebooksList.length > 0}
-                        <button on:click={createNotebooksDialog(notebooksList)}
-                            >有笔记书籍</button
+                        <button on:click={createNotebooksDialog(plugin, notebooksList)}
+                            >{i18n.hasNotesBooks}</button
                         >
-                        <button on:click={openBookShelf}>书架图书</button>
+                        <button on:click={openBookShelf}
+                            >{i18n.bookShelf}</button
+                        >
                     {/if}
                 </div>
                 {#if loadingBookShelf}
-                    <div class="loading-notice">⌛ 正在加载书架信息...</div>
+                    <div class="loading-notice">⌛ {i18n.loadingBookShelf}</div>
                 {/if}
             {:else}
-                <div class="loading-notice">⌛ 正在获取书籍信息，请稍候...</div>
+                <div class="loading-notice">⌛ {i18n.loadingBookInfo}</div>
                 <div class="loading-notice">
-                    （若书籍比较多，所需时间会加长）
+                    ({i18n.loadingBookInfoTip})
                 </div>
             {/if}
         {:else}
             <div class="cookie-warning">
-                🔑 请先填写有效的微信读书Cookie以查看书籍信息
+                {i18n.pleaseFillCookie}
             </div>
         {/if}
     </div>
     <div class="weread-custom-books">
-        <button on:click={createManageISBNDialog}>管理自定义ISBN书籍</button>
-        <button on:click={createIgnoredBooksDialog}>管理忽略书籍</button>
+        <button on:click={createManageISBNDialog}
+            >{i18n.manageCustomISBNBooks}</button
+        >
+        <button on:click={createIgnoredBooksDialog}
+            >{i18n.manageIgnoredBooks}</button
+        >
     </div>
     <div class="weread-notes-template">
         <button
-            on:click={createWereadNotesTemplateDialog((newWereadTemplates) => {
+            on:click={createWereadNotesTemplateDialog(i18n, (newWereadTemplates) => {
                 wereadTemplates = newWereadTemplates;
                 plugin.saveData("weread_templates", newWereadTemplates);
-            }, wereadTemplates)}>设置模板</button
+            }, wereadTemplates)}>{i18n.setNotesTemplate}</button
         >
-        <label title="同步的微信读书笔记位于位置标记之后"
-            >位置标记：
+        <label title={i18n.notesSyncPositionTip}
+            >{i18n.positionMark}:
             <input type="text" bind:value={wereadPositionMark} />
         </label>
         <button
@@ -359,10 +373,10 @@
                     "weread_position_mark",
                     wereadPositionMark,
                 );
-                showMessage("保存成功！");
+                showMessage(i18n.showMessage14);
             }}
         >
-            确定
+            {i18n.confirm}
         </button>
     </div>
     <div class="sync-setting">
@@ -370,7 +384,7 @@
             disabled={!notebooksInfo}
             on:click={async () => {
                 if (!checkMessage.includes("✅")) {
-                    showMessage("❌请先填写有效的微信读书 Cookie 再进行同步");
+                    showMessage(i18n.showMessage15);
                     return;
                 }
                 isSyncing = true;
@@ -382,7 +396,7 @@
             disabled={!notebooksInfo}
             on:click={async () => {
                 if (!checkMessage.includes("✅")) {
-                    showMessage("❌请先填写有效的微信读书 Cookie 再进行同步");
+                    showMessage(i18n.showMessage15);
                     return;
                 }
                 isSyncing = true;
@@ -393,19 +407,19 @@
         <label>
             <input
                 type="checkbox"
-                title="是否启动软件自动同步"
+                title={i18n.autoSyncTip}
                 bind:checked={autoSync}
                 on:change={() => {
                     plugin.saveData("weread_settings", { autoSync });
                 }}
             />
-            启动同步
+            {i18n.autoSync}
         </label>
     </div>
     {#if isSyncing}
         <div class="syncing-notice">
-            <span class="syncing-title">⏳ 正在同步微信读书笔记...</span>
-            <span class="tip">（若书籍比较多，所需时间会加长）</span>
+            <span class="syncing-title">⏳ {i18n.syncing}</span>
+            <span class="tip">{i18n.syncingTip}</span>
         </div>
     {/if}
 </div>

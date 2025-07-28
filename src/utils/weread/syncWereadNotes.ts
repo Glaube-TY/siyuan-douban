@@ -107,6 +107,7 @@ export async function syncWereadNotes(plugin: any, cookies: string, isupdate: bo
                         return new WereadNewBooks({
                             target: containerEl,
                             props: {
+                                i18n: plugin.i18n,
                                 books: newBooksToImport,
                                 onConfirm: async (selectedBooks, ignoredBooks) => {
                                     try {
@@ -227,6 +228,7 @@ export async function syncWereadNotes(plugin: any, cookies: string, isupdate: bo
                     return new WereadNewBooks({
                         target: containerEl,
                         props: {
+                            i18n: plugin.i18n,
                             books: newBooksToImport,
                             onConfirm: async (selectedBooks, ignoredBooks) => {
                                 try {

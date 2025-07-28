@@ -134,6 +134,21 @@
                     微信读书笔记同步功能参考了其微信官方 API 接口。
                 </span>
             </li>
+            <li style="margin: 0.5em 0; padding: 12px; background: #f3f0ff; border-radius: 6px;">
+                <a href="https://getquicker.net/sharedaction?code=c9154e53-d422-43de-4832-08dc59347e50" 
+                   style="color: #8a3ffc; 
+                          text-decoration: none;
+                          font-weight: 500;
+                          display: block;
+                          margin-bottom: 4px;"
+                   onmouseover="this.style.textDecoration='underline'"
+                   onmouseout="this.style.textDecoration='none'">
+                    Quicker - 读书笔记
+                </a>
+                <span style="color: #666; display: block; line-height: 1.5;">
+                    本插件来源于我在 Quicker 中为 Obsidian 等开发的读书笔记动作。
+                </span>
+            </li>
         </ul>
     </div>
     <div style="margin: 1.5em 0; padding: 1.5em; background: #fff5f5; border-left: 4px solid #ff4d4f; border-radius: 8px;">

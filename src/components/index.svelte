@@ -12,7 +12,6 @@
     import WereadTab from "./tabs/WereadTab.svelte";
     import AboutTab from "./tabs/AboutTab.svelte";
 
-    export let app;
     export let i18n: I18N;
     export let plugin: any;
 
@@ -44,7 +43,12 @@
     let searchKeyword = "";
     let webviewRef: any;
 
-    const tabs = ["🔍 书籍查询", "⚙️ 用户设置", "📗 微信读书", "ℹ️ 关于插件"];
+    const tabs = [
+        "🔍 " + i18n.topTabname1,
+        "⚙️ " + i18n.topTabname2,
+        "📗 " + i18n.topTabname3,
+        "ℹ️ " + i18n.topTabname4,
+    ];
     let activeTab = tabs[0];
 
     interface BookInfo {
@@ -76,7 +80,7 @@
         try {
             // 检查空值
             if (!inputVales) {
-                throw new Error("输入不能为空");
+                throw new Error(i18n.Error4);
             }
 
             // 新增ISBN格式判断
@@ -84,10 +88,10 @@
 
             if (isISBN) {
                 // ISBN 模式：获取页面并解析
-                statusMessage = "正在通过ISBN号获取书籍信息...";
+                statusMessage = i18n.statusMessage2;
                 const html = await fetchBookHtml(inputVales);
                 bookInfo = await fetchDoubanBook(html);
-                statusMessage = "成功获取书籍信息";
+                statusMessage = i18n.statusMessage1;
                 bookInfo.addNotes = addNotes1;
                 inputVales = bookInfo.isbn;
             } else {
@@ -96,8 +100,8 @@
                 showSearchDialog = true;
             }
         } catch (error) {
-            statusMessage = error.message || "未知错误，请检查控制台";
-            console.error("书籍获取失败:", error);
+            statusMessage = error.message || i18n.statusMessage3;
+            console.error("Book acquisition failed:", error);
         }
     }
 
@@ -121,13 +125,16 @@
         try {
             const result = await loadAVData(avID, fullData);
             if (result.code === 1) {
-                showMessage(`❌ 保存失败: ${result.msg}`, 5000);
+                showMessage(`${i18n.showMessage1} ${result.msg}`, 5000);
             } else if (result.code === 0) {
-                showMessage(`✅《${bookInfo.title}》已加入书库`, 3000);
+                showMessage(
+                    `✅《${bookInfo.title}》${i18n.showMessage2}`,
+                    3000,
+                );
                 await fetchPost("/api/ui/reloadAttributeView", { id: avID });
             }
         } catch (error) {
-            showMessage(`❌ 保存失败: ${error.message}`, 5000);
+            showMessage(`${i18n.showMessage1} ${error.message}`, 5000);
         }
     }
 
@@ -148,39 +155,39 @@
                 bookDatabaseID: bookDatabassID,
                 noteTemplate: noteTemplate,
             });
-            showMessage("✅ 设置保存成功", 3000);
+            showMessage(i18n.showMessage5, 3000);
             await validateDatabaseID();
         } catch (error) {
-            showMessage(`❌ 设置保存失败: ${error.message}`, 5000);
+            showMessage(`${i18n.showMessage6} ${error.message}`, 5000);
         }
     }
 
     // 验证数据库ID
     async function validateDatabaseID() {
         if (!bookDatabassID) {
-            showMessage("⚠️ 请输入数据库块ID", 3000);
+            showMessage(i18n.showMessage3, 3000);
             return;
         }
 
         try {
-            databaseStatusMessage = "验证数据库中...";
+            databaseStatusMessage = i18n.databaseStatusMessage1;
             const query = `SELECT * FROM blocks WHERE id = "${bookDatabassID}"`;
             const result = await sql(query);
 
             if (result.length === 0 || !result[0]?.markdown) {
-                throw new Error("未找到对应的数据库块，请输入数据库视图块ID");
+                throw new Error(i18n.Error1);
             }
 
             const avDivMatch = result[0].markdown.match(/data-av-id="([^"]+)"/);
             if (!avDivMatch) {
-                throw new Error("该块不是有效的属性视图数据库块");
+                throw new Error(i18n.Error2);
             }
 
             avID = avDivMatch[1];
-            databaseStatusMessage = "数据库验证通过 ✅";
+            databaseStatusMessage = i18n.databaseStatusMessage2;
         } catch (error) {
-            showMessage(`❌ 数据库验证失败: ${error.message}`, 5000);
-            databaseStatusMessage = `验证失败: ${error.message}`;
+            showMessage(`${i18n.showMessage4} ${error.message}`, 5000);
+            databaseStatusMessage = `${i18n.showMessage4} ${error.message}`;
             bookDatabassID = "";
             avID = "";
         }
@@ -233,6 +240,7 @@
             <BookSearchTab
                 bind:inputVales
                 bind:bookInfo
+                bind:i18n
                 {statusMessage}
                 {customRatings}
                 {customCategories}
@@ -248,6 +256,7 @@
         {:else if activeTab === tabs[1]}
             <UserSettingsTab
                 bind:bookDatabassID
+                bind:i18n
                 bind:tempRatings
                 bind:tempCategories
                 bind:tempStatuses
@@ -263,16 +272,17 @@
             />
             <!-- 第三个标签页 - 微信读书设置-->
         {:else if activeTab === tabs[2]}
-            <WereadTab bind:plugin />
+            <WereadTab bind:plugin bind:i18n />
 
             <!-- 最后一个标签页 - 关于插件 -->
         {:else}
-            <AboutTab />
+            <AboutTab bind:i18n />
         {/if}
     </div>
 </div>
 
 <SearchBookDialog
+    bind:plugin
     bind:showSearchDialog
     bind:searchKeyword
     bind:webviewRef
@@ -280,13 +290,13 @@
     on:select={async ({ detail: html }) => {
         try {
             bookInfo = await fetchDoubanBook(html);
-            statusMessage = "成功获取书籍信息";
+            statusMessage = i18n.statusMessage1;
             bookInfo.addNotes = addNotes1;
             inputVales = bookInfo.isbn;
-            showMessage(`✅ 成功获取《${bookInfo.title}》的信息`, 3000);
+            showMessage(`${i18n.showMessage7}《${bookInfo.title}》`, 3000);
         } catch (error) {
-            showMessage(`❌ 解析失败: ${error.message}`, 5000);
-            console.error("书籍解析失败:", error);
+            showMessage(`${i18n.showMessage8} ${error.message}`, 5000);
+            console.error("Book analysis failed:", error);
         }
     }}
 />
@@ -294,6 +304,7 @@
 <TemplateEditorDialog
     bind:showTemplateEditor
     bind:noteTemplate
+    bind:plugin
     on:close={() => {
         noteTemplate = originalTemplate;
         showTemplateEditor = false;
@@ -306,9 +317,9 @@
             await plugin.saveData("settings.json", currentSettings);
             originalTemplate = noteTemplate;
             showTemplateEditor = false;
-            showMessage("✅ 模板保存成功", 3000);
+            showMessage(i18n.showMessage9, 3000);
         } catch (error) {
-            showMessage(`❌ 模板保存失败: ${error.message}`, 5000);
+            showMessage(`${i18n.showMessage10} ${error.message}`, 5000);
         }
     }}
 />

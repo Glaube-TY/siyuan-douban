@@ -84,14 +84,15 @@ export async function createWereadQRCodeDialog(idbtn: boolean): Promise<string> 
     });
 }
 
-export const createWereadNotesTemplateDialog = (onConfirm: (newWereadTemplates: string) => void, initialTemplates = "") => {
+export const createWereadNotesTemplateDialog = (i18n: any, onConfirm: (newWereadTemplates: string) => void, initialTemplates = "") => {
     return () => {
         const dialog = svelteDialog({
-            title: "填写微信读书笔记模板",
+            title: i18n.setNotesTemplateTitle,
             constructor: (containerEl: HTMLElement) => {
                 return new wereadNotesTemplate({
                     target: containerEl,
                     props: {
+                        i18n: i18n,
                         newWereadTemplates: initialTemplates,
                         close: () => dialog.close(),
                         confirm: (newWereadTemplates: string) => {
@@ -105,7 +106,7 @@ export const createWereadNotesTemplateDialog = (onConfirm: (newWereadTemplates: 
     };
 };
 
-export const createBookShelfDialog = (books: any) => {
+export const createBookShelfDialog = (plugin: any, books: any) => {
     return () => {
         svelteDialog({
             title: "微信读书书架列表",
@@ -114,6 +115,7 @@ export const createBookShelfDialog = (books: any) => {
                 return new allNotebooks({
                     target: containerEl,
                     props: {
+                        plugin: plugin,
                         books,
                     }
                 });
@@ -122,7 +124,7 @@ export const createBookShelfDialog = (books: any) => {
     };
 };
 
-export const createNotebooksDialog = (books: any[]) => {
+export const createNotebooksDialog = (plugin: any, books: any[]) => {
     return () => {
         svelteDialog({
             title: "微信读书笔记列表",
@@ -131,6 +133,7 @@ export const createNotebooksDialog = (books: any[]) => {
                 return new allNotebooks({
                     target: containerEl,
                     props: {
+                        plugin: plugin,
                         books,
                     }
                 });
@@ -139,14 +142,15 @@ export const createNotebooksDialog = (books: any[]) => {
     };
 };
 
-export const createWereadDialog = (cookies: string, onConfirm: (newCookies: string) => void) => {
+export const createWereadDialog = (plugin: any, cookies: string, onConfirm: (newCookies: string) => void) => {
     return () => {
         const dialog = svelteDialog({
-            title: "填写微信读书 Cookie",
+            title: plugin.i18n.fillCookie,
             constructor: (containerEl: HTMLElement) => {
                 return new wereadCookie({
                     target: containerEl,
                     props: {
+                        plugin: plugin,
                         cookies: cookies,
                         close: () => dialog.close(),
                         confirm: (newCookies: string) => {

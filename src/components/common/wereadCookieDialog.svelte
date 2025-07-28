@@ -1,6 +1,7 @@
 <script lang="ts">
     import "../styles/main.scss";
 
+    export let plugin: any;
     export let cookies: string;
     export let close: () => void;
     export let confirm: (cookies: string) => void;
@@ -10,9 +11,9 @@
     <textarea class="weread-cookie" bind:value={cookies}></textarea>
     <div class="cookie-weread-btn">
         <button class="confirm-btn" on:click={() => confirm(cookies)}>
-            确认
+            {plugin.i18n.confirm}
         </button>
-        <button class="cancel-btn" on:click={() => close()}> 取消 </button>
+        <button class="cancel-btn" on:click={() => close()}> {plugin.i18n.cancel} </button>
     </div>
 </div>
 

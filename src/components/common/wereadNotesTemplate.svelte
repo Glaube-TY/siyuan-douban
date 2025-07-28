@@ -1,6 +1,8 @@
 <script lang="ts">
+    import { I18N } from "siyuan";
     import "../styles/main.scss";
 
+    export let i18n: I18N;
     export let newWereadTemplates: string;
     export let close: () => void;
     export let confirm: (newWereadTemplates: string) => void;
@@ -14,9 +16,9 @@
             class="confirm-btn"
             on:click={() => confirm(newWereadTemplates)}
         >
-            确认
+            {i18n.confirm}
         </button>
-        <button class="cancel-btn" on:click={() => close()}> 取消 </button>
+        <button class="cancel-btn" on:click={() => close()}> {i18n.cancel} </button>
     </div>
 </div>
 

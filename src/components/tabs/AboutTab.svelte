@@ -1,4 +1,8 @@
 <script lang="ts">
+    import { I18N } from "siyuan";
+
+    export let i18n: I18N;
+
     export const LINKS = {
         github: "https://github.com/Glaube-TY/siyuan-douban",
         feishu: "https://ttl8ygt82u.feishu.cn/wiki/VZdjwDNxWi4j0jkdyxMcOg2VnFf",
@@ -14,58 +18,58 @@
 
 <div class="about">
     <div class="about-header">
-        <h3>📚 读书笔记插件</h3>
-        <p class="motto">让阅读管理更优雅</p>
+        <h3>📚 {i18n.pluginName}</h3>
+        <p class="motto">{i18n.pluginMotto}</p>
     </div>
 
     <div class="about-grid">
         <div class="about-card">
             <span class="icon">🌐</span>
             <div>
-                <p class="label">插件主页：</p>
+                <p class="label">{i18n.pluginHomepage}：</p>
                 <a href={LINKS.github} class="link">siyuan-douban</a>
             </div>
             <span class="icon">&nbsp;&nbsp;&nbsp;</span>
             <span class="icon">📜</span>
             <div>
-                <p class="label">插件教程：</p>
-                <a href={LINKS.feishu} class="link">飞书文档</a>
+                <p class="label">{i18n.pluginTutorial}：</p>
+                <a href={LINKS.feishu} class="link">{i18n.pluginTutorialLink}</a>
             </div>
         </div>
 
         <div class="about-card">
             <span class="icon">👨</span>
             <div>
-                <p class="label">开发者：Glaube-TY</p>
-                <a href={LINKS.author} class="link">Github 主页</a>
-                <p><a href={LINKS.ld246} class="link">链滴主页</a></p>
+                <p class="label">{i18n.pluginDeveloper}：Glaube-TY</p>
+                <a href={LINKS.author} class="link">{i18n.pluginDeveloperLink}</a>
+                <p><a href={LINKS.ld246} class="link">{i18n.pluginDeveloperLink2}</a></p>
             </div>
             <span class="icon">&nbsp;&nbsp;&nbsp;</span>
             <span class="icon">📊</span>
             <div>
-                <p class="label">数据来源：</p>
-                <a href={LINKS.douban} class="link">豆瓣读书</a>
-                <p><a href={LINKS.weread} class="link">微信读书</a></p>
+                <p class="label">{i18n.pluginDataSource}：</p>
+                <a href={LINKS.douban} class="link">{i18n.pluginDataSource1}</a>
+                <p><a href={LINKS.weread} class="link">{i18n.pluginDataSource2}</a></p>
             </div>
         </div>
 
         <div class="about-card">
             <span class="icon">💖</span>
             <div>
-                <p class="label">支持开发者：</p>
-                <a href={LINKS.feishu} class="link">🌹 请作者喝咖啡</a>
+                <p class="label">{i18n.pluginSupport}：</p>
+                <a href={LINKS.feishu} class="link">{i18n.pluginSupport1}</a>
             </div>
             <span class="icon">&nbsp;&nbsp;&nbsp;</span>
             <span class="icon">⁉</span>
             <div>
-                <p class="label">反馈&建议：</p>
-                <a href={LINKS.issues} class="link">Github Issues</a>
-                <p><a href={LINKS.tencent} class="link">腾讯频道</a></p>
+                <p class="label">{i18n.pluginFeedback}：</p>
+                <a href={LINKS.issues} class="link">{i18n.pluginFeedbackLink1}</a>
+                <p><a href={LINKS.tencent} class="link">{i18n.pluginFeedbackLink2}</a></p>
             </div>
         </div>
     </div>
 
     <div class="about-footer">
-        <p>❤ 由一位热爱阅读的开发者制作，希望为你带来更好的知识管理体验</p>
+        <p>{i18n.pluginFooter}</p>
     </div>
 </div>
