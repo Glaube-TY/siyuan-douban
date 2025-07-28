@@ -131,7 +131,7 @@
                     obsidian-weread-plugin
                 </a>
                 <span style="color: #666; display: block; line-height: 1.5;">
-                    The Weread notes synchronization function refers to its official WeChat API interface.
+                    The Weread notes synchronization function refers to its official API interface.
                 </span>
             </li>
             <li style="margin: 0.5em 0; padding: 12px; background: #f3f0ff; border-radius: 6px;">
@@ -156,7 +156,7 @@
         <ul style="margin: 0.5em 0; padding-left: 1.2em; color: #666;">
             <li style="margin: 0.5em 0;">The data of this plugin is based on the public data of Douban, and the developer does not guarantee the accuracy and completeness of the data.</li>
             <li style="margin: 0.5em 0;">Users should comply with the relevant use terms of the Douban website.</li>
-            <li style="margin: 0.5em 0;">For the synchronization of WeChat读书笔记, it is based on Cookie remote acquisition of personal information, and all are performed locally. If you are uncomfortable with this, please use it with caution.</li>
+            <li style="margin: 0.5em 0;">For the synchronization of WeRead notes, it is based on Cookie remote acquisition of personal information, and all are performed locally. If you are uncomfortable with this, please use it with caution.</li>
             <li style="margin: 0.5em 0;">The data of this plugin is only used for personal book data management, and it is strictly prohibited from being used for commercial purposes or other violation behaviors.</li>
             <li style="margin: 0.5em 0;">The developer assumes no responsibility for any losses caused by using this plugin.</li>
         </ul>
