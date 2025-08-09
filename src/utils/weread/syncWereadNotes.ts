@@ -29,17 +29,36 @@ export async function syncWereadNotes(plugin: any, cookies: string, isupdate: bo
     const personalNotebooks = await getPersonalNotebooks(plugin); // 获取预加载的书籍笔记列表
 
     // 获取插件配置并提取数据库ID
-    const settingConfig = await plugin.loadData("settings.json");
-    const ViewID = settingConfig?.bookDatabaseID;
-    const query = `SELECT * FROM blocks WHERE id = "${ViewID}"`;
-    const result = await sql(query);
-    const avID = result[0].markdown.match(/data-av-id="([^"]+)"/)[1];
+    const settingConfig = await plugin.loadData("settings.json"); // 加载插件配置
+    const ViewID = settingConfig?.bookDatabaseID || ""; // 数据库块ID
+    const result = await sql(`SELECT * FROM blocks WHERE id = "${ViewID}"`); // 查询数据库块
+    const avID = result[0].markdown.match(/data-av-id="([^"]+)"/)[1] || ""; // 提取数据库ID
 
     // 获取原始数据库完整信息
-    const getdatabase = await fetchSyncPost('/api/av/getAttributeView', { "id": avID });
-    const database = getdatabase.data.av;
-    const ISBNKey = database.keyValues.find((item: any) => item.key.name === "ISBN"); // 获取ISBN列内容
-    const ISBNColumn = ISBNKey?.values || []; // 获取ISBN列所有行内容
+    const getdatabase = await fetchSyncPost('/api/av/getAttributeView', { "id": avID }); // 获取数据库详细内容
+    const database = getdatabase.data.av || {}; // 数据库内容
+    const ISBNKey = database.keyValues.find((item: any) => item.key.name === "ISBN"); // 获取ISBN列属性
+    let ISBNColumn = ISBNKey?.values || []; // 获取ISBN列所有行内容
+
+    // 处理异常情况
+    // 当用户直接删除读书笔记文档，数据库视图会同步删除，但是本地数据库文件中还保留了除书名以外的其他列内容
+    const bookNameKey = database.keyValues.find((item: any) => item.key.name === "书名");
+    const bookNameColumn = bookNameKey?.values || [];
+    // 对比bookNameColumn与ISBNColumn，若他俩存在不同的，则将不同的blockID用removeAttributeViewBlocks方法清理
+    const bookNameBlockIDs = new Set(bookNameColumn.map((item: any) => item.blockID));
+    const isbnBlockIDs = new Set(ISBNColumn.map((item: any) => item.blockID));
+    // 找出在ISBN列中但不在书名列中的blockID
+    const blockIDsToRemove = Array.from(isbnBlockIDs).filter(id => !bookNameBlockIDs.has(id) && id !== undefined);
+    // 如果有需要清理的blockID，则调用removeAttributeViewBlocks方法
+    if (blockIDsToRemove.length > 0) {
+        await fetchSyncPost('/api/av/removeAttributeViewBlocks', { "avID": avID, "srcIDs": blockIDsToRemove });
+        console.log(`清理了 ${blockIDsToRemove.length} 个不匹配的blockID`);
+        // 如果有清理操作，则重新获取数据库的ISBN相关数据
+        const updatedDatabase = await fetchSyncPost('/api/av/getAttributeView', { "id": avID });
+        const updatedDatabaseData = updatedDatabase.data.av || {};
+        const updatedISBNKey = updatedDatabaseData.keyValues.find((item: any) => item.key.name === "ISBN");
+        ISBNColumn = updatedISBNKey?.values || [];
+    }
 
     // 根据是否更新同步进行不同处理
     if (isupdate) {
@@ -47,10 +66,10 @@ export async function syncWereadNotes(plugin: any, cookies: string, isupdate: bo
         const oldNotebooks = await plugin.loadData("weread_notebooks"); // 获取上一次的同步数据
         // 若没有同步过则要求进行一次完整同步
         if (!oldNotebooks) {
-            showMessage("❌请先进行一次全部同步后再更新同步");
+            showMessage(plugin.i18n.showMessage26);
             return;
         } else {
-            // 获取数据库中的ISBN集合
+            // 获取数据库中的ISBN集合 
             const existingIsbnsInDB = new Set(
                 ISBNColumn.map(item => item.number?.content?.toString()).filter(Boolean) || []
             );
@@ -80,7 +99,7 @@ export async function syncWereadNotes(plugin: any, cookies: string, isupdate: bo
             }
 
             // 重建映射关系（从数据库获取实际blockID）
-            const isbnBlockMap = new Map();
+            const isbnBlockMap = new Map(); // 创建一个映射表，用于存储ISBN与blockID的对应关系
             ISBNColumn.forEach(item => {
                 const isbn = item.number?.content?.toString();
                 if (isbn) isbnBlockMap.set(isbn, item.blockID);
@@ -102,7 +121,7 @@ export async function syncWereadNotes(plugin: any, cookies: string, isupdate: bo
                 }));
             if (newBooksToImport.length > 0) {
                 const dialog = svelteDialog({
-                    title: "新书籍确认",
+                    title: plugin.i18n.newBooksConfirm,
                     constructor: (containerEl: HTMLElement) => {
                         return new WereadNewBooks({
                             target: containerEl,
@@ -114,7 +133,7 @@ export async function syncWereadNotes(plugin: any, cookies: string, isupdate: bo
                                         await saveCustomBooksISBN(plugin, selectedBooks, personalNotebooks);
                                         await saveIgnoredBooks(plugin, ignoredBooks);
                                         dialog.close();
-                                        showMessage("⏳ 正在导入选中书籍...");
+                                        showMessage(plugin.i18n.showMessage27);
                                         const settingConfig = await plugin.loadData("settings.json");
                                         const noteTemplate = settingConfig?.noteTemplate || "";
                                         for (const book of selectedBooks) {
@@ -135,8 +154,9 @@ export async function syncWereadNotes(plugin: any, cookies: string, isupdate: bo
                                                     finishDate: ""
                                                 });
 
-                                                showMessage(`✅ 成功导入《${book.title}》`, 3000);
-                                                await fetchPost("/api/ui/reloadAttributeView", { id: avID });
+                                                showMessage(`${plugin.i18n.showMessage28}《${book.title}》`);
+
+                                                fetchPost("/api/ui/reloadAttributeView", { id: avID });
                                             } catch (error) {
                                                 console.error(`导入书籍 ${book.title} 失败:`, error);
                                             }
@@ -151,8 +171,8 @@ export async function syncWereadNotes(plugin: any, cookies: string, isupdate: bo
                                             if (isbn) newIsbnBlockMap.set(isbn, item.blockID);
                                         });
 
-                                        showMessage(`✅ 成功导入 ${selectedBooks.length} 本书籍`);
-                                        
+                                        showMessage(`${plugin.i18n.showMessage28} ${selectedBooks.length} ${plugin.i18n.showMessage29}`);
+
                                         const mergedSaveBooks = [
                                             ...latestBooksInDB,
                                             ...selectedBooks.map(book => ({
@@ -170,12 +190,12 @@ export async function syncWereadNotes(plugin: any, cookies: string, isupdate: bo
                                         ];
 
                                         await plugin.saveData("weread_notebooks", mergedSaveBooks);
-                                        showMessage("⌛开始同步微信读书笔记……");
+                                        showMessage(plugin.i18n.showMessage30);
                                         await syncNotesProcess(plugin, cookies, booksToSync); // 只同步需要同步的书籍
 
                                     } catch (error) {
                                         console.error("批量导入失败:", error);
-                                        showMessage("批量导入失败，请检查控制台日志", 3000);
+                                        showMessage(plugin.i18n.showMessage31, 3000);
                                     }
                                 },
                                 onContinue: async (ignoredBooks) => {
@@ -184,14 +204,14 @@ export async function syncWereadNotes(plugin: any, cookies: string, isupdate: bo
                                         dialog.close();
                                         if (enhancedNotebooks.length == 0) {
                                             await plugin.saveData("weread_notebooks", latestBooksInDB);
-                                            showMessage("微信读书没有新笔记~");
+                                            showMessage(plugin.i18n.showMessage32);
                                         } else {
                                             await plugin.saveData("weread_notebooks", latestBooksInDB);
                                             await syncNotesProcess(plugin, cookies, enhancedNotebooks);
                                         }
                                     } catch (error) {
                                         console.error("同步失败:", error);
-                                        showMessage("同步失败，请检查控制台日志", 3000);
+                                        showMessage(plugin.i18n.showMessage33, 3000);
                                     }
                                 },
                                 onCancel: () => {
@@ -202,28 +222,39 @@ export async function syncWereadNotes(plugin: any, cookies: string, isupdate: bo
                     }
                 });
             } else {
+                await plugin.saveData("weread_notebooks", latestBooksInDB);
                 await syncNotesProcess(plugin, cookies, enhancedNotebooks);
             }
         }
     } else {
-        const isbnBlockMap = new Map();
+        // 获取数据库中的ISBN集合 
+        const existingIsbnsInDB = new Set(
+            ISBNColumn.map((item: any) => item.number?.content?.toString()).filter(Boolean) || []
+        );
+
+        // 从最新书单中筛选出数据库存在的书籍
+        const latestBooksInDB = personalNotebooks.filter(newBook =>
+            existingIsbnsInDB.has(newBook.isbn?.toString())
+        );
+
+        const isbnBlockMap = new Map(); // 创建一个映射表，用于存储ISBN与blockID的对应关系
         if (ISBNKey) {
-            ISBNColumn.forEach(item => {
+            ISBNColumn.forEach((item: any) => {
                 const isbn = item.number?.content?.toString();
                 if (isbn) isbnBlockMap.set(isbn, item.blockID);
             });
         }
 
-        const enhancedNotebooks = personalNotebooks.map(notebook => ({
+        const enhancedNotebooks = personalNotebooks.map((notebook: any) => ({
             ...notebook,
             blockID: ISBNKey ? isbnBlockMap.get(notebook.isbn?.toString()) || null : null
         }));
 
-        const newBooksToImport = enhancedNotebooks.filter(notebook => notebook.blockID === null);
+        const newBooksToImport = enhancedNotebooks.filter((notebook: any) => notebook.blockID === null);
 
         if (newBooksToImport.length > 0) {
             const dialog = svelteDialog({
-                title: "新书籍确认",
+                title: plugin.i18n.newBooksConfirm,
                 constructor: (containerEl: HTMLElement) => {
                     return new WereadNewBooks({
                         target: containerEl,
@@ -235,7 +266,7 @@ export async function syncWereadNotes(plugin: any, cookies: string, isupdate: bo
                                     await saveCustomBooksISBN(plugin, selectedBooks, personalNotebooks);
                                     await saveIgnoredBooks(plugin, ignoredBooks);
                                     dialog.close();
-                                    showMessage("⏳ 正在导入选中书籍...");
+                                    showMessage(plugin.i18n.showMessage27);
                                     const settingConfig = await plugin.loadData("settings.json");
                                     const noteTemplate = settingConfig?.noteTemplate || "";
                                     for (const book of selectedBooks) {
@@ -256,7 +287,7 @@ export async function syncWereadNotes(plugin: any, cookies: string, isupdate: bo
                                                 finishDate: ""
                                             });
 
-                                            showMessage(`✅ 成功导入《${book.title}》`, 3000);
+                                            showMessage(`${plugin.i18n.showMessage28}《${book.title}》`, 3000);
                                             await fetchPost("/api/ui/reloadAttributeView", { id: avID });
                                         } catch (error) {
                                             console.error(`导入书籍 ${book.title} 失败:`, error);
@@ -279,13 +310,13 @@ export async function syncWereadNotes(plugin: any, cookies: string, isupdate: bo
                                             blockID: newIsbnBlockMap.get(notebook.isbn?.toString())
                                         }));
 
-                                    showMessage(`✅ 成功导入 ${selectedBooks.length} 本书籍`);
+                                    showMessage(`${plugin.i18n.showMessage28} ${selectedBooks.length} ${plugin.i18n.showMessage29}`);
                                     await plugin.saveData("weread_notebooks", updatedNotebooks);
-                                    showMessage("⌛开始同步微信读书笔记……");
+                                    showMessage(plugin.i18n.showMessage30);
                                     await syncNotesProcess(plugin, cookies, updatedNotebooks)
                                 } catch (error) {
                                     console.error("批量导入失败:", error);
-                                    showMessage("批量导入失败，请检查控制台日志", 3000);
+                                    showMessage(plugin.i18n.showMessage31, 3000);
                                 }
                             },
                             onContinue: async (ignoredBooks) => {
@@ -300,14 +331,14 @@ export async function syncWereadNotes(plugin: any, cookies: string, isupdate: bo
                                     );
 
                                     if (updatedBooks.length == 0) {
-                                        showMessage("微信读书没有新笔记~");
+                                        showMessage(plugin.i18n.showMessage32);
                                     } else {
                                         await plugin.saveData("weread_notebooks", updatedBooks);
                                         await syncNotesProcess(plugin, cookies, updatedBooks);
                                     }
                                 } catch (error) {
                                     console.error("同步失败:", error);
-                                    showMessage("同步失败，请检查控制台日志", 3000);
+                                    showMessage(plugin.i18n.showMessage33, 3000);
                                 }
                             },
                             onCancel: () => {
@@ -318,34 +349,21 @@ export async function syncWereadNotes(plugin: any, cookies: string, isupdate: bo
                 }
             });
         } else {
+            await plugin.saveData("weread_notebooks", latestBooksInDB);
             await syncNotesProcess(plugin, cookies, enhancedNotebooks);
         }
     }
 }
 
 async function syncNotesProcess(plugin: any, cookies: string, notebooks: any): Promise<void> {
-    const template = await plugin.loadData("weread_templates") || `
-# {{notebookTitle}}
-**最后同步时间**: {{updateTime}}
+    // 加载微信读书笔记同步模板
+    const template = await plugin.loadData("weread_templates");
+    // 检查模板
+    if (!template) {
+        showMessage(plugin.i18n.showMessage25);
+        return;
+    }
 
-{{#globalComments}}
-## 书评
-> 💬 {{globalComments}}
-{{/globalComments}}
-
-{{#chapters}}
-## {{chapterTitle}}
-### 重点笔记
-{{#notes}}
-- {{highlightText}}
-> 💬 {{highlightComment}}
-{{/notes}}
-{{#chapterComments}}
-### 章节思考
-> 💬 {{chapterComments}}
-{{/chapterComments}}
-{{/chapters}}
-    `;
     const enhancedNotebooks = await Promise.all(
         notebooks.map(async (notebook: any) => ({
             ...notebook,
@@ -485,22 +503,26 @@ async function syncNotesProcess(plugin: any, cookies: string, notebooks: any): P
                 const noteContent = renderTemplate(template);
 
                 const wereadPositionMark = await plugin.loadData("weread_position_mark");
-                await updateEndBlocks(
-                    plugin,
-                    notebook.blockID,
-                    wereadPositionMark,
-                    noteContent
-                );
-
-                showMessage(`✅ 已同步《${notebook.title}》`, 2000);
+                try {
+                    await updateEndBlocks(
+                        plugin,
+                        notebook.blockID,
+                        wereadPositionMark,
+                        noteContent
+                    );
+                    showMessage(`${plugin.i18n.showMessage34}《${notebook.title}》`, 2000);
+                } catch (error) {
+                    showMessage(`${plugin.i18n.showMessage35}《${notebook.title}》${plugin.i18n.showMessage36}`, 2000);
+                    console.error(`更新失败:`, error);
+                }
             } catch (error) {
-                showMessage(`❌ 同步《${notebook.title}》失败`, 2000);
+                showMessage(`${plugin.i18n.showMessage35}《${notebook.title}》${plugin.i18n.showMessage36}`, 2000);
                 console.error(`更新失败:`, error);
             }
         });
 
     return Promise.all(updatePromises).then(() => {
-        showMessage(`✅ 全部同步完成`, 2000);
+        showMessage(plugin.i18n.showMessage37, 2000);
     });
 }
 
@@ -537,39 +559,55 @@ async function getPersonalNotebooks(plugin: any) {
 }
 
 async function updateEndBlocks(plugin: any, blockID: string, wereadPositionMark: string, noteContent: any) {
-    const childBlocks = await plugin.client.getChildBlocks({
-        id: blockID,
-    });
-
-    const data = childBlocks?.data || [];
-    const targetContent = wereadPositionMark;
-
-    let targetBlock = data.find(block => block.content === targetContent);
-    let targetBlockID: string | null = null;
-    let idsList: string[] = [];
-
-    if (targetBlock) {
-        targetBlockID = targetBlock.id;
-        const targetIndex = data.indexOf(targetBlock);
-        idsList = data.slice(targetIndex + 1).map(block => block.id);
-
-        for (const id of idsList) {
-            try {
-                await plugin.client.deleteBlock({ id });
-            } catch (error) {
-                console.error(`删除块 ${id} 时出错：`, error);
-            }
-        }
-    } else {
-        const lastBlock = data.length > 0 ? data[data.length - 1] : null;
-        targetBlockID = lastBlock ? lastBlock.id : blockID;
+    // 首先检查 blockID 是否存在
+    if (!blockID) {
+        throw new Error("blockID 不存在");
     }
 
-    await plugin.client.insertBlock({
-        data: noteContent,
-        dataType: "markdown",
-        previousID: targetBlockID,
-    });
+    try {
+        const childBlocks = await plugin.client.getChildBlocks({
+            id: blockID,
+        });
+
+        // 检查是否有子块
+        if (!childBlocks || !childBlocks.data || childBlocks.data.length === 0) {
+            throw new Error(`书籍 blockID ${blockID} 不存在子块`);
+        }
+
+        const data = childBlocks.data || [];
+        const targetContent = wereadPositionMark;
+
+        let targetBlock = data.find((block: { content: string; }) => block.content === targetContent);
+        let targetBlockID: string | null = null;
+        let idsList: string[] = [];
+
+        if (targetBlock) {
+            targetBlockID = targetBlock.id;
+            const targetIndex = data.indexOf(targetBlock);
+            idsList = data.slice(targetIndex + 1).map(block => block.id);
+
+            for (const id of idsList) {
+                try {
+                    await plugin.client.deleteBlock({ id });
+                } catch (error) {
+                    console.error(`删除块 ${id} 时出错：`, error);
+                }
+            }
+        } else {
+            const lastBlock = data.length > 0 ? data[data.length - 1] : null;
+            targetBlockID = lastBlock ? lastBlock.id : blockID;
+        }
+
+        await plugin.client.insertBlock({
+            data: noteContent,
+            dataType: "markdown",
+            previousID: targetBlockID,
+        });
+    } catch (error) {
+        console.error(`获取子块或更新块时出错，blockID: ${blockID}`, error);
+        // 重新抛出错误，以便在调用函数中处理
+        throw error;
+    }
 }
 
 async function saveIgnoredBooks(plugin: any, newIgnoredBooks: any[]) {

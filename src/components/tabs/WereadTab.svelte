@@ -31,7 +31,6 @@
     let autoSync = false;
     let isSyncing = false;
     let userVid = "";
-    let isChecking = false;
     let checkMessage = "";
     let notebookdata: any = "";
 
@@ -41,20 +40,25 @@
     let loadingBookShelf = false;
 
     onMount(async () => {
-        const savedCookie = await plugin.loadData("weread_cookie");
+        // 加载本地配置
+        const savedcookies = await plugin.loadData("weread_cookie");
         wereadPositionMark = await plugin.loadData("weread_position_mark");
         const wereadSetting = await plugin.loadData("weread_settings");
-
         autoSync = wereadSetting.autoSync;
+        const savedTemplates = await plugin.loadData("weread_templates");
+        if (savedTemplates) {
+            wereadTemplates = savedTemplates;
+        }
 
-        if (savedCookie) {
-            cookies = savedCookie.cookies;
+        // 检查并更新登录信息
+        cookies = savedcookies.cookies;
+        if (cookies) {
+            // 从 cookie 中获取用户ID
             const result = checkWrVid(cookies);
             userVid = result.userVid;
-            checkMessage = `<span class="${result.checkMessage.includes("✅") ? "success" : "error"}">${result.checkMessage}</span>`;
 
+            // 判断是否从 cookie 中获取用户ID成功
             if (userVid) {
-                isChecking = true;
                 const verifyResult = await verifyCookie(
                     plugin,
                     cookies,
@@ -62,38 +66,53 @@
                 );
                 checkMessage = verifyResult.message;
 
+                // 判断是否需要重新登录
                 if (verifyResult.loginDue) {
-                    isChecking = false;
-                    checkMessage = i18n.checkMessage1;
-                    const autoCookies = await createWereadQRCodeDialog(false);
-                    const savedata = {
-                        cookies: autoCookies,
-                        isQRCode: true,
-                    };
-                    plugin.saveData("weread_cookie", savedata);
-
-                    const result = checkWrVid(autoCookies);
-                    userVid = result.userVid;
-
-                    if (userVid) {
-                        isChecking = true;
-                        verifyCookie(plugin, autoCookies, userVid).then(
-                            (verifyResult) => {
-                                checkMessage = verifyResult.message;
-                                isChecking = false;
-                            },
+                    // 判断上一次是否是扫码登录
+                    if (savedcookies.isQRCode) {
+                        checkMessage = i18n.checkMessage1;
+                        // 创建不可见的登陆窗口用于刷新登录信息
+                        const updatedCookes = await createWereadQRCodeDialog(
+                            i18n,
+                            false,
                         );
+
+                        const savedata = {
+                            cookies: updatedCookes,
+                            isQRCode: true,
+                        };
+                        plugin.saveData("weread_cookie", savedata);
+
+                        // 更新全局cookies变量
+                        cookies = updatedCookes;
+
+                        const result = checkWrVid(updatedCookes);
+                        userVid = result.userVid;
+
+                        // 验证登录信息
+                        if (userVid) {
+                            verifyCookie(plugin, updatedCookes, userVid).then(
+                                (verifyResult) => {
+                                    checkMessage = verifyResult.message;
+                                },
+                            );
+                        } else {
+                            checkMessage = i18n.checkMessage6;
+                            return;
+                        }
                     }
                 }
-                isChecking = false;
+
+                await getNotebooksList();
+            } else {
+                showMessage(i18n.showMessage16);
             }
+        } else {
+            checkMessage = i18n.checkMessage7;
         }
+    });
 
-        const savedTemplates = await plugin.loadData("weread_templates");
-        if (savedTemplates) {
-            wereadTemplates = savedTemplates;
-        }
-
+    async function getNotebooksList() {
         notebookdata = await getNotebooks(plugin, cookies);
 
         const syncDate = new Date(notebookdata.synckey * 1000);
@@ -110,15 +129,15 @@
                     updatedTime: b.sort,
                     bookID: details.bookId,
                     title: details.title,
-                    author: details.author || "未知作者",
+                    author: details.author,
                     cover: details.cover,
-                    format: details.format === "epub" ? "电子书" : "纸质书",
+                    format: details.format,
                     price: details.price,
                     introduction: details.intro,
                     publishTime: details.publishTime,
-                    category: details.category || "未分类",
+                    category: details.category,
                     isbn: details.isbn,
-                    publisher: details.publisher || "未知出版社",
+                    publisher: details.publisher,
                     totalWords: details.totalWords,
                     star: details.newRating,
                     ratingCount: details.ratingCount,
@@ -150,7 +169,7 @@
                     )}
             </div>
         `;
-    });
+    }
 
     async function openBookShelf() {
         loadingBookShelf = true;
@@ -172,15 +191,15 @@
                             )?.reviewCount || 0,
                         bookID: details.bookId,
                         title: details.title,
-                        author: details.author || "未知作者",
+                        author: details.author,
                         cover: details.cover,
-                        format: details.format === "epub" ? "电子书" : "纸质书",
+                        format: details.format,
                         price: details.price,
                         introduction: details.intro,
                         publishTime: details.publishTime,
-                        category: details.category || "未分类",
+                        category: details.category,
                         isbn: details.isbn,
-                        publisher: details.publisher || "未知出版社",
+                        publisher: details.publisher,
                         totalWords: details.totalWords,
                         star: details.newRating,
                         ratingCount: details.ratingCount,
@@ -258,7 +277,7 @@
 
 <div class="wereadSetting">
     <label for="tutorial"
-        >{i18n.tutorial}:<a
+        >{i18n.tutorial}<a
             id="tutorial"
             href="https://ttl8ygt82u.feishu.cn/wiki/TVR2wczSKiy2HSk7PyQcMGuNnyc"
             >{i18n.tutorialLink}</a
@@ -268,7 +287,8 @@
         <button
             class="scan-qrcode"
             on:click={async () => {
-                const autoCookies = await createWereadQRCodeDialog(true);
+                const autoCookies = await createWereadQRCodeDialog(i18n, true);
+
                 const savedata = {
                     cookies: autoCookies,
                     isQRCode: true,
@@ -279,11 +299,9 @@
                 userVid = result.userVid;
 
                 if (userVid) {
-                    isChecking = true;
                     verifyCookie(plugin, autoCookies, userVid).then(
                         (verifyResult) => {
                             checkMessage = verifyResult.message;
-                            isChecking = false;
                         },
                     );
                 }
@@ -300,24 +318,19 @@
 
                 const result = checkWrVid(newCookies);
                 userVid = result.userVid;
-                checkMessage = `<span class="${result.checkMessage.includes("✅") ? "success" : "error"}">${result.checkMessage}</span>`;
-
+                // 验证登录信息
                 if (userVid) {
-                    isChecking = true;
-                    verifyCookie(plugin, newCookies, userVid).then(
+                    verifyCookie(plugin, cookies, userVid).then(
                         (verifyResult) => {
                             checkMessage = verifyResult.message;
-                            isChecking = false;
                         },
                     );
+                } else {
+                    checkMessage = i18n.checkMessage6;
                 }
             })}>{i18n.fillCookie}</button
         >
-        {#if isChecking}
-            <span class="checking">⌛ {i18n.checking}</span>
-        {:else}
-            {@html checkMessage}
-        {/if}
+        <span class="checking">{checkMessage}</span>
     </div>
     <div class="weread-notebooks-info">
         {#if checkMessage.includes("✅")}
@@ -325,13 +338,14 @@
                 {@html notebooksInfo}
                 <div class="booksinfo-button">
                     {#if notebooksList.length > 0}
-                        <button on:click={createNotebooksDialog(plugin, notebooksList)}
-                            >{i18n.hasNotesBooks}</button
-                        >
-                        <button on:click={openBookShelf}
-                            >{i18n.bookShelf}</button
+                        <button
+                            on:click={createNotebooksDialog(
+                                plugin,
+                                notebooksList,
+                            )}>{i18n.hasNotesBooks}</button
                         >
                     {/if}
+                    <button on:click={openBookShelf}>{i18n.bookShelf}</button>
                 </div>
                 {#if loadingBookShelf}
                     <div class="loading-notice">⌛ {i18n.loadingBookShelf}</div>
@@ -339,7 +353,7 @@
             {:else}
                 <div class="loading-notice">⌛ {i18n.loadingBookInfo}</div>
                 <div class="loading-notice">
-                    ({i18n.loadingBookInfoTip})
+                    {i18n.loadingBookInfoTip}
                 </div>
             {/if}
         {:else}
@@ -358,10 +372,14 @@
     </div>
     <div class="weread-notes-template">
         <button
-            on:click={createWereadNotesTemplateDialog(i18n, (newWereadTemplates) => {
-                wereadTemplates = newWereadTemplates;
-                plugin.saveData("weread_templates", newWereadTemplates);
-            }, wereadTemplates)}>{i18n.setNotesTemplate}</button
+            on:click={createWereadNotesTemplateDialog(
+                i18n,
+                (newWereadTemplates) => {
+                    wereadTemplates = newWereadTemplates;
+                    plugin.saveData("weread_templates", newWereadTemplates);
+                },
+                wereadTemplates,
+            )}>{i18n.setNotesTemplate}</button
         >
         <label title={i18n.notesSyncPositionTip}
             >{i18n.positionMark}:
@@ -383,6 +401,11 @@
         <button
             disabled={!notebooksInfo}
             on:click={async () => {
+                if (!wereadTemplates) {
+                    showMessage(i18n.showMessage25);
+                    return;
+                }
+
                 if (!checkMessage.includes("✅")) {
                     showMessage(i18n.showMessage15);
                     return;
@@ -390,11 +413,15 @@
                 isSyncing = true;
                 await syncWereadNotes(plugin, cookies, false);
                 isSyncing = false;
-            }}>全部同步</button
+            }}>{i18n.syncAll}</button
         >
         <button
             disabled={!notebooksInfo}
             on:click={async () => {
+                if (!wereadTemplates) {
+                    showMessage(i18n.showMessage25);
+                    return;
+                }
                 if (!checkMessage.includes("✅")) {
                     showMessage(i18n.showMessage15);
                     return;
@@ -402,7 +429,7 @@
                 isSyncing = true;
                 await syncWereadNotes(plugin, cookies, true);
                 isSyncing = false;
-            }}>更新同步</button
+            }}>{i18n.updateSync}</button
         >
         <label>
             <input

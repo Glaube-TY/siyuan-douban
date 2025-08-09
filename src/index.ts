@@ -51,7 +51,7 @@ export default class PluginSample extends Plugin {
                 userVid = result.userVid;
 
                 if (!userVid && !savedCookie.isQRCode) {
-                    showMessage("Cookies 格式不正确，请重新输入！");
+                    showMessage(this.i18n.showMessage17);
                     return
                 }
 
@@ -63,8 +63,14 @@ export default class PluginSample extends Plugin {
                     );
 
                     if (verifyResult.loginDue) {
-                        showMessage("登录已过期，正在重新登录...")
-                        const autoCookies = await createWereadQRCodeDialog(false);
+                        if (!window.navigator.userAgent.includes("Electron") || typeof window.require !== "function") {
+                            showMessage(this.i18n.showMessage18);
+                            return;
+                        }
+
+                        showMessage(this.i18n.showMessage19)
+                        const autoCookies = await createWereadQRCodeDialog(this.i18n, false);
+
                         const savedata = {
                             cookies: autoCookies,
                             isQRCode: true,
@@ -78,12 +84,12 @@ export default class PluginSample extends Plugin {
                             const verifyResult = await verifyCookie(this, autoCookies, userVid);
 
                             if (verifyResult.success) {
-                                showMessage("登录成功，正在同步笔记...");
+                                showMessage(this.i18n.showMessage20);
                                 await syncWereadNotes(this, autoCookies, true);
                             }
                         }
                     } else if (verifyResult.success) {
-                        showMessage("正在同步微信读书笔记...");
+                        showMessage(this.i18n.showMessage21);
                         const notebookdata = await getNotebooks(this, cookies);
                         const basicBooks = notebookdata.books;
                         const notebooksList = await Promise.all(
@@ -95,15 +101,15 @@ export default class PluginSample extends Plugin {
                                     updatedTime: b.sort,
                                     bookID: details.bookId,
                                     title: details.title,
-                                    author: details.author || "未知作者",
+                                    author: details.author,
                                     cover: details.cover,
-                                    format: details.format === "epub" ? "电子书" : "纸质书",
+                                    format: details.format,
                                     price: details.price,
                                     introduction: details.intro,
                                     publishTime: details.publishTime,
-                                    category: details.category || "未分类",
+                                    category: details.category,
                                     isbn: details.isbn,
-                                    publisher: details.publisher || "未知出版社",
+                                    publisher: details.publisher,
                                     totalWords: details.totalWords,
                                     star: details.newRating,
                                     ratingCount: details.ratingCount,
@@ -117,7 +123,7 @@ export default class PluginSample extends Plugin {
                     }
                 }
             } else {
-                showMessage("请先登录微信读书，或手动输入 cookies")
+                showMessage(this.i18n.showMessage22)
             }
         }
     }
