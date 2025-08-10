@@ -304,10 +304,10 @@ function buildBlocksValues(databaseKeys: any[], fullData: any) {
                 };
                 break;
 
-            case "出版年":
+                        case "出版年":
                 keyValue.date = {
                     content: fullData.publishDate ? parseDateToTimestamp(fullData.publishDate) : null,
-                    isNotEmpty: true,
+                    isNotEmpty: !!fullData.publishDate,
                     isNotTime: true
                 };
                 break;
@@ -315,7 +315,7 @@ function buildBlocksValues(databaseKeys: any[], fullData: any) {
             case "开始日期":
                 keyValue.date = {
                     content: fullData.startDate ? parseDateToTimestamp(fullData.startDate) : null,
-                    isNotEmpty: true,
+                    isNotEmpty: !!fullData.startDate,
                     isNotTime: true
                 };
                 break;
@@ -323,7 +323,7 @@ function buildBlocksValues(databaseKeys: any[], fullData: any) {
             case "读完日期":
                 keyValue.date = {
                     content: fullData.finishDate ? parseDateToTimestamp(fullData.finishDate) : null,
-                    isNotEmpty: true,
+                    isNotEmpty: !!fullData.finishDate,
                     isNotTime: true
                 };
                 break;

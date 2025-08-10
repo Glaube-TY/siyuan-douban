@@ -83,7 +83,7 @@
                 throw new Error(i18n.Error4);
             }
 
-            // 新增ISBN格式判断
+            // ISBN格式判断
             const isISBN = /^(97(8|9))?\d{9}(\d|X)$/.test(inputVales);
 
             if (isISBN) {
@@ -96,8 +96,16 @@
                 inputVales = bookInfo.isbn;
             } else {
                 // 书名搜索模式：打开搜索弹窗
-                searchKeyword = encodeURIComponent(inputVales);
-                showSearchDialog = true;
+                // 判断软件环境
+                if (
+                    !window.navigator.userAgent.includes("Electron") ||
+                    typeof window.require !== "function"
+                ) {
+                    showMessage(i18n.showMessage39);
+                } else {
+                    searchKeyword = encodeURIComponent(inputVales);
+                    showSearchDialog = true;
+                }
             }
         } catch (error) {
             statusMessage = error.message || i18n.statusMessage3;

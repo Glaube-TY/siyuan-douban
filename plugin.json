@@ -2,7 +2,7 @@
   "name": "siyuan-douban",
   "author": "Glaube-TY",
   "url": "https://github.com/Glaube-TY/siyuan-douban",
-  "version": "2.5.1",
+  "version": "2.5.2",
   "minAppVersion": "3.0.12",
   "backends": [
     "windows",
