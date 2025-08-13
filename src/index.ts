@@ -85,6 +85,36 @@ export default class PluginSample extends Plugin {
 
                             if (verifyResult.success) {
                                 showMessage(this.i18n.showMessage20);
+                                // 在登录成功后，用新的cookie获取notebooksList并保存
+                                const notebookdata = await getNotebooks(this, autoCookies);
+                                const basicBooks = notebookdata.books;
+                                const notebooksList = await Promise.all(
+                                    basicBooks.map(async (b: any) => {
+                                        const details = await getBook(this, autoCookies, b.bookId);
+                                        return {
+                                            noteCount: b.noteCount,
+                                            reviewCount: b.reviewCount,
+                                            updatedTime: b.sort,
+                                            bookID: details.bookId,
+                                            title: details.title,
+                                            author: details.author,
+                                            cover: details.cover,
+                                            format: details.format,
+                                            price: details.price,
+                                            introduction: details.intro,
+                                            publishTime: details.publishTime,
+                                            category: details.category,
+                                            isbn: details.isbn,
+                                            publisher: details.publisher,
+                                            totalWords: details.totalWords,
+                                            star: details.newRating,
+                                            ratingCount: details.ratingCount,
+                                            AISummary: details.AISummary,
+                                        };
+                                    }),
+                                );
+
+                                await this.saveData("temporary_weread_notebooksList", notebooksList);
                                 await syncWereadNotes(this, autoCookies, true);
                             }
                         }

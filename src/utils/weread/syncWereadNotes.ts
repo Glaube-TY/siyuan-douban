@@ -222,8 +222,13 @@ export async function syncWereadNotes(plugin: any, cookies: string, isupdate: bo
                     }
                 });
             } else {
-                await plugin.saveData("weread_notebooks", latestBooksInDB);
-                await syncNotesProcess(plugin, cookies, enhancedNotebooks);
+                // 判断enhancedNotebooks是否为0
+                if (enhancedNotebooks.length === 0) {
+                    showMessage(plugin.i18n.showMessage32);
+                } else {
+                    await plugin.saveData("weread_notebooks", latestBooksInDB);
+                    await syncNotesProcess(plugin, cookies, enhancedNotebooks);
+                }
             }
         }
     } else {
