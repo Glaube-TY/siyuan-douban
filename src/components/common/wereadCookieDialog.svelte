@@ -32,12 +32,16 @@
             height: 200px;
             border-radius: 8px;
             background-color: var(--b3-theme-background);
+            // 应用适配的主题色
+            color: var(--text-color);
         }
 
         button {
             padding: 10px 20px;
             border-radius: 8px;
             border: 1px solid var(--b3-border-color);
+            // 应用适配的主题色
+            color: var(--b3-theme-primary);
         }
 
         .confirm-btn {
