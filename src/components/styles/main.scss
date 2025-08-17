@@ -3,6 +3,19 @@
 @use "./about";
 @use "./weread";
 
+// 适配思源笔记主题色
+:root {
+  // 默认使用明亮模式的颜色
+  --text-color: var(--b3-theme-on-primary);
+}
+
+// 暗色模式适配
+@media (prefers-color-scheme: dark) {
+  :root {
+    --text-color: var(--b3-theme-on-background);
+  }
+}
+
 .tab-container {
     width: auto;
     padding: 20px;
@@ -24,8 +37,9 @@
             padding: 8px 20px;
             border-radius: 4px;
             transition: all 0.2s;
-            color: var(--b3-theme-text);
             background: var(--b3-theme-surface);
+            // 应用适配的主题色
+            color: var(--text-color);
 
             &.active {
                 background: var(--b3-theme-primary);
@@ -48,6 +62,8 @@
         align-items: center;
         display: flex;
         flex-direction: column;
+        // 应用适配的主题色
+        color: var(--text-color);
 
         input {
             background-color: var(--b3-theme-background);
@@ -56,6 +72,8 @@
             border-radius: 4px;
             padding: 8px 12px;
             transition: all 0.3s ease;
+            // 应用适配的主题色
+            color: var(--text-color);
 
             &:focus {
                 border-color: var(--b3-theme-primary);
@@ -80,6 +98,8 @@
             border: 1px solid var(--b3-border-color);
             border-radius: 8px;
             transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            // 应用适配的主题色
+            color: var(--text-color);
 
             &:hover {
                 transform: translateY(-1px);
@@ -124,4 +144,6 @@
     pointer-events: auto;
     z-index: 1;
     animation: dialog-enter 0.2s ease;
+    // 应用适配的主题色
+    color: var(--text-color);
 }
