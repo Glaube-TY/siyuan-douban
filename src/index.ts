@@ -64,7 +64,6 @@ export default class PluginSample extends Plugin {
 
                     if (verifyResult.loginDue) {
                         if (!window.navigator.userAgent.includes("Electron") || typeof window.require !== "function") {
-                            showMessage(this.i18n.showMessage18);
                             return;
                         }
 

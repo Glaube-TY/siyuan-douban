@@ -129,7 +129,6 @@
     "showMessage15": "❌ Please fill in a valid WeRead Cookie first before synchronization",
     "showMessage16": "❌Login information verification failed. Please try again.",
     "showMessage17": "❌Cookies format is incorrect, please re-enter!",
-    "showMessage18": "❌Update login status is only useful on the client side, please do not use it on the web side, mobile side, etc.",
     "showMessage19": "🔄Login has expired, logging in again...",
     "showMessage20": "✅Login successful, syncing notes...",
     "showMessage21": "Syncing WeRead notes...",
