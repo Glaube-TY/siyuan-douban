@@ -15,6 +15,7 @@ interface BookInfo {
     rating?: string;
     ratingCount?: string;
     cover?: string;
+    description?: string;
 }
 
 const extractInfo = (doc: Document, label: string): string | null => {
@@ -97,7 +98,7 @@ export async function fetchDoubanBook(html: string): Promise<BookInfo> {
 
             rating: doc.querySelector(".rating_num")?.textContent?.trim(),
 
-            ratingCount: doc.querySelector(".rating_people span")?.textContent?.match(/\d+/)?.[0] // 使用正则提取纯数字评分人数
+            ratingCount: doc.querySelector(".rating_people span")?.textContent?.match(/\d+/)?.[0]
         };
     } catch (error) {
         // 增强错误信息处理

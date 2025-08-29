@@ -152,7 +152,7 @@ export async function syncWereadNotes(plugin: any, cookies: string, isupdate: bo
                                                     readingStatus: "",
                                                     startDate: "",
                                                     finishDate: ""
-                                                });
+                                                }, plugin);
 
                                                 showMessage(`${plugin.i18n.showMessage28}《${book.title}》`);
 
@@ -290,7 +290,7 @@ export async function syncWereadNotes(plugin: any, cookies: string, isupdate: bo
                                                 readingStatus: "",
                                                 startDate: "",
                                                 finishDate: ""
-                                            });
+                                            }, plugin);
 
                                             showMessage(`${plugin.i18n.showMessage28}《${book.title}》`, 3000);
                                             await fetchPost("/api/ui/reloadAttributeView", { id: avID });

@@ -43,6 +43,7 @@
     "readingStatuses": "阅读状态（逗号分隔）：",
     "defaultGenerateNotes": "默认生成读书笔记",
     "setTemplate": "设置模板",
+    "SYTemplateRender": "SY模板渲染",
     "saveSettings": "保存设置",
     "customNoteTemplate": "自定义读书笔记模板",
     "checkMessage1": "🔄正在更新登录信息……",

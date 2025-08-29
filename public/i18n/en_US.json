@@ -43,6 +43,7 @@
     "readingStatuses": "Reading Statuses (comma-separated):",
     "defaultGenerateNotes": "Default Generate Notes",
     "setTemplate": "Set Template",
+    "SYTemplateRender": "SY Template Render",
     "saveSettings": "Save Settings",
     "customNoteTemplate": "Custom Note Template",
     "checkMessage1": "🔄Updating login information...",

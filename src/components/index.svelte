@@ -19,6 +19,7 @@
     let bookInfo: BookInfo | null = null;
     let statusMessage = "";
     let addNotes1 = true;
+    let isSYTemplateRender = false;
 
     let customRatings = [];
     let customCategories = [];
@@ -131,7 +132,7 @@
         };
 
         try {
-            const result = await loadAVData(avID, fullData);
+            const result = await loadAVData(avID, fullData, plugin);
             if (result.code === 1) {
                 showMessage(`${i18n.showMessage1} ${result.msg}`, 5000);
             } else if (result.code === 0) {
@@ -160,6 +161,7 @@
                 categories: customCategories,
                 statuses: customReadingStatuses,
                 addNotes: addNotes1,
+                isSYTemplateRender: isSYTemplateRender,
                 bookDatabaseID: bookDatabassID,
                 noteTemplate: noteTemplate,
             });
@@ -212,6 +214,7 @@
                 customCategories = savedSettings.categories;
                 customReadingStatuses = savedSettings.statuses;
                 addNotes1 = savedSettings.addNotes ?? true;
+                isSYTemplateRender = savedSettings.isSYTemplateRender ?? false;
                 bookDatabassID = savedSettings.bookDatabaseID || "";
 
                 tempRatings = customRatings.join(", ") || "";
@@ -269,7 +272,7 @@
                 bind:tempCategories
                 bind:tempStatuses
                 bind:addNotes1
-                bind:noteTemplate
+                bind:isSYTemplateRender
                 {databaseStatusMessage}
                 on:validate={validateDatabaseID}
                 on:save={handleSaveSettings}

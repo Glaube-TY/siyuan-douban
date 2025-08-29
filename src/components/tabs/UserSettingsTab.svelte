@@ -9,8 +9,8 @@
     export let tempCategories: string;
     export let tempStatuses: string;
     export let addNotes1: boolean;
+    export let isSYTemplateRender: boolean;
     export let databaseStatusMessage: string;
-    export let noteTemplate: string;
 </script>
 
 <div class="settings">
@@ -54,6 +54,10 @@
         <button class="b3-button" on:click={() => dispatch("openTemplate")}
             >📝 {i18n.setTemplate}</button
         >
+        <label>
+            <input type="checkbox" bind:checked={isSYTemplateRender} />
+            {i18n.SYTemplateRender}
+        </label>
     </div>
 
     <div class="saveButton">

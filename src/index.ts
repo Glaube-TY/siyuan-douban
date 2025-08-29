@@ -1,4 +1,4 @@
-import { Plugin, IModel, showMessage, } from "siyuan";
+import { Plugin, IModel, showMessage, fetchSyncPost } from "siyuan";
 import setPage from "./components/index.svelte";
 import { svelteDialog } from "./libs/dialog";
 import * as sdk from "@siyuan-community/siyuan-sdk";
