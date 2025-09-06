@@ -564,7 +564,7 @@ async function getPersonalNotebooks(plugin: any) {
 }
 
 async function updateEndBlocks(plugin: any, blockID: string, wereadPositionMark: string, noteContent: any) {
-    // 首先检查 blockID 是否存在
+    // 检查 blockID 是否存在
     if (!blockID) {
         throw new Error("blockID 不存在");
     }
@@ -599,8 +599,16 @@ async function updateEndBlocks(plugin: any, blockID: string, wereadPositionMark:
                 }
             }
         } else {
+            // 如果没有找到标记块，则在文档末尾添加标记块
             const lastBlock = data.length > 0 ? data[data.length - 1] : null;
-            targetBlockID = lastBlock ? lastBlock.id : blockID;
+            const markBlockID = await plugin.client.insertBlock({
+                data: targetContent,
+                dataType: "markdown",
+                previousID: lastBlock ? lastBlock.id : blockID,
+            });
+            
+            // 使用新插入的标记块作为目标块
+            targetBlockID = markBlockID.data[0].doOperations[0].id;
         }
 
         await plugin.client.insertBlock({

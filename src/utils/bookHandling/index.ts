@@ -182,7 +182,6 @@ export async function loadAVData(avID: string, fullData: any, plugin: any) {
                     id: blockID,
                     path: dataDir + "/storage/petal/siyuan-douban/noteTemplate.md",
                 });
-                console.log(respo.data.content);
                 await plugin.client.updateBlock({
                     id: blockID,
                     data: respo.data.content,
