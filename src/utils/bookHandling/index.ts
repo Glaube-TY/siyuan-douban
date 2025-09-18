@@ -7,17 +7,45 @@ import { getImage, downloadCover } from "@/utils/core/getImg";
 export async function loadAVData(avID: string, fullData: any, plugin: any) {
     try {
         // 判断数据库中是否含有该书籍（以 ISBN 为依据）
-        const originalDatabase = await fetchSyncPost("/api/av/getAttributeView", { "id": avID, });
-        const originalDatabasekeyValues = originalDatabase.data.av.keyValues;
+        let originalDatabase = await fetchSyncPost("/api/av/getAttributeView", { "id": avID, });
+        let originalDatabasekeyValues = originalDatabase.data.av.keyValues;
 
         // 检查数据库是否为空或不存在 ISBN 列
         if (originalDatabasekeyValues && Array.isArray(originalDatabasekeyValues)) {
             // 查找 ISBN 列
             const isbnKey = originalDatabasekeyValues.find((kv: any) => kv.key?.name === "ISBN");
+            const bookNameKey = originalDatabasekeyValues.find((kv: any) => kv.key?.name === "书名");
 
-            if (isbnKey && isbnKey.values && Array.isArray(isbnKey.values)) {
+            // 处理异常情况
+            // 当用户直接删除读书笔记文档，数据库视图会同步删除，但是本地数据库文件中还保留了除书名以外的其他列内容
+            if (isbnKey && bookNameKey) {
+                const ISBNColumn = isbnKey.values || [];
+                const bookNameColumn = bookNameKey.values || [];
+                
+                // 对比bookNameColumn与ISBNColumn，若他俩存在不同的，则将不同的blockID用removeAttributeViewBlocks方法清理
+                const bookNameBlockIDs = new Set(bookNameColumn.map((item: any) => item.blockID));
+                const isbnBlockIDs = new Set(ISBNColumn.map((item: any) => item.blockID));
+                
+                // 找出在ISBN列中但不在书名列中的blockID
+                const blockIDsToRemove = Array.from(isbnBlockIDs).filter(id => !bookNameBlockIDs.has(id) && id !== undefined);
+                
+                // 如果有需要清理的blockID，则调用removeAttributeViewBlocks方法
+                if (blockIDsToRemove.length > 0) {
+                    await fetchSyncPost('/api/av/removeAttributeViewBlocks', { "avID": avID, "srcIDs": blockIDsToRemove });
+                    console.log(`清理了 ${blockIDsToRemove.length} 个不匹配的blockID`);
+                    
+                    // 重新获取数据库信息
+                    originalDatabase = await fetchSyncPost("/api/av/getAttributeView", { "id": avID, });
+                    originalDatabasekeyValues = originalDatabase.data.av.keyValues;
+                }
+            }
+
+            // 查找 ISBN 列
+            const updatedIsbnKey = originalDatabasekeyValues.find((kv: any) => kv.key?.name === "ISBN");
+
+            if (updatedIsbnKey && updatedIsbnKey.values && Array.isArray(updatedIsbnKey.values)) {
                 // 检查是否已存在相同 ISBN 的书籍
-                const existingBook = isbnKey.values.find((value: any) => {
+                const existingBook = updatedIsbnKey.values.find((value: any) => {
                     return value.number && value.number.formattedContent === fullData.ISBN;
                 });
 
