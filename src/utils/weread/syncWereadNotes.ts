@@ -405,7 +405,7 @@ async function syncNotesProcess(plugin: any, cookies: string, notebooks: any): P
                 const comments = notebook.comments?.reviews;
                 const chapterComments = new Map();
                 const highlightComments = new Map();
-                comments.forEach(comment => {
+                comments.forEach((comment: any) => {
                     const review = comment.review;
                     const key = `${review.chapterUid}_${review.range}`;
                     if (review.abstract) {
@@ -450,12 +450,16 @@ async function syncNotesProcess(plugin: any, cookies: string, notebooks: any): P
                                             if (line.includes('{{highlightComment}}')) {
                                                 return null;
                                             }
-                                            return line.replace(/{{highlightText}}/g, h.markText);
+                                            return line.replace(/{{highlightText}}/g, h.markText)
+                                                      .replace(/{{chapterTitle}}/g, chapterInfo.title)
+                                                      .replace(/{{notebookTitle}}/g, notebook.title);
                                         }
 
                                         return line
                                             .replace(/{{highlightText}}/g, h.markText)
-                                            .replace(/{{highlightComment}}/g, c.content);
+                                            .replace(/{{highlightComment}}/g, c.content)
+                                            .replace(/{{chapterTitle}}/g, chapterInfo.title)
+                                            .replace(/{{notebookTitle}}/g, notebook.title);
                                     })
                                     .filter(line => line !== null && line.trim() !== '');
 
@@ -502,7 +506,7 @@ async function syncNotesProcess(plugin: any, cookies: string, notebooks: any): P
                         .replace(/\{\{#globalComments\}\}([\s\S]*?)\{\{\/globalComments\}\}/g, (_, section) => {
                             return variables.globalComments ? section : '';
                         })
-                        .replace(/\{\{(\w+)\}\}/g, (_, key) => variables[key] || '');
+                        .replace(/\{(\w+)\}/g, (_, key) => variables[key] || '');
                 };
 
                 const noteContent = renderTemplate(template);
