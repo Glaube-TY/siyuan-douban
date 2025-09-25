@@ -404,16 +404,20 @@ async function syncNotesProcess(plugin: any, cookies: string, notebooks: any): P
 
                 const comments = notebook.comments?.reviews;
                 const chapterComments = new Map();
-                const highlightComments = new Map();
+                const unmatchedComments = new Map(); // 未匹配到划线的评论（只评论笔记）
+
+                // 首先收集所有有abstract的评论（正文评论）
+                const allAbstractComments = new Map();
                 comments.forEach((comment: any) => {
                     const review = comment.review;
-                    const key = `${review.chapterUid}_${review.range}`;
                     if (review.abstract) {
-                        if (!highlightComments.has(key)) {
-                            highlightComments.set(key, []);
+                        const key = `${review.chapterUid}_${review.range}`;
+                        if (!allAbstractComments.has(key)) {
+                            allAbstractComments.set(key, []);
                         }
-                        highlightComments.get(key).push(review);
-                    } else {
+                        allAbstractComments.get(key).push(review);
+                    } else if (!review.range) {
+                        // 没有abstract且没有range的是章节评论
                         if (!chapterComments.has(review.chapterUid)) {
                             chapterComments.set(review.chapterUid, []);
                         }
@@ -434,45 +438,115 @@ async function syncNotesProcess(plugin: any, cookies: string, notebooks: any): P
                             .map(c => c.content);
 
                         const notesTemplateMatch = template.match(/\{\{#notes\}\}([\s\S]*?)\{\{\/notes\}\}/);
-
                         const notesTemplate = notesTemplateMatch ? notesTemplateMatch[1] : `- {{markText}}\n> 💬 {{content}}`;
 
-                        const notesData = sortedHighlights.flatMap(h => {
-                            const comments = highlightComments.get(`${h.chapterUid}_${h.range}`) || [];
+                        // 收集所有笔记（划线+评论），保持它们在原文中的相对顺序
+                        const allNotes = [];
 
-                            const effectiveComments = comments.length > 0 ? comments : [{}];
+                        // 1. 先收集所有划线笔记（包括有评论和无评论的）
+                        sortedHighlights.forEach(h => {
+                            const comments = allAbstractComments.get(`${h.chapterUid}_${h.range}`) || [];
 
-                            return effectiveComments.map((c: any) => {
-                                const lines = notesTemplate.split('\n');
-                                const renderedLines = lines
-                                    .map(line => {
-                                        if (!c || !c.content) {
+                            if (comments.length > 0) {
+                                // 有匹配的评论（划线+评论）
+                                comments.forEach(comment => {
+                                    allNotes.push({
+                                        type: 'highlight_with_comment',
+                                        highlight: h,
+                                        comment: comment,
+                                        range: h.range
+                                    });
+                                });
+
+                                // 标记这个评论已经匹配
+                                allAbstractComments.delete(`${h.chapterUid}_${h.range}`);
+                            } else {
+                                // 纯划线笔记
+                                allNotes.push({
+                                    type: 'highlight_only',
+                                    highlight: h,
+                                    range: h.range
+                                });
+                            }
+                        });
+
+                        // 2. 收集未匹配到划线的评论（只评论笔记）
+                        allAbstractComments.forEach((comments, key) => {
+                            const [commentChapterUid, commentRange] = key.split('_');
+
+                            if (commentChapterUid == chapterUid) {
+                                comments.forEach(comment => {
+                                    allNotes.push({
+                                        type: 'comment_only',
+                                        comment: comment,
+                                        range: commentRange
+                                    });
+                                });
+                            }
+                        });
+
+                        // 3. 按 range 统一排序所有笔记
+                        allNotes.sort((a, b) => {
+                            const getStart = (range) => parseInt((range || '').split('-')[0]) || 0;
+                            return getStart(a.range) - getStart(b.range);
+                        });
+
+                        // 4. 统一渲染所有笔记
+                        const notesData = allNotes.map(note => {
+                            const lines = notesTemplate.split('\n');
+                            let renderedLines;
+
+                            switch (note.type) {
+                                case 'highlight_only':
+                                    // 纯划线笔记
+                                    renderedLines = lines
+                                        .map(line => {
                                             if (line.includes('{{highlightComment}}')) {
                                                 return null;
                                             }
-                                            return line.replace(/{{highlightText}}/g, h.markText)
-                                                      .replace(/{{chapterTitle}}/g, chapterInfo.title)
-                                                      .replace(/{{notebookTitle}}/g, notebook.title);
-                                        }
+                                            return line.replace(/{{highlightText}}/g, note.highlight.markText)
+                                                .replace(/{{chapterTitle}}/g, chapterInfo.title)
+                                                .replace(/{{notebookTitle}}/g, notebook.title);
+                                        })
+                                        .filter(line => line !== null && line.trim() !== '');
+                                    break;
 
-                                        return line
-                                            .replace(/{{highlightText}}/g, h.markText)
-                                            .replace(/{{highlightComment}}/g, c.content)
-                                            .replace(/{{chapterTitle}}/g, chapterInfo.title)
-                                            .replace(/{{notebookTitle}}/g, notebook.title);
-                                    })
-                                    .filter(line => line !== null && line.trim() !== '');
+                                case 'highlight_with_comment':
+                                    // 划线+评论
+                                    renderedLines = lines
+                                        .map(line => {
+                                            return line
+                                                .replace(/{{highlightText}}/g, note.highlight.markText)
+                                                .replace(/{{highlightComment}}/g, note.comment.content || '')
+                                                .replace(/{{chapterTitle}}/g, chapterInfo.title)
+                                                .replace(/{{notebookTitle}}/g, notebook.title);
+                                        })
+                                        .filter(line => line !== null && line.trim() !== '');
+                                    break;
 
-                                const renderedNote = renderedLines.join('\n');
+                                case 'comment_only':
+                                    // 只评论笔记
+                                    renderedLines = lines
+                                        .map(line => {
+                                            return line
+                                                .replace(/{{highlightText}}/g, note.comment.abstract || '[评论]')
+                                                .replace(/{{highlightComment}}/g, note.comment.content || '')
+                                                .replace(/{{chapterTitle}}/g, chapterInfo.title)
+                                                .replace(/{{notebookTitle}}/g, notebook.title);
+                                        })
+                                        .filter(line => line !== null && line.trim() !== '');
+                                    break;
+                            }
 
-                                return { formattedNote: renderedNote };
-                            });
+                            const renderedNote = renderedLines.join('\n');
+                            
+                            return { formattedNote: renderedNote, range: note.range };
                         });
 
                         return {
                             chapterTitle: chapterInfo.title,
                             notes: notesData,
-                            chapterComments: chapterEndComments.join('')
+                            chapterComments: chapterEndComments.join('\n')
                         };
                     });
 
@@ -610,7 +684,7 @@ async function updateEndBlocks(plugin: any, blockID: string, wereadPositionMark:
                 dataType: "markdown",
                 previousID: lastBlock ? lastBlock.id : blockID,
             });
-            
+
             // 使用新插入的标记块作为目标块
             targetBlockID = markBlockID.data[0].doOperations[0].id;
         }
