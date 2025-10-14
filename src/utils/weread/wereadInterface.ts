@@ -67,3 +67,13 @@ export async function getBookComments(plugin: any, cookies: string, bookId: stri
     });
     return checkResponse(response);
 }
+
+// 获取书籍热门划线
+export async function getBookBestHighlights(plugin: any, cookies: string, bookId: string) {
+    const response = await plugin.client.forwardProxy({
+        url: `https://weread.qq.com/web/book/bestbookmarks?bookId=${bookId}`,
+        method: "GET" as const,
+        headers: [{ ...getHeaders(cookies) }],
+    });
+    return checkResponse(response);
+}

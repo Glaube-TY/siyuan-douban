@@ -43,6 +43,11 @@ export async function createWereadQRCodeDialog(i18n: any, idbtn: boolean): Promi
                     contextIsolation: true,
                     sandbox: true
                 },
+                // 添加以下配置避免影响主应用
+                focusable: idbtn, // 静默模式下窗口不可获得焦点
+                skipTaskbar: !idbtn, // 静默模式下不显示在任务栏
+                alwaysOnTop: false, // 不置顶
+                modal: false, // 非模态窗口
             });
 
             // 页面加载完成监听器
@@ -100,6 +105,11 @@ export async function createWereadQRCodeDialog(i18n: any, idbtn: boolean): Promi
             }
 
         } catch (error) {
+            // 确保在出错时也能清理窗口
+            if (loginWindow && !loginWindow.isDestroyed()) {
+                loginWindow.close();
+                loginWindow.destroy();
+            }
             reject("扫码登录失败: " + error);
         }
     });

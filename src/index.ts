@@ -1,4 +1,4 @@
-import { Plugin, IModel, showMessage, fetchSyncPost } from "siyuan";
+import { Plugin, IModel, showMessage, fetchSyncPost, getFrontend } from "siyuan";
 import setPage from "./components/index.svelte";
 import { svelteDialog } from "./libs/dialog";
 import * as sdk from "@siyuan-community/siyuan-sdk";
@@ -15,7 +15,9 @@ import {
 
 const STORAGE_NAME = "menu-config";
 
-export default class PluginSample extends Plugin {
+export default class PluginDouban extends Plugin {
+
+    isMobile: boolean;
 
     customTab: () => IModel;
 
@@ -23,6 +25,9 @@ export default class PluginSample extends Plugin {
 
     async onload() {
         this.data[STORAGE_NAME] = { readonlyText: "Readonly" };
+
+        const frontEnd = getFrontend();
+        this.isMobile = frontEnd === "mobile" || frontEnd === "browser-mobile";
 
         await this.loadData(STORAGE_NAME);
 
@@ -36,6 +41,8 @@ export default class PluginSample extends Plugin {
                 this.showDialog();
             }
         });
+
+        this.registerCommand();
     }
 
     async onLayoutReady() {
@@ -170,6 +177,24 @@ export default class PluginSample extends Plugin {
                     }
                 });
             }
+        });
+    }
+
+    private registerCommand() {
+        // 添加快速打开读书笔记插件的快捷键命令
+        this.addCommand({
+            langKey: "打开读书笔记",
+            hotkey: "⌘⇧;",
+            callback: () => {
+                // 检查是否为移动端
+                if (this.isMobile) {
+                    showMessage("❌移动端不支持快捷键开启");
+                    return;
+                } else {
+                    // 桌面端打开方式
+                    this.showDialog();
+                }
+            },
         });
     }
 }
