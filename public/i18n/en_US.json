@@ -151,6 +151,7 @@
     "showMessage37": "✅ All synced",
     "showMessage38": "No notes document found, skipping sync",
     "showMessage39": "❌ Keyword search is only available on the desktop client",
+    "showMessage40": "❌ Import failed:",
     "Error1": "Not found the corresponding database block, please input the database view block ID",
     "Error2": "The block is not a valid attribute view database block",
     "Error3": "Database view block ID does not exist",
