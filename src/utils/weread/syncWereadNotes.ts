@@ -72,11 +72,17 @@ export async function syncWereadNotes(plugin: any, cookies: string, isupdate: bo
         const dialog = svelteDialog({
             title: plugin.i18n.newBooksConfirm,
             constructor: (containerEl: HTMLElement) => {
+                // 创建cloudNewBooks的深拷贝，避免引用传递问题
+                const booksForDialog = cloudNewBooks.map(book => ({
+                    ...book,
+                    // 确保创建新对象，避免引用传递
+                }));
+
                 return new WereadNewBooks({
                     target: containerEl,
                     props: {
                         i18n: plugin.i18n,
-                        books: cloudNewBooks,
+                        books: booksForDialog, // 使用深拷贝的对象
                         // 新增书籍弹窗确认按钮点击事件处理
                         onConfirm: async (selectedBooks, ignoredBooks) => {
                             try {
@@ -132,7 +138,7 @@ export async function syncWereadNotes(plugin: any, cookies: string, isupdate: bo
 
                                 // 执行同步操作
                                 try {
-                                    await syncBooks();
+                                    await syncBooks(selectedBooks);
                                 } catch (error) {
                                     console.error("同步失败:", error);
                                     showMessage(plugin.i18n.showMessage33, 3000); // "同步失败，请检查控制台日志"
@@ -187,7 +193,7 @@ export async function syncWereadNotes(plugin: any, cookies: string, isupdate: bo
         }
     }
 
-    async function syncBooks() {
+    async function syncBooks(selectedBooksForSync?: any[]) {
         cloudNotebooksList = await getPersonalNotebooks(plugin); // 获取最新的云端笔记本列表，此时包含了最新的自定义ISBN数据和忽略书籍数据
 
         // 获取数据库中的ISBN集合 
@@ -196,9 +202,19 @@ export async function syncWereadNotes(plugin: any, cookies: string, isupdate: bo
         );
 
         // 提取云端和数据库同时包含的书籍（用于后续同步）
-        const awaitSyncBooksList = cloudNotebooksList.filter((item: any) =>
+        let awaitSyncBooksList = cloudNotebooksList.filter((item: any) =>
             existingIsbnsInDB.has(item.isbn?.toString())
         );
+
+        // 如果有选中的书籍（来自selectedBooks），强制包含这些书籍
+        if (selectedBooksForSync && selectedBooksForSync.length > 0) {
+            const selectedIsbns = new Set(selectedBooksForSync.map(book => book.isbn?.toString()));
+            const additionalBooks = cloudNotebooksList.filter(item =>
+                selectedIsbns.has(item.isbn?.toString()) &&
+                !awaitSyncBooksList.some(syncBook => syncBook.isbn === item.isbn)
+            );
+            awaitSyncBooksList = [...awaitSyncBooksList, ...additionalBooks];
+        }
 
         if (awaitSyncBooksList.length === 0) {
             showMessage(plugin.i18n.showMessage32); // "微信读书没有新笔记~"
@@ -215,11 +231,27 @@ export async function syncWereadNotes(plugin: any, cookies: string, isupdate: bo
             }
 
             // 筛选出需要同步的书籍（更新时间有变化或新增的书籍）
-            const booksNeedSync = awaitSyncBooksList.filter((book: any) => {
+            let booksNeedSync = awaitSyncBooksList.filter((book: any) => {
                 const oldBook = oldNotebooksMap.get(book.isbn?.toString());
                 // 如果旧记录不存在，或者更新时间不同，则需要同步
                 return !oldBook || oldBook.updatedTime !== book.updatedTime;
             });
+
+            // 如果有选中的书籍，确保它们都被包含在同步列表中（不管oldNotebooks中是否有记录）
+            if (selectedBooksForSync && selectedBooksForSync.length > 0) {
+                const selectedIsbns = new Set(selectedBooksForSync.map(book => book.isbn?.toString()));
+                const selectedBooksInCloud = awaitSyncBooksList.filter(item =>
+                    selectedIsbns.has(item.isbn?.toString())
+                );
+
+                // 合并并去重，确保选中的书籍都在同步列表中
+                const needSyncIsbns = new Set(booksNeedSync.map(book => book.isbn));
+                const additionalBooks = selectedBooksInCloud.filter(book => !needSyncIsbns.has(book.isbn));
+
+                if (additionalBooks.length > 0) {
+                    booksNeedSync = [...booksNeedSync, ...additionalBooks];
+                }
+            }
 
             if (booksNeedSync.length === 0) {
                 showMessage(plugin.i18n.showMessage32); // "微信读书没有新笔记~"
@@ -543,8 +575,17 @@ async function getPersonalNotebooks(plugin: any) {
     const filteredNotebooks = notebooksList.filter((book: any) => {
         const bookID = book.bookID?.toString();
         const isbn = book.isbn?.toString();
-        if (bookID) return !ignoredBookIDs.has(bookID);
-        if (isbn) return !ignoredIsbns.has(isbn);
+        
+        // 优先使用bookID检查，因为bookID是唯一标识符
+        if (bookID && ignoredBookIDs.has(bookID)) {
+            return false;
+        }
+        
+        // 如果没有bookID，再使用isbn检查
+        if (isbn && ignoredIsbns.has(isbn)) {
+            return false;
+        }
+        
         return true;
     });
 
@@ -639,22 +680,24 @@ async function saveIgnoredBooks(plugin: any, newIgnoredBooks: any[]) {
     const uniqueMap = new Map();
     merged.forEach(book => {
         const bookID = book.bookID?.toString();
-        if (bookID) uniqueMap.set(bookID, book);
+        if (bookID) {
+            uniqueMap.set(bookID, book);
+        }
     });
 
-    await plugin.saveData('weread_ignoredBooks', Array.from(uniqueMap.values()));
+    const finalIgnoredBooks = Array.from(uniqueMap.values());
+    
+    await plugin.saveData('weread_ignoredBooks', finalIgnoredBooks);
 }
 
 // 保存自定义书籍ISBN
 async function saveCustomBooksISBN(plugin: any, selectedBooks: any[], cloudNotebooksList: any[]) {
     const customBooks = selectedBooks
-        .filter(book =>
-            cloudNotebooksList.some(original =>
-                original.bookID === book.bookID &&
-                original.isbn === "" &&
-                book.isbn !== ""
-            )
-        )
+        .filter(book => {
+            const originalBook = cloudNotebooksList.find(original => original.bookID === book.bookID);
+            const shouldSave = originalBook && originalBook.isbn === "" && book.isbn !== "";
+            return shouldSave;
+        })
         .map(({ title, isbn, bookID }) => ({
             title,
             customISBN: isbn,
@@ -663,8 +706,11 @@ async function saveCustomBooksISBN(plugin: any, selectedBooks: any[], cloudNoteb
 
     if (customBooks.length > 0) {
         const existingCustom = await plugin.loadData("weread_customBooksISBN") || [];
+
         const merged = [...existingCustom, ...customBooks];
         const customMap = new Map(merged.map(item => [item.bookID, item]));
-        await plugin.saveData("weread_customBooksISBN", Array.from(customMap.values()));
+        const finalCustomBooks = Array.from(customMap.values());
+
+        await plugin.saveData("weread_customBooksISBN", finalCustomBooks);
     }
 }

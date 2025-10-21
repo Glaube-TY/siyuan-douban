@@ -28,7 +28,7 @@
 
     $: allSelected =
         books.length > 0 &&
-        books.every((book) => selectedBooks.some((b) => b.isbn === book.isbn));
+        books.every((book) => selectedBooks.some((b) => b.bookID === book.bookID));
 
     function toggleAllBooks() {
         if (allSelected) {
@@ -39,7 +39,8 @@
     }
 
     function toggleBook(book) {
-        const index = selectedBooks.findIndex((b) => b.isbn === book.isbn);
+        // 使用bookID作为唯一标识符，而不是isbn
+        const index = selectedBooks.findIndex((b) => b.bookID === book.bookID);
         if (index > -1) {
             selectedBooks.splice(index, 1);
         } else {
@@ -48,7 +49,8 @@
     }
 
     function toggleIgnore(book) {
-        const index = ignoredBooks.findIndex((b) => b.isbn === book.isbn);
+        // 使用bookID作为唯一标识符，而不是isbn，避免多个没有ISBN的书籍冲突
+        const index = ignoredBooks.findIndex((b) => b.bookID === book.bookID);
         if (index > -1) {
             ignoredBooks.splice(index, 1);
         } else {
@@ -97,7 +99,7 @@
                             type="checkbox"
                             on:change={() => toggleBook(book)}
                             checked={selectedBooks.some(
-                                (b) => b.isbn === book.isbn,
+                                (b) => b.bookID === book.bookID,
                             )}
                             disabled={!isValidISBN(book.isbn)}
                         />
@@ -125,7 +127,7 @@
                             type="checkbox"
                             on:change={() => toggleIgnore(book)}
                             checked={ignoredBooks.some(
-                                (b) => b.isbn === book.isbn,
+                                (b) => b.bookID === book.bookID,
                             )}
                         />
                     </td>
