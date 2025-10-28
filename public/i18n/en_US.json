@@ -94,7 +94,6 @@
     "bookIsbnValid": "Valid ISBN",
     "bookIsbnInvalid": "Invalid ISBN Format",
     "bookIsbnManual": "Manual Input ISBN",
-    "operation": "Operation",
     "delete": "Delete",
     "pluginName": "WeRead Note Plugin",
     "pluginMotto": "Make Reading Management More Elegant",
