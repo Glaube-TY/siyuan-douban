@@ -150,6 +150,7 @@
     "showMessage38": "不存在读书笔记文档，跳过同步",
     "showMessage39": "❌关键词搜索仅在桌面客户端可用",
     "showMessage40": "❌ 导入失败：",
+    "showMessage41": "下次启动将不再显示提示弹窗",
     "Error1": "未找到对应的数据库块，请输入数据库视图块ID",
     "Error2": "该块不是有效的属性视图数据库块",
     "Error3": "数据库视图块ID不存在",
@@ -167,5 +168,18 @@
     "reviewCount1": "个人评论数",
     "bookNotesTitle": "微信读书笔记列表",
     "bookShelfTitle": "微信读书书架列表",
-    "newBooksConfirm": "新书籍确认"
+    "newBooksConfirm": "新书籍确认",
+    "firstDialog1": "欢迎使用读书笔记插件",
+    "firstDialog2": "温馨提示",
+    "firstDialog3": "使用前请先查看教程文档或视频：",
+    "firstDialog4": "教程文档",
+    "firstDialog5": "教程视频",
+    "firstDialog6": "重要提醒",
+    "firstDialog7": "目前很多人在没有查看教程的情况下使用插件，导致出现诸多问题。主要集中在数据库设置上，请务必按照教程进行设置。",
+    "firstDialog8": "问题反馈",
+    "firstDialog9": "有什么问题可在以下平台反馈：",
+    "firstDialog10": "腾讯频道",
+    "firstDialog11": "继续",
+    "firstDialog12": "不再提示",
+    "firstDialog13": "关闭"
 }

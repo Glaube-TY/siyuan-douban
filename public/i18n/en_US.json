@@ -151,6 +151,7 @@
     "showMessage38": "No notes document found, skipping sync",
     "showMessage39": "❌ Keyword search is only available on the desktop client",
     "showMessage40": "❌ Import failed:",
+    "showMessage41": "Next time the plugin will not display this prompt again",
     "Error1": "Not found the corresponding database block, please input the database view block ID",
     "Error2": "The block is not a valid attribute view database block",
     "Error3": "Database view block ID does not exist",
@@ -168,7 +169,18 @@
     "reviewCount1": "Personal Review Count",
     "bookNotesTitle": "WeRead Book Notes List",
     "bookShelfTitle": "WeRead Book Shelf List",
-    "newBooksConfirm": "New Books Confirm"
-
-
+    "newBooksConfirm": "New Books Confirm",
+    "firstDialog1": "Welcome to use the Plugin",
+    "firstDialog2": "Tips",
+    "firstDialog3": "Before using, please view the tutorial document or video:",
+    "firstDialog4": "Tutorial Document",
+    "firstDialog5": "Tutorial Video",
+    "firstDialog6": "Important Reminder",
+    "firstDialog7": "Currently, many people use plug-ins without viewing the tutorial, which leads to many problems. It mainly focuses on database settings, so please be sure to follow the tutorial to set them up.",
+    "firstDialog8": "Problem Feedback",
+    "firstDialog9": "You can report any problems or suggestions on the following platforms:",
+    "firstDialog10": "Tencent Channel",
+    "firstDialog11": "Continue",
+    "firstDialog12": "Do not prompt again",
+    "firstDialog13": "Close"
 }

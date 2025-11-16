@@ -1,6 +1,6 @@
 {
   "name": "siyuan-douban",
-  "version": "2.6.10",
+  "version": "2.6.11",
   "type": "module",
   "description": "Get book information from Douban and import it into the book database(https://github.com/Glaube-TY/siyuan-douban)",
   "repository": "",

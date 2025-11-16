@@ -1,5 +1,8 @@
 import { Plugin, IModel, showMessage, fetchSyncPost, getFrontend } from "siyuan";
+
+import firstPage from "./components/common/firstDialog.svelte";
 import setPage from "./components/index.svelte";
+
 import { svelteDialog } from "./libs/dialog";
 import * as sdk from "@siyuan-community/siyuan-sdk";
 import { syncWereadNotes } from "./utils/weread/syncWereadNotes";
@@ -37,8 +40,18 @@ export default class PluginDouban extends Plugin {
             icon: "iconNotebook",
             title: this.i18n.addTopBarIcon,
             position: "right",
-            callback: () => {
-                this.showDialog();
+            callback: async () => {
+                await this.loadData("INTP").then(async (INTP) => {
+                    if (!INTP) {
+                        this.showFirstDialog();
+                        return;
+                    } else if (INTP.isFirstLoad) {
+                        this.showFirstDialog();
+                        return;
+                    } else {
+                        this.showSetDialog();
+                    }
+                });
             }
         });
 
@@ -164,7 +177,35 @@ export default class PluginDouban extends Plugin {
         }
     }
 
-    private showDialog() {
+    private showFirstDialog() {
+        const dialogRef = svelteDialog({
+            title: "",
+            width: "auto",
+            constructor: (container: HTMLElement) => {
+                return new firstPage({
+                    target: container,
+                    props: {
+                        plugin: this,
+                        onClose: () => {
+                            dialogRef.close();
+                        },
+                        onContinue: () => {
+                            this.showSetDialog();
+                            dialogRef.close();
+                        },
+                        onNeverNotice: async () => {
+                            await this.saveData("INTP", { "isFirstLoad": false });
+                            showMessage(this.i18n.showMessage41);
+                            this.showSetDialog();
+                            dialogRef.close();
+                        },
+                    }
+                });
+            }
+        });
+    }
+
+    private showSetDialog() {
         svelteDialog({
             title: "",
             width: "auto",
@@ -192,7 +233,7 @@ export default class PluginDouban extends Plugin {
                     return;
                 } else {
                     // 桌面端打开方式
-                    this.showDialog();
+                    this.showSetDialog();
                 }
             },
         });
