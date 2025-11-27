@@ -75,7 +75,7 @@ export async function loadAVData(avID: string, fullData: any, plugin: any) {
 
             // 如果不存在，则添加该属性列
             if (!existingAttribute) {
-                await fetchSyncPost("/api/av/addAttributeViewKey", {
+                await fetchSyncPost("/api/av/addAttributeViewKey", { 
                     avID: avID,
                     keyID: generateUniqueBlocked(),
                     keyName: attributeName,

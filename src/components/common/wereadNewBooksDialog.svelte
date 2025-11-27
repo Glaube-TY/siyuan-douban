@@ -11,6 +11,7 @@
     export let onConfirm: (
         selectedBooks: Array<{ title: string; isbn: string; bookID: string }>,
         ignoredBooks: Array<{ title: string; isbn: string; bookID: string }>,
+        useBookIDBooks: Array<{ title: string; isbn: string; bookID: string }>,
     ) => void;
     export let onContinue: (
         ignoredBooks: Array<{ title: string; isbn: string; bookID: string }>,
@@ -20,6 +21,7 @@
     let originalISBNs = new Map(books.map((book) => [book.bookID, book.isbn]));
     let selectedBooks = [];
     let ignoredBooks = [];
+    let useBookIDs = [];
 
     const isValidISBN = (isbn: string) => {
         const cleaned = isbn.replace(/[-\s]/g, "");
@@ -57,13 +59,23 @@
             ignoredBooks.push(book);
         }
     }
+
+    function toggleUseBookID(book) {
+        // 切换是否使用bookID进行同步
+        const index = useBookIDs.findIndex((b) => b.bookID === book.bookID);
+        if (index > -1) {
+            useBookIDs.splice(index, 1);
+        } else {
+            useBookIDs.push(book);
+        }
+    }
 </script>
 
 <div class="notebooks-dialog">
     <div class="confirm-btn-container">
         <button
             class="confirm-btn"
-            on:click={() => onConfirm(selectedBooks, ignoredBooks)}
+            on:click={() => onConfirm(selectedBooks, ignoredBooks, useBookIDs)}
             >{i18n.confirmSelect}</button
         >
         <button class="continue-btn" on:click={() => onContinue(ignoredBooks)}
@@ -89,6 +101,7 @@
                 <th class="book-title">{i18n.bookTitle1}</th>
                 <th class="book-isbn">{i18n.bookIsbn1}</th>
                 <th class="ignore-column">{i18n.ignore}</th>
+                <!-- <th class="use-bookid-column">使用BookID</th> -->
             </tr>
         </thead>
         <tbody>
@@ -131,6 +144,15 @@
                             )}
                         />
                     </td>
+                    <!-- <td class="use-bookID">
+                        <input
+                            type="checkbox"
+                            on:change={() => toggleUseBookID(book)}
+                            checked={useBookIDs.some(
+                                (b) => b.bookID === book.bookID,
+                            )}
+                        />
+                    </td> -->
                 </tr>
             {/each}
         </tbody>
@@ -216,6 +238,17 @@
                 width: 60px;
             }
             .ignore-checkbox {
+                text-align: center;
+                input[type="checkbox"] {
+                    margin: 0;
+                    transform: scale(1.2);
+                }
+            }
+            .use-bookid-column {
+                width: 80px;
+                text-align: center;
+            }
+            .use-bookID {
                 text-align: center;
                 input[type="checkbox"] {
                     margin: 0;

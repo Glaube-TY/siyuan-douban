@@ -20,6 +20,7 @@
 
     import wereadManageISBN from "@/components/common/wereadManageISBN.svelte";
     import wereadIgnoredBooksDialog from "@/components/common/wereadIgnoredBooksDialog.svelte";
+    import wereadUseBookIDBooksDialog from "@/components/common/wereadUseBookIDBooksDialog.svelte";
 
     export let i18n: I18N;
     export let plugin: any;
@@ -273,6 +274,34 @@
             },
         });
     }
+
+    async function createWereadUseBookIDBooksDialog() {
+        const useBookIDBooks = await plugin.loadData("weread_useBookIDBooks");
+
+        if (useBookIDBooks.length == 0) {
+            showMessage(i18n.showMessage42);
+            return;
+        }
+
+        const dialog = svelteDialog({
+            title: i18n.useBookIDBooksDialogTitle,
+            constructor: (containerEl: HTMLElement) => {
+                return new wereadUseBookIDBooksDialog({
+                    target: containerEl,
+                    props: {
+                        plugin,
+                        useBookIDBooks: useBookIDBooks,
+                        onConfirm: () => {
+                            dialog.close();
+                        },
+                        onCancel: () => {
+                            dialog.close();
+                        },
+                    },
+                });
+            },
+        });
+    }
 </script>
 
 <div class="wereadSetting">
@@ -369,6 +398,9 @@
         <button on:click={createIgnoredBooksDialog}
             >{i18n.manageIgnoredBooks}</button
         >
+        <!-- <button on:click={createWereadUseBookIDBooksDialog}
+            >{i18n.manageUseBookIDBooks}</button
+        > -->
     </div>
     <div class="weread-notes-template">
         <button

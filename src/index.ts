@@ -1,4 +1,4 @@
-import { Plugin, IModel, showMessage, fetchSyncPost, getFrontend } from "siyuan";
+import { Plugin, IModel, showMessage, getFrontend } from "siyuan";
 
 import firstPage from "./components/common/firstDialog.svelte";
 import setPage from "./components/index.svelte";
