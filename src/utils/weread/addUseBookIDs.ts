@@ -8,7 +8,6 @@ import { getImage, downloadCover } from "@/utils/core/getImg";
 export async function addUseBookIDsToDatabase(plugin: any, avID: string, bookDetail: any) {
     let getdatabase = await fetchSyncPost('/api/av/getAttributeView', { "id": avID });
     let originalDatabasekeyValues = getdatabase.data.av.keyValues;
-    console.log(originalDatabasekeyValues);
 
     // 检查数据库是否为空或不存在 bookID 列
     if (originalDatabasekeyValues && Array.isArray(originalDatabasekeyValues)) {
@@ -71,7 +70,7 @@ export async function addUseBookIDsToDatabase(plugin: any, avID: string, bookDet
 
     // 检查数据库列中否存在书籍属性并添加缺失的书籍属性列
     for (const attributeName of requiredBookAttributes) {
-        const existingAttribute = databaseKeys.find(key => key.name === attributeName);
+        const existingAttribute = databaseKeys.find((key: { name: string }) => key.name === attributeName); // 检查数据库列中是否存在该属性列
 
         // 如果不存在，则添加该属性列
         if (!existingAttribute) {
@@ -92,10 +91,10 @@ export async function addUseBookIDsToDatabase(plugin: any, avID: string, bookDet
     }).then((res) => databaseKeys = res.data);
 
     // 下载封面
-    const coverBase64Data = await getImage(bookDetail.cover);
-    bookDetail.cover = await downloadCover(coverBase64Data, bookDetail.title);
+    const coverBase64Data = await getImage(bookDetail.cover); // 下载封面图片的 Base64 数据
+    bookDetail.cover = await downloadCover(coverBase64Data, bookDetail.title); // 下载封面图片并保存到本地
 
-    // 构建书籍数据并添加到数据库
+    // 构建书籍数据
     const blocksValues = buildBlocksValues(databaseKeys, bookDetail);
 
     // 添加书籍数据到数据库
@@ -104,14 +103,11 @@ export async function addUseBookIDsToDatabase(plugin: any, avID: string, bookDet
         blocksValues: [blocksValues]
     });
 
-    // 获取数据库信息并匹配新添加的书籍行的 blockID
+    // 获取添加书籍后的数据库信息并匹配新添加的书籍行的 blockID
     const updatedDatabase = await fetchSyncPost("/api/av/getAttributeView", { "id": avID, });
     const updatedDatabaseKeyValues = updatedDatabase.data.av.keyValues;
-
-    // 查找 书名列
-    const bookNameKeyNew = updatedDatabaseKeyValues.find((kv: any) => kv.key.name === "书名");
+    const bookNameKeyNew = updatedDatabaseKeyValues.find((kv: any) => kv.key.name === "书名"); // 查找 书名 列
     let blockID = null;
-
     let matchingValue = null;
     if (bookNameKeyNew) {
         // 查找匹配 书名 的书籍
@@ -129,39 +125,49 @@ export async function addUseBookIDsToDatabase(plugin: any, avID: string, bookDet
         throw new Error("无法找到新添加书籍的 blockID");
     }
 
+    const setting = await plugin.loadData("settings.json");
+
     // 创建读书笔记
-    const sqlresult = await sql(`SELECT * FROM blocks WHERE id = "${blockID}"`);
+    const sqlresult = await sql(`SELECT * FROM blocks WHERE id = "${setting.bookDatabaseID}"`);
+
+    // 检查SQL查询结果
+    if (!sqlresult || sqlresult.length === 0) {
+        throw new Error(`未找到ID为 ${setting.bookDatabaseID} 的数据库块，请确保数据库存在且ID正确`);
+    }
 
     // 根据模板创建读书笔记
-    const setting = await plugin.loadData("settings.json");
+    // 根据是否使用思源笔记模板渲染分别进行
     const isSYTemplateRender = setting.isSYTemplateRender;
-    const noteTemplate = await plugin.loadData("noteTemplate.md");
     if (!isSYTemplateRender) {
         const response = await fetchSyncPost('/api/filetree/createDocWithMd', {
             id: blockID, // 使读书笔记文档ID与数据库ID一致
             parentID: sqlresult[0].root_id,
             notebook: sqlresult[0].box,
             path: sqlresult[0].hpath + "/" + bookDetail.title,
-            markdown: noteTemplate
+            markdown: setting.noteTemplate
                 .replace(/{{书名}}/g, bookDetail.title || '无书名')
                 .replace(/{{副标题}}/g, bookDetail.subtitle || '')
                 .replace(/{{原作名}}/g, bookDetail.originalTitle || '')
-                .replace(/{{作者}}/g, bookDetail.authors || '')
-                .replace(/{{译者}}/g, bookDetail.translators || '')
-                .replace(/{{出版社}}/g, bookDetail.copyrightInfo?.name || bookDetail.publisher || '未知出版社')
-                .replace(/{{出版年}}/g, bookDetail.publishDate || '未知日期')
-                .replace(/{{出品方}}/g, bookDetail.producer || '')
-                .replace(/{{ISBN}}/g, bookDetail.isbn || '')
-                .replace(/{{装帧}}/g, bookDetail.format || '')
-                .replace(/{{丛书}}/g, bookDetail.series || '')
-                .replace(/{{页数}}/g, bookDetail.pages ? `${bookDetail.pages}` : '')
-                .replace(/{{定价}}/g, bookDetail.centPrice ? `${bookDetail.centPrice / 100}` : '')
+                .replace(/{{作者}}/g, bookDetail.authors || "无作者")
+                .replace(/{{译者}}/g, bookDetail.translators || "无译者")
+                .replace(/{{出版社}}/g, bookDetail.copyrightInfo.name || bookDetail.publisher || "无出版社")
+                .replace(/{{出版年}}/g, bookDetail.publishTime ? parseDateToTimestamp(bookDetail.publishTime) : null)
+                .replace(/{{出品方}}/g, bookDetail.producer || "无出品方")
+                .replace(/{{ISBN}}/g, bookDetail.isbn ? String(bookDetail.isbn) : "无ISBN")
+                .replace(/{{装帧}}/g, bookDetail.format || "无装帧")
+                .replace(/{{丛书}}/g, bookDetail.series || '无丛书')
+                .replace(/{{豆瓣评分}}/g, bookDetail.rating ? `${bookDetail.rating}` : '无评分')
+                .replace(/{{评分人数}}/g, bookDetail.ratingCount ? `${bookDetail.ratingCount}` : '0')
+                .replace(/{{页数}}/g, bookDetail.pages ? `${bookDetail.pages}` : '无页数')
+                .replace(/{{定价}}/g, bookDetail.centPrice ? String(bookDetail.centPrice / 100) : "无定价")
                 .replace(/{{我的评分}}/g, bookDetail.myRating || '未评分')
-                .replace(/{{书籍分类}}/g, bookDetail.category || '默认分类')
+                .replace(/{{书籍分类}}/g, bookDetail.category || "无分类")
                 .replace(/{{阅读状态}}/g, bookDetail.readingStatus || '未读')
                 .replace(/{{开始日期}}/g, bookDetail.startDate || '未开始')
                 .replace(/{{读完日期}}/g, bookDetail.finishDate || '未完成')
-                .replace(/{{封面}}/g, bookDetail.cover || '')
+                .replace(/{{封面}}/g, bookDetail.cover || '无封面')
+                .replace(/{{微信读书评分}}/g, bookDetail.rating ? `${bookDetail.rating}` : '无评分')
+                .replace(/{{微信读书评分人数}}/g, bookDetail.ratingCount ? `${bookDetail.ratingCount}` : '暂无评价')
         });
 
         // 检查读书笔记是否创建成功
@@ -177,26 +183,30 @@ export async function addUseBookIDsToDatabase(plugin: any, avID: string, bookDet
             markdown: ""
         });
 
-        const template = noteTemplate
+        const template = setting.noteTemplate
             .replace(/{{书名}}/g, bookDetail.title || '无书名')
-            .replace(/{{副标题}}/g, bookDetail.subtitle || '')
-            .replace(/{{原作名}}/g, bookDetail.originalTitle || '')
-            .replace(/{{作者}}/g, bookDetail.authors || '')
-            .replace(/{{译者}}/g, bookDetail.translators || '')
-            .replace(/{{出版社}}/g, bookDetail.copyrightInfo?.name || bookDetail.publisher || '未知出版社')
-            .replace(/{{出版年}}/g, bookDetail.publishDate || '未知日期')
-            .replace(/{{出品方}}/g, bookDetail.producer || '')
-            .replace(/{{ISBN}}/g, bookDetail.isbn || '')
-            .replace(/{{装帧}}/g, bookDetail.format || '')
-            .replace(/{{丛书}}/g, bookDetail.series || '')
-            .replace(/{{页数}}/g, bookDetail.pages ? `${bookDetail.pages}` : '')
-            .replace(/{{定价}}/g, bookDetail.centPrice ? `${bookDetail.centPrice / 100}` : '')
+            .replace(/{{副标题}}/g, bookDetail.subtitle || '无副标题')
+            .replace(/{{原作名}}/g, bookDetail.originalTitle || '无原作名')
+            .replace(/{{作者}}/g, bookDetail.authors || "无作者")
+            .replace(/{{译者}}/g, bookDetail.translators || "无译者")
+            .replace(/{{出版社}}/g, bookDetail.copyrightInfo.name || bookDetail.publisher || "无出版社")
+            .replace(/{{出版年}}/g, bookDetail.publishTime ? parseDateToTimestamp(bookDetail.publishTime) : null)
+            .replace(/{{出品方}}/g, bookDetail.producer || "无出品方")
+            .replace(/{{ISBN}}/g, bookDetail.isbn ? String(bookDetail.isbn) : "无ISBN")
+            .replace(/{{装帧}}/g, bookDetail.format || "无装帧")
+            .replace(/{{丛书}}/g, bookDetail.series || '无丛书')
+            .replace(/{{豆瓣评分}}/g, bookDetail.rating ? `${bookDetail.rating}` : '无评分')
+            .replace(/{{评分人数}}/g, bookDetail.ratingCount ? `${bookDetail.ratingCount}` : '暂无评价')
+            .replace(/{{页数}}/g, bookDetail.pages ? `${bookDetail.pages}` : '无页数')
+            .replace(/{{定价}}/g, bookDetail.centPrice ? String(bookDetail.centPrice / 100) : "无定价")
             .replace(/{{我的评分}}/g, bookDetail.myRating || '未评分')
-            .replace(/{{书籍分类}}/g, bookDetail.category || '默认分类')
+            .replace(/{{书籍分类}}/g, bookDetail.category || "无分类")
             .replace(/{{阅读状态}}/g, bookDetail.readingStatus || '未读')
             .replace(/{{开始日期}}/g, bookDetail.startDate || '未开始')
             .replace(/{{读完日期}}/g, bookDetail.finishDate || '未完成')
-            .replace(/{{封面}}/g, bookDetail.cover || '')
+            .replace(/{{封面}}/g, bookDetail.cover || '无封面')
+            .replace(/{{微信读书评分}}/g, bookDetail.rating ? `${bookDetail.rating}` : '无评分')
+            .replace(/{{微信读书评分人数}}/g, bookDetail.ratingCount ? `${bookDetail.ratingCount}` : '暂无评价')
 
         await plugin.saveData("noteTemplate.md", template);
 
@@ -244,7 +254,6 @@ export async function addUseBookIDsToDatabase(plugin: any, avID: string, bookDet
         code: 0,
         msg: "书籍添加成功"
     };
-
 }
 
 // ==== 定义属性列类型 ====

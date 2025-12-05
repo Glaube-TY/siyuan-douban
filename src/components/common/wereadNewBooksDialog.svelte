@@ -101,7 +101,7 @@
                 <th class="book-title">{i18n.bookTitle1}</th>
                 <th class="book-isbn">{i18n.bookIsbn1}</th>
                 <th class="ignore-column">{i18n.ignore}</th>
-                <!-- <th class="use-bookid-column">使用BookID</th> -->
+                <th class="use-bookid-column">使用BookID</th>
             </tr>
         </thead>
         <tbody>
@@ -144,7 +144,7 @@
                             )}
                         />
                     </td>
-                    <!-- <td class="use-bookID">
+                    <td class="use-bookID">
                         <input
                             type="checkbox"
                             on:change={() => toggleUseBookID(book)}
@@ -152,7 +152,7 @@
                                 (b) => b.bookID === book.bookID,
                             )}
                         />
-                    </td> -->
+                    </td>
                 </tr>
             {/each}
         </tbody>

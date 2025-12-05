@@ -1,7 +1,7 @@
 import { fetchPost, fetchSyncPost, showMessage } from "siyuan";
 import { svelteDialog } from "@/libs/dialog";
 import { sql } from "@/api";
-import { getBookComments, getBookHighlights, getBook } from "@/utils/weread/wereadInterface";
+import { getBookComments, getBookHighlights, getBook, getBookBestHighlights } from "@/utils/weread/wereadInterface";
 import { fetchBookHtml } from "@/utils/douban/book/getWebPage";
 import { fetchDoubanBook } from "@/utils/douban/book/fetchBook";
 import { loadAVData } from "@/utils/bookHandling/index";
@@ -24,6 +24,9 @@ type TemplateVariables = {
     updateTime: string;
     chapters: ChapterContent[];
     globalComments: string;
+    bookInfo: string;
+    AISummary: string;
+    bestHighlights: string[];
 };
 
 export async function syncWereadNotes(plugin: any, cookies: string, isupdate: boolean) {
@@ -45,6 +48,8 @@ export async function syncWereadNotes(plugin: any, cookies: string, isupdate: bo
     const database = getdatabase.data.av || {}; // 数据库内容
     const ISBNKey = database.keyValues.find((item: any) => item.key.name === "ISBN"); // 获取ISBN列属性
     let ISBNColumn = ISBNKey?.values || []; // 获取ISBN列所有行内容
+    const bookIDKey = database.keyValues.find((item: any) => item.key.name === "bookID"); // 获取bookID列属性
+    let bookIDColumn = bookIDKey?.values || []; // 获取bookID列所有行内容
 
     // 处理异常情况
     // 当用户直接删除读书笔记文档，数据库视图会同步删除，但是本地数据库文件中还保留了除书名以外的其他列内容
@@ -64,31 +69,34 @@ export async function syncWereadNotes(plugin: any, cookies: string, isupdate: bo
         const updatedDatabaseData = updatedDatabase.data.av || {};
         const updatedISBNKey = updatedDatabaseData.keyValues.find((item: any) => item.key.name === "ISBN");
         ISBNColumn = updatedISBNKey?.values || [];
+        const updatedBookIDKey = updatedDatabaseData.keyValues.find((item: any) => item.key.name === "bookID");
+        bookIDColumn = updatedBookIDKey?.values || [];
     }
 
-    // // 获取使用bookID同步的书籍列表（处理旧格式和新格式）
-    // const useBookIDBooks = await plugin.loadData("weread_useBookIDBooks") || [];
-    // const useBookIDSet = new Set(useBookIDBooks.map((item: any) => {
-    //     // 处理旧格式（对象数组）和新格式（字符串数组）
-    //     if (typeof item === 'string') {
-    //         return item;
-    //     } else if (item && item.bookID) {
-    //         return item.bookID.toString();
-    //     }
-    //     return null;
-    // }).filter(Boolean));
+    // 获取使用bookID同步的书籍列表
+    const useBookIDBooks = await plugin.loadData("weread_useBookIDBooks") || []; // 加载使用bookID同步的书籍列表
+    // 处理旧格式（对象数组）和新格式（字符串数组）
+    const useBookIDSet = new Set(useBookIDBooks.map((item: any) => {
+        if (typeof item === 'string') {
+            return item;
+        } else if (item && item.bookID) {
+            return item.bookID.toString();
+        }
+        return null;
+    }).filter(Boolean));
 
-    // const cloudNewBooks = cloudNotebooksList.filter((item: any) => {
-    //     // 如果这本书已经在使用bookID同步的列表中，则不在新书籍窗口中显示
-    //     if (item.bookID && useBookIDSet.has(item.bookID.toString())) {
-    //         return false;
-    //     }
+    // 筛选出云端有但本地没有的书籍：包括使用bookID同步的书籍和不使用bookID同步的书籍
+    const cloudNewBooks = cloudNotebooksList.filter((item: any) => {
+        // 如果这本书已经在使用bookID同步的列表中，则不在新书籍窗口中显示
+        if (item.bookID && useBookIDSet.has(item.bookID.toString())) {
+            return false;
+        }
 
-    //     // 否则检查是否已经在数据库中（通过ISBN）
-    //     return !ISBNColumn.some((isbnItem: any) => isbnItem.number?.content?.toString() === item.isbn);
-    // }); // 筛选出云端有但本地没有的书籍
+        // 否则检查是否已经在数据库中（通过ISBN）
+        return !ISBNColumn.some((isbnItem: any) => isbnItem.number?.content?.toString() === item.isbn);
+    });
 
-    const cloudNewBooks = cloudNotebooksList.filter((item: any) => !ISBNColumn.some((isbnItem: any) => isbnItem.number?.content?.toString() === item.isbn)); // 筛选出云端有但本地没有的书籍
+    // const cloudNewBooks = cloudNotebooksList.filter((item: any) => !ISBNColumn.some((isbnItem: any) => isbnItem.number?.content?.toString() === item.isbn)); // 筛选出云端有但本地没有的书籍
 
     // 若有新增书籍，则显示新增书籍弹窗
     if (cloudNewBooks.length > 0) {
@@ -112,7 +120,9 @@ export async function syncWereadNotes(plugin: any, cookies: string, isupdate: bo
                                 await saveCustomBooksISBN(plugin, selectedBooks, cloudNotebooksList); // 保存自定义书籍ISBN
                                 await saveIgnoredBooks(plugin, ignoredBooks); // 保存忽略书籍
 
-                                // 保存使用bookID同步的书籍信息
+                                let importBooksNumber = 0;
+
+                                // 保存使用bookID同步的书籍信息并将使用bookID同步的书籍添加到书籍数据库中
                                 if (useBookIDs && useBookIDs.length > 0) {
                                     await saveUseBookIDBooks(plugin, useBookIDs); // 保存使用bookID同步的书籍列表
 
@@ -121,6 +131,7 @@ export async function syncWereadNotes(plugin: any, cookies: string, isupdate: bo
                                         try {
                                             const bookDetail = await getBook(plugin, cookies, bookItem.bookID);
                                             await addUseBookIDsToDatabase(plugin, avID, bookDetail);
+                                            importBooksNumber++; // 成功导入书籍数量增加
                                         } catch (error) {
                                             console.error(`获取书籍 ${bookItem.bookID} 详细信息失败:`, error);
                                         }
@@ -129,7 +140,6 @@ export async function syncWereadNotes(plugin: any, cookies: string, isupdate: bo
 
                                 dialog.close(); // 关闭新增书籍弹窗
 
-                                let importBooksNumber = 0;
                                 // 若有选择的新导入书籍，则进行数据库书籍的导入
                                 if (selectedBooks.length > 0) {
                                     showMessage(plugin.i18n.showMessage27); // "⏳ 正在导入选中书籍..."
@@ -168,15 +178,16 @@ export async function syncWereadNotes(plugin: any, cookies: string, isupdate: bo
 
                                 showMessage(`${plugin.i18n.showMessage28} ${importBooksNumber} ${plugin.i18n.showMessage29}`); // "✅ 成功导入 ${importBooksNumber} 本书籍"
 
-                                // 若有新增书籍，则更新ISBNColumn
-                                if (selectedBooks.length > 0) {
+                                // 若有新增书籍或使用bookID同步的书籍，则更新ISBNColumn和bookIDColumn
+                                if (selectedBooks.length > 0 || useBookIDs.length > 0) {
                                     getdatabase = await fetchSyncPost('/api/av/getAttributeView', { "id": avID }); // 获取数据库最新数据
                                     ISBNColumn = getdatabase.data.av.keyValues.find((item: any) => item.key.name === "ISBN").values || []; // 更新ISBNColumn
+                                    bookIDColumn = getdatabase.data.av.keyValues.find((item: any) => item.key.name === "bookID").values || []; // 更新bookIDColumn
                                 }
 
                                 // 执行同步操作
                                 try {
-                                    await syncBooks(selectedBooks);
+                                    await syncBooks(selectedBooks, useBookIDs);
                                 } catch (error) {
                                     console.error("同步失败:", error);
                                     showMessage(plugin.i18n.showMessage33, 3000); // "同步失败，请检查控制台日志"
@@ -231,26 +242,77 @@ export async function syncWereadNotes(plugin: any, cookies: string, isupdate: bo
         }
     }
 
-    async function syncBooks(selectedBooksForSync?: any[]) {
+    async function syncBooks(selectedBooksForSync?: any[], useBookIDs?) {
         cloudNotebooksList = await getPersonalNotebooks(plugin); // 获取最新的云端笔记本列表，此时包含了最新的自定义ISBN数据和忽略书籍数据
+        const useBookIDBooks = await plugin.loadData("weread_useBookIDBooks") || []; // 获取使用bookID同步的书籍列表
 
-        // 获取数据库中的ISBN集合 
+        // 获取数据库中的ISBN集合
         const existingIsbnsInDB = new Set(
             ISBNColumn.map((item: any) => item.number?.content?.toString()).filter(Boolean) || []
         );
 
-        // 提取云端和数据库同时包含的书籍（用于后续同步）
-        let awaitSyncBooksList = cloudNotebooksList.filter((item: any) =>
-            existingIsbnsInDB.has(item.isbn?.toString())
+        // 获取数据库中的bookID集合（用于bookID同步的书籍）
+        const existingBookIDsInDB = new Set(
+            bookIDColumn.map((item: any) => item.text?.content?.toString()).filter(Boolean) || []
         );
+
+        // 提取云端和数据库同时包含的书籍（用于后续同步）
+        // 支持ISBN同步和bookID同步两种方式
+        let awaitSyncBooksList = cloudNotebooksList.filter((item: any) => {
+            // 如果有ISBN，优先使用ISBN同步
+            if (item.isbn) {
+                return existingIsbnsInDB.has(item.isbn?.toString());
+            }
+            // 如果没有ISBN，使用bookID同步
+            return existingBookIDsInDB.has(item.bookID?.toString());
+        });
 
         // 如果有选中的书籍（来自selectedBooks），强制包含这些书籍
         if (selectedBooksForSync && selectedBooksForSync.length > 0) {
-            const selectedIsbns = new Set(selectedBooksForSync.map(book => book.isbn?.toString()));
-            const additionalBooks = cloudNotebooksList.filter(item =>
-                selectedIsbns.has(item.isbn?.toString()) &&
-                !awaitSyncBooksList.some(syncBook => syncBook.isbn === item.isbn)
+            const selectedIsbns = new Set(selectedBooksForSync.map(book => book.isbn?.toString()).filter(Boolean));
+            const selectedBookIDs = new Set(selectedBooksForSync.map(book => book.bookID?.toString()).filter(Boolean));
+            
+            const additionalBooks = cloudNotebooksList.filter(item => {
+                // 通过ISBN匹配
+                if (item.isbn && selectedIsbns.has(item.isbn?.toString())) {
+                    return !awaitSyncBooksList.some(syncBook => syncBook.isbn === item.isbn);
+                }
+                // 通过bookID匹配
+                if (item.bookID && selectedBookIDs.has(item.bookID?.toString())) {
+                    return !awaitSyncBooksList.some(syncBook => syncBook.bookID === item.bookID);
+                }
+                return false;
+            });
+            awaitSyncBooksList = [...awaitSyncBooksList, ...additionalBooks];
+        }
+
+        // 如果有使用bookID同步的书籍（来自useBookIDs），强制包含这些书籍
+        if (useBookIDs && useBookIDs.length > 0) {
+            const useBookIDSet = new Set(useBookIDs.map(book => book.bookID?.toString()).filter(Boolean));
+            const additionalUseBookIDBooks = cloudNotebooksList.filter(item => 
+                item.bookID && useBookIDSet.has(item.bookID?.toString()) &&
+                !awaitSyncBooksList.some(syncBook => syncBook.bookID === item.bookID)
             );
+            awaitSyncBooksList = [...awaitSyncBooksList, ...additionalUseBookIDBooks];
+        }
+
+        // 处理useBookIDBooks（从本地存储加载的使用bookID同步的书籍列表）
+        if (useBookIDBooks && useBookIDBooks.length > 0) {
+            const useBookIDBooksSet = new Set(useBookIDBooks.map((item: any) => {
+                if (typeof item === 'string') {
+                    return item;
+                } else if (item && item.bookID) {
+                    return item.bookID.toString();
+                }
+                return null;
+            }).filter(Boolean));
+            
+            const additionalBooks = cloudNotebooksList.filter(item => {
+                if (item.bookID && useBookIDBooksSet.has(item.bookID.toString())) {
+                    return !awaitSyncBooksList.some(syncBook => syncBook.bookID === item.bookID);
+                }
+                return false;
+            });
             awaitSyncBooksList = [...awaitSyncBooksList, ...additionalBooks];
         }
 
@@ -260,31 +322,59 @@ export async function syncWereadNotes(plugin: any, cookies: string, isupdate: bo
         }
 
         if (isupdate) {
-            // 创建旧书籍映射，方便快速查找
+            // 创建旧书籍映射，方便快速查找（支持ISBN和bookID）
             const oldNotebooksMap = new Map();
             if (oldNotebooks) {
                 oldNotebooks.forEach((book: any) => {
-                    oldNotebooksMap.set(book.isbn?.toString(), book);
+                    if (book.isbn) {
+                        oldNotebooksMap.set(book.isbn?.toString(), book);
+                    } else if (book.bookID) {
+                        oldNotebooksMap.set(book.bookID?.toString(), book);
+                    }
                 });
             }
 
             // 筛选出需要同步的书籍（更新时间有变化或新增的书籍）
             let booksNeedSync = awaitSyncBooksList.filter((book: any) => {
-                const oldBook = oldNotebooksMap.get(book.isbn?.toString());
+                // 优先使用ISBN查找旧记录，没有ISBN则使用bookID
+                const oldBook = book.isbn ? oldNotebooksMap.get(book.isbn?.toString()) : oldNotebooksMap.get(book.bookID?.toString());
                 // 如果旧记录不存在，或者更新时间不同，则需要同步
                 return !oldBook || oldBook.updatedTime !== book.updatedTime;
             });
 
             // 如果有选中的书籍，确保它们都被包含在同步列表中（不管oldNotebooks中是否有记录）
             if (selectedBooksForSync && selectedBooksForSync.length > 0) {
-                const selectedIsbns = new Set(selectedBooksForSync.map(book => book.isbn?.toString()));
+                const selectedIsbns = new Set(selectedBooksForSync.map(book => book.isbn?.toString()).filter(Boolean));
+                const selectedBookIDs = new Set(selectedBooksForSync.map(book => book.bookID?.toString()).filter(Boolean));
+                
                 const selectedBooksInCloud = awaitSyncBooksList.filter(item =>
-                    selectedIsbns.has(item.isbn?.toString())
+                    (item.isbn && selectedIsbns.has(item.isbn?.toString())) ||
+                    (item.bookID && selectedBookIDs.has(item.bookID?.toString()))
                 );
 
                 // 合并并去重，确保选中的书籍都在同步列表中
-                const needSyncIsbns = new Set(booksNeedSync.map(book => book.isbn));
-                const additionalBooks = selectedBooksInCloud.filter(book => !needSyncIsbns.has(book.isbn));
+                const needSyncKeys = new Set(booksNeedSync.map(book => book.isbn || book.bookID));
+                const additionalBooks = selectedBooksInCloud.filter(book => 
+                    !needSyncKeys.has(book.isbn || book.bookID)
+                );
+
+                if (additionalBooks.length > 0) {
+                    booksNeedSync = [...booksNeedSync, ...additionalBooks];
+                }
+            }
+
+            // 如果有使用bookID同步的书籍，确保它们都被包含在同步列表中
+            if (useBookIDs && useBookIDs.length > 0) {
+                const useBookIDSet = new Set(useBookIDs.map(book => book.bookID?.toString()).filter(Boolean));
+                const useBookIDBooksInCloud = awaitSyncBooksList.filter(item =>
+                    item.bookID && useBookIDSet.has(item.bookID?.toString())
+                );
+
+                // 合并并去重
+                const needSyncKeys = new Set(booksNeedSync.map(book => book.isbn || book.bookID));
+                const additionalBooks = useBookIDBooksInCloud.filter(book => 
+                    !needSyncKeys.has(book.bookID)
+                );
 
                 if (additionalBooks.length > 0) {
                     booksNeedSync = [...booksNeedSync, ...additionalBooks];
@@ -296,17 +386,23 @@ export async function syncWereadNotes(plugin: any, cookies: string, isupdate: bo
                 return;
             }
 
-            // 获取数据库中的blockID映射
-            const isbnBlockMap = new Map();
+            // 获取数据库中的blockID映射（支持ISBN和bookID两种方式）
+            const blockMap = new Map();
+            // 处理ISBN映射
             ISBNColumn.forEach((item: any) => {
                 const isbn = item.number?.content?.toString();
-                if (isbn) isbnBlockMap.set(isbn, item.blockID);
+                if (isbn) blockMap.set(isbn, item.blockID);
+            });
+            // 处理bookID映射
+            bookIDColumn.forEach((item: any) => {
+                const bookID = item.text?.content?.toString();
+                if (bookID) blockMap.set(bookID, item.blockID);
             });
 
             // 为需要同步的书籍添加blockID
             const booksToSync = booksNeedSync.map((book: any) => ({
                 ...book,
-                blockID: isbnBlockMap.get(book.isbn?.toString()) || null
+                blockID: blockMap.get(book.isbn?.toString()) || blockMap.get(book.bookID?.toString()) || null
             }));
 
             // 执行同步
@@ -315,24 +411,30 @@ export async function syncWereadNotes(plugin: any, cookies: string, isupdate: bo
             // 更新本地存储的同步记录
             const updatedNotebooks = awaitSyncBooksList.map((book: any) => ({
                 ...book,
-                blockID: isbnBlockMap.get(book.isbn?.toString()) || null
+                blockID: blockMap.get(book.isbn?.toString()) || blockMap.get(book.bookID?.toString()) || null
             }));
 
             await plugin.saveData("weread_notebooks", updatedNotebooks); // 保存更新后的同步记录
             showMessage(plugin.i18n.showMessage37); // "✅ 全部同步完成"
             return; // 完成更新同步后返回，不再执行后续逻辑
         } else {
-            // 获取数据库中的blockID映射
-            const isbnBlockMap = new Map();
+            // 获取数据库中的blockID映射（支持ISBN和bookID两种方式）
+            const blockMap = new Map();
+            // 处理ISBN映射
             ISBNColumn.forEach((item: any) => {
                 const isbn = item.number?.content?.toString();
-                if (isbn) isbnBlockMap.set(isbn, item.blockID);
+                if (isbn) blockMap.set(isbn, item.blockID);
+            });
+            // 处理bookID映射
+            bookIDColumn.forEach((item: any) => {
+                const bookID = item.text?.content?.toString();
+                if (bookID) blockMap.set(bookID, item.blockID);
             });
 
             // 为所有需要同步的书籍添加blockID
             const booksToSync = awaitSyncBooksList.map((book: any) => ({
                 ...book,
-                blockID: isbnBlockMap.get(book.isbn?.toString()) || null
+                blockID: blockMap.get(book.isbn?.toString()) || blockMap.get(book.bookID?.toString()) || null
             }));
 
             // 执行同步
@@ -341,7 +443,7 @@ export async function syncWereadNotes(plugin: any, cookies: string, isupdate: bo
             // 更新本地存储的同步记录
             const updatedNotebooks = awaitSyncBooksList.map((book: any) => ({
                 ...book,
-                blockID: isbnBlockMap.get(book.isbn?.toString()) || null
+                blockID: blockMap.get(book.isbn?.toString()) || blockMap.get(book.bookID?.toString()) || null
             }));
 
             await plugin.saveData("weread_notebooks", updatedNotebooks); // 保存更新后的同步记录
@@ -365,7 +467,9 @@ async function syncNotesProcess(plugin: any, cookies: string, notebooks: any): P
         notebooks.map(async (notebook: any) => ({
             ...notebook,
             highlights: await getBookHighlights(plugin, cookies, notebook.bookID),
-            comments: await getBookComments(plugin, cookies, notebook.bookID)
+            comments: await getBookComments(plugin, cookies, notebook.bookID),
+            bookDetails: await getBook(plugin, cookies, notebook.bookID),
+            bestHighlights: await getBookBestHighlights(plugin, cookies, notebook.bookID)
         }))
     );
 
@@ -569,7 +673,10 @@ async function syncNotesProcess(plugin: any, cookies: string, notebooks: any): P
                     globalComments: comments
                         .filter(c => !c.review.abstract && !c.review.contextAbstract)
                         .map(c => `${c.review.content}`)
-                        .join('\n')
+                        .join('\n'),
+                    bookInfo: notebook.bookDetails?.intro || '',
+                    AISummary: notebook.bookDetails?.AISummary || '',
+                    bestHighlights: notebook.bestHighlights?.bestBookMarks?.items?.map(item => item.markText) || []
                 };
 
                 const renderTemplate = (tpl: string) => {
@@ -590,6 +697,19 @@ async function syncNotesProcess(plugin: any, cookies: string, notebooks: any): P
                         })
                         .replace(/\{\{#globalComments\}\}([\s\S]*?)\{\{\/globalComments\}\}/g, (_, section) => {
                             return variables.globalComments ? section : '';
+                        })
+                        .replace(/\{\{#bookInfo\}\}([\s\S]*?)\{\{\/bookInfo\}\}/g, (_, section) => {
+                            return variables.bookInfo ? section.replace(/\{\{bookInfo\}\}/g, variables.bookInfo) : '';
+                        })
+                        .replace(/\{\{#AISummary\}\}([\s\S]*?)\{\{\/AISummary\}\}/g, (_, section) => {
+                            return variables.AISummary ? section.replace(/\{\{AISummary\}\}/g, variables.AISummary) : '';
+                        })
+                        .replace(/\{\{#bestHighlights\}\}([\s\S]*?)\{\{\/bestHighlights\}\}/g, (_, section) => {
+                            return variables.bestHighlights.length > 0 
+                                ? variables.bestHighlights.map(highlight => 
+                                    section.replace(/\{\{bestHighlight\}\}/g, highlight)
+                                ).join('\n')
+                                : '';
                         })
                         .replace(/\{(\w+)\}/g, (_, key) => variables[key] || '');
                 };

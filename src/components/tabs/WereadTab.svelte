@@ -398,9 +398,9 @@
         <button on:click={createIgnoredBooksDialog}
             >{i18n.manageIgnoredBooks}</button
         >
-        <!-- <button on:click={createWereadUseBookIDBooksDialog}
+        <button on:click={createWereadUseBookIDBooksDialog}
             >{i18n.manageUseBookIDBooks}</button
-        > -->
+        >
     </div>
     <div class="weread-notes-template">
         <button
