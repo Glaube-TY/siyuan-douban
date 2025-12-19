@@ -33,6 +33,8 @@
     "bookAddNotes": "Generate Notes",
     "bookStartDate": "Start Date:",
     "bookFinishDate": "Finish Date:",
+    "bookDescription": "Book Description:",
+    "bookAuthorBio": "Author Biography:",
     "searchBook": "Book Search",
     "searchBookLoading": "Searching books...",
     "bookDatabaseID": "Book Database Block ID:",
@@ -85,7 +87,7 @@
     "setNotesTemplateTitle": "WeRead Note Template",
     "confirmSelect": "Confirm Select",
     "continueSync": "Continue Sync",
-    "selectBooksTip": "Select the books you want to sync notes, and books without ISBN can be manually filled in to match the database.",
+    "selectBooksTip": "Select the books you want to sync notes, and books without ISBN can be manually filled in or selected to use BookID for synchronization.",
     "select": "Select",
     "selectAll": "Select All",
     "bookTitle1": "Book Title",
@@ -184,5 +186,6 @@
     "firstDialog10": "Tencent Channel",
     "firstDialog11": "Continue",
     "firstDialog12": "Do not prompt again",
-    "firstDialog13": "Close"
+    "firstDialog13": "Close",
+    "cookieTip": "Please enter the WeRead Cookie, save it, and switch to another tab to refresh the status."
 }

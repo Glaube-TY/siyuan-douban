@@ -63,7 +63,6 @@ export async function syncWereadNotes(plugin: any, cookies: string, isupdate: bo
     // 如果有需要清理的blockID，则调用removeAttributeViewBlocks方法
     if (blockIDsToRemove.length > 0) {
         await fetchSyncPost('/api/av/removeAttributeViewBlocks', { "avID": avID, "srcIDs": blockIDsToRemove });
-        console.log(`清理了 ${blockIDsToRemove.length} 个不匹配的blockID`);
         // 如果有清理操作，则重新获取数据库的ISBN相关数据
         const updatedDatabase = await fetchSyncPost('/api/av/getAttributeView', { "id": avID });
         const updatedDatabaseData = updatedDatabase.data.av || {};
@@ -472,8 +471,6 @@ async function syncNotesProcess(plugin: any, cookies: string, notebooks: any): P
             bestHighlights: await getBookBestHighlights(plugin, cookies, notebook.bookID)
         }))
     );
-
-    console.log(enhancedNotebooks);
 
     // 并行处理所有书籍的更新
     const updatePromises = enhancedNotebooks

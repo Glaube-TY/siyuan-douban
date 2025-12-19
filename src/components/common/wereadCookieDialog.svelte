@@ -8,6 +8,7 @@
 </script>
 
 <div class="cookie-weread-dialog">
+    <p>{plugin.i18n.cookieTip}</p>
     <textarea class="weread-cookie" bind:value={cookies}></textarea>
     <div class="cookie-weread-btn">
         <button class="confirm-btn" on:click={() => confirm(cookies)}>
@@ -24,8 +25,8 @@
         justify-content: center;
         align-items: center;
         height: 100%;
-        gap: 20px;
-        padding: 20px;
+        gap: 10px;
+        padding: 10px;
 
         .weread-cookie {
             width: 400px;

@@ -305,13 +305,15 @@
 </script>
 
 <div class="wereadSetting">
-    <label for="tutorial"
-        >{i18n.tutorial}<a
-            id="tutorial"
-            href="https://ttl8ygt82u.feishu.cn/wiki/TVR2wczSKiy2HSk7PyQcMGuNnyc"
-            >{i18n.tutorialLink}</a
-        ></label
-    >
+    <div style="margin-bottom: 10px;">
+        <label for="tutorial">
+            {i18n.tutorial}<a
+                id="tutorial"
+                href="https://ttl8ygt82u.feishu.cn/wiki/TVR2wczSKiy2HSk7PyQcMGuNnyc"
+                >{i18n.tutorialLink}</a
+            ></label
+        >
+    </div>
     <div class="cookie-weread-setting">
         <button
             class="scan-qrcode"

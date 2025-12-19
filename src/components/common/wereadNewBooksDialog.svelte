@@ -47,7 +47,20 @@
             selectedBooks.splice(index, 1);
         } else {
             selectedBooks.push(book);
+            // 选择时，从其他两个列表中移除
+            const ignoreIndex = ignoredBooks.findIndex((b) => b.bookID === book.bookID);
+            if (ignoreIndex > -1) {
+                ignoredBooks.splice(ignoreIndex, 1);
+            }
+            const useBookIDIndex = useBookIDs.findIndex((b) => b.bookID === book.bookID);
+            if (useBookIDIndex > -1) {
+                useBookIDs.splice(useBookIDIndex, 1);
+            }
         }
+        // 强制触发响应式更新
+        selectedBooks = [...selectedBooks];
+        ignoredBooks = [...ignoredBooks];
+        useBookIDs = [...useBookIDs];
     }
 
     function toggleIgnore(book) {
@@ -57,7 +70,20 @@
             ignoredBooks.splice(index, 1);
         } else {
             ignoredBooks.push(book);
+            // 忽略时，从其他两个列表中移除
+            const selectedIndex = selectedBooks.findIndex((b) => b.bookID === book.bookID);
+            if (selectedIndex > -1) {
+                selectedBooks.splice(selectedIndex, 1);
+            }
+            const useBookIDIndex = useBookIDs.findIndex((b) => b.bookID === book.bookID);
+            if (useBookIDIndex > -1) {
+                useBookIDs.splice(useBookIDIndex, 1);
+            }
         }
+        // 强制触发响应式更新
+        selectedBooks = [...selectedBooks];
+        ignoredBooks = [...ignoredBooks];
+        useBookIDs = [...useBookIDs];
     }
 
     function toggleUseBookID(book) {
@@ -67,7 +93,20 @@
             useBookIDs.splice(index, 1);
         } else {
             useBookIDs.push(book);
+            // 使用BookID时，从其他两个列表中移除
+            const selectedIndex = selectedBooks.findIndex((b) => b.bookID === book.bookID);
+            if (selectedIndex > -1) {
+                selectedBooks.splice(selectedIndex, 1);
+            }
+            const ignoreIndex = ignoredBooks.findIndex((b) => b.bookID === book.bookID);
+            if (ignoreIndex > -1) {
+                ignoredBooks.splice(ignoreIndex, 1);
+            }
         }
+        // 强制触发响应式更新
+        selectedBooks = [...selectedBooks];
+        ignoredBooks = [...ignoredBooks];
+        useBookIDs = [...useBookIDs];
     }
 </script>
 
@@ -100,8 +139,8 @@
                 </th>
                 <th class="book-title">{i18n.bookTitle1}</th>
                 <th class="book-isbn">{i18n.bookIsbn1}</th>
-                <th class="ignore-column">{i18n.ignore}</th>
-                <th class="use-bookid-column">使用BookID</th>
+                <th class="ignore-column" title="选择、忽略、使用BookID 三选一">{i18n.ignore}</th>
+                <th class="use-bookid-column" title="选择、忽略、使用BookID 三选一">使用BookID</th>
             </tr>
         </thead>
         <tbody>
@@ -114,7 +153,9 @@
                             checked={selectedBooks.some(
                                 (b) => b.bookID === book.bookID,
                             )}
-                            disabled={!isValidISBN(book.isbn)}
+                            disabled={!isValidISBN(book.isbn) || 
+                                     ignoredBooks.some((b) => b.bookID === book.bookID) || 
+                                     useBookIDs.some((b) => b.bookID === book.bookID)}
                         />
                     </td>
                     <td>{book.title}</td>
@@ -135,22 +176,30 @@
                                 book.isbn !== ""}
                         />
                     </td>
-                    <td class="ignore-checkbox">
+                    <td class="ignore-checkbox" 
+                        class:disabled={selectedBooks.some((b) => b.bookID === book.bookID) || 
+                                       useBookIDs.some((b) => b.bookID === book.bookID)}>
                         <input
                             type="checkbox"
                             on:change={() => toggleIgnore(book)}
                             checked={ignoredBooks.some(
                                 (b) => b.bookID === book.bookID,
                             )}
+                            disabled={selectedBooks.some((b) => b.bookID === book.bookID) || 
+                                     useBookIDs.some((b) => b.bookID === book.bookID)}
                         />
                     </td>
-                    <td class="use-bookID">
+                    <td class="use-bookID" 
+                        class:disabled={selectedBooks.some((b) => b.bookID === book.bookID) || 
+                                       ignoredBooks.some((b) => b.bookID === book.bookID)}>
                         <input
                             type="checkbox"
                             on:change={() => toggleUseBookID(book)}
                             checked={useBookIDs.some(
                                 (b) => b.bookID === book.bookID,
                             )}
+                            disabled={selectedBooks.some((b) => b.bookID === book.bookID) || 
+                                     ignoredBooks.some((b) => b.bookID === book.bookID)}
                         />
                     </td>
                 </tr>
@@ -243,6 +292,10 @@
                     margin: 0;
                     transform: scale(1.2);
                 }
+                &.disabled {
+                    opacity: 0.4;
+                    cursor: not-allowed;
+                }
             }
             .use-bookid-column {
                 width: 80px;
@@ -253,6 +306,10 @@
                 input[type="checkbox"] {
                     margin: 0;
                     transform: scale(1.2);
+                }
+                &.disabled {
+                    opacity: 0.4;
+                    cursor: not-allowed;
                 }
             }
         }

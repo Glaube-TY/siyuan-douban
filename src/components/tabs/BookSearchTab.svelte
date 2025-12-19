@@ -221,7 +221,7 @@
                 >
                     <div>
                         <label>
-                            {i18n.bookMyRating}：
+                            {i18n.bookMyRating}
                             <select bind:value={myRatingIndex}>
                                 {#each customRatings as rating, index}
                                     <option value={index}>{rating}</option>
@@ -231,7 +231,7 @@
                     </div>
                     <div>
                         <label>
-                            {i18n.bookCategory}：
+                            {i18n.bookCategory}
                             <select bind:value={bookCategoryIndex}>
                                 {#each customCategories as category, index}
                                     <option value={index}>{category}</option>
@@ -241,7 +241,7 @@
                     </div>
                     <div>
                         <label>
-                            {i18n.bookReadingStatus}：
+                            {i18n.bookReadingStatus}
                             <select bind:value={readingStatusIndex}>
                                 {#each customReadingStatuses as status, index}
                                     <option value={index}>{status}</option>
@@ -265,7 +265,7 @@
                 >
                     <div>
                         <label>
-                            {i18n.bookStartDate}：
+                            {i18n.bookStartDate}
                             <input
                                 type="date"
                                 bind:value={bookInfo.startDate}
@@ -274,13 +274,35 @@
                     </div>
                     <div>
                         <label>
-                            {i18n.bookFinishDate}：
+                            {i18n.bookFinishDate}
                             <input
                                 type="date"
                                 bind:value={bookInfo.finishDate}
                             />
                         </label>
                     </div>
+                </div>
+            </div>
+
+            <!-- 下部区域 -->
+            <div class="book-bottom-area">
+                <div class="form-row">
+                    <label>
+                        {i18n.bookDescription}
+                        <textarea
+                            bind:value={bookInfo.description}
+                            rows="4"
+                        ></textarea>
+                    </label>
+                </div>
+                <div class="form-row">
+                    <label>
+                        {i18n.bookAuthorBio}
+                        <textarea
+                            bind:value={bookInfo.authorBio}
+                            rows="4"
+                        ></textarea>
+                    </label>
                 </div>
             </div>
         </div>

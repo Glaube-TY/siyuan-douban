@@ -75,6 +75,8 @@
         startDate?: string;
         finishDate?: string;
         addNotes?: boolean;
+        description?: string;
+        authorBio?: string;
     }
 
     async function fetchBookData() {
@@ -108,6 +110,8 @@
                     showSearchDialog = true;
                 }
             }
+
+            console.log(bookInfo);
         } catch (error) {
             statusMessage = error.message || i18n.statusMessage3;
             console.error("Book acquisition failed:", error);

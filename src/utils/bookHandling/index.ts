@@ -21,19 +21,19 @@ export async function loadAVData(avID: string, fullData: any, plugin: any) {
             if (isbnKey && bookNameKey) {
                 const ISBNColumn = isbnKey.values || [];
                 const bookNameColumn = bookNameKey.values || [];
-                
+
                 // 对比bookNameColumn与ISBNColumn，若他俩存在不同的，则将不同的blockID用removeAttributeViewBlocks方法清理
                 const bookNameBlockIDs = new Set(bookNameColumn.map((item: any) => item.blockID));
                 const isbnBlockIDs = new Set(ISBNColumn.map((item: any) => item.blockID));
-                
+
                 // 找出在ISBN列中但不在书名列中的blockID
                 const blockIDsToRemove = Array.from(isbnBlockIDs).filter(id => !bookNameBlockIDs.has(id) && id !== undefined);
-                
+
                 // 如果有需要清理的blockID，则调用removeAttributeViewBlocks方法
                 if (blockIDsToRemove.length > 0) {
                     await fetchSyncPost('/api/av/removeAttributeViewBlocks', { "avID": avID, "srcIDs": blockIDsToRemove });
                     console.log(`清理了 ${blockIDsToRemove.length} 个不匹配的blockID`);
-                    
+
                     // 重新获取数据库信息
                     originalDatabase = await fetchSyncPost("/api/av/getAttributeView", { "id": avID, });
                     originalDatabasekeyValues = originalDatabase.data.av.keyValues;
@@ -67,7 +67,7 @@ export async function loadAVData(avID: string, fullData: any, plugin: any) {
         if (databaseKeys[0].name !== "书名") { await changeMainKeyName(avID); }
 
         // 定义书籍属性列
-        const requiredBookAttributes = ["书名", "封面", "副标题", "原作名", "作者", "译者", "出版社", "出版年", "出品方", "丛书", "ISBN", "豆瓣评分", "评分人数", "定价", "页数", "装帧", "我的评分", "书籍分类", "阅读状态", "开始日期", "读完日期",].reverse();
+        const requiredBookAttributes = ["书名", "封面", "副标题", "原作名", "作者", "译者", "出版社", "出版年", "出品方", "丛书", "ISBN", "豆瓣评分", "评分人数", "定价", "页数", "装帧", "我的评分", "书籍分类", "阅读状态", "开始日期", "读完日期", "书籍简介", "作者介绍"].reverse();
 
         // 检查数据库列中否存在书籍属性并添加缺失的书籍属性列
         for (const attributeName of requiredBookAttributes) {
@@ -75,7 +75,7 @@ export async function loadAVData(avID: string, fullData: any, plugin: any) {
 
             // 如果不存在，则添加该属性列
             if (!existingAttribute) {
-                await fetchSyncPost("/api/av/addAttributeViewKey", { 
+                await fetchSyncPost("/api/av/addAttributeViewKey", {
                     avID: avID,
                     keyID: generateUniqueBlocked(),
                     keyName: attributeName,
@@ -164,6 +164,8 @@ export async function loadAVData(avID: string, fullData: any, plugin: any) {
                         .replace(/{{开始日期}}/g, fullData.startDate || '未开始')
                         .replace(/{{读完日期}}/g, fullData.finishDate || '未完成')
                         .replace(/{{封面}}/g, fullData.cover || '')
+                        .replace(/{{书籍简介}}/g, fullData.description || '')
+                        .replace(/{{作者介绍}}/g, fullData.authorBio || '')
                 });
 
                 // 检查读书笔记是否创建成功
@@ -201,6 +203,8 @@ export async function loadAVData(avID: string, fullData: any, plugin: any) {
                     .replace(/{{开始日期}}/g, fullData.startDate || '未开始')
                     .replace(/{{读完日期}}/g, fullData.finishDate || '未完成')
                     .replace(/{{封面}}/g, fullData.cover || '')
+                    .replace(/{{书籍简介}}/g, fullData.description || '')
+                    .replace(/{{作者介绍}}/g, fullData.authorBio || '')
 
                 await plugin.saveData("noteTemplate.md", template);
 
@@ -269,6 +273,8 @@ function getAttributeType(attributeName: string): string {
         case "出品方":
         case "丛书":
         case "装帧":
+        case "书籍简介":
+        case "作者介绍":
             return "text";
         case "ISBN":
             return "number";
@@ -447,6 +453,18 @@ function buildBlocksValues(databaseKeys: any[], fullData: any) {
                 keyValue.mSelect = [{
                     content: fullData.readingStatus || ""
                 }];
+                break;
+
+            case "书籍简介":
+                keyValue.text = {
+                    content: fullData.description || ""
+                };
+                break;
+
+            case "作者介绍":
+                keyValue.text = {
+                    content: fullData.authorBio || ""
+                };
                 break;
 
             default:

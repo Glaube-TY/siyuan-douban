@@ -16,6 +16,7 @@ interface BookInfo {
     ratingCount?: string;
     cover?: string;
     description?: string;
+    authorBio?: string;
 }
 
 const extractInfo = (doc: Document, label: string): string | null => {
@@ -98,7 +99,67 @@ export async function fetchDoubanBook(html: string): Promise<BookInfo> {
 
             rating: doc.querySelector(".rating_num")?.textContent?.trim(),
 
-            ratingCount: doc.querySelector(".rating_people span")?.textContent?.match(/\d+/)?.[0]
+            ratingCount: doc.querySelector(".rating_people span")?.textContent?.match(/\d+/)?.[0],
+
+            description: (() => {
+                // 优先从展开的内容简介中获取完整内容
+                const fullContent = doc.querySelector('#link-report .all.hidden .intro');
+                if (fullContent) {
+                    return Array.from(fullContent.querySelectorAll('p'))
+                        .map(p => p.textContent?.trim())
+                        .filter(text => text && !text.startsWith('【') && !text.includes('(展开全部)'))
+                        .join('\n\n');
+                }
+                
+                // 如果没有展开内容，尝试获取简短版本
+                const shortContent = doc.querySelector('#link-report .short .intro');
+                if (shortContent) {
+                    return Array.from(shortContent.querySelectorAll('p'))
+                        .map(p => p.textContent?.trim())
+                        .filter(text => text && !text.startsWith('【') && !text.includes('(展开全部)'))
+                        .join('\n\n');
+                }
+                
+                // 最后尝试从meta标签获取
+                const metaDesc = doc.querySelector('meta[property="og:description"]')?.getAttribute('content');
+                if (metaDesc) {
+                    return metaDesc.trim();
+                }
+                
+                return null;
+            })(),
+
+            authorBio: (() => {
+                // 精准定位：查找包含"作者简介"文本的h2元素
+                const allH2 = doc.querySelectorAll('h2');
+                let authorH2: Element | null = null;
+                
+                for (const h2 of allH2) {
+                    const span = h2.querySelector('span');
+                    if (span && (span as HTMLElement).textContent?.includes('作者简介')) {
+                        authorH2 = h2;
+                        break;
+                    }
+                }
+                
+                if (authorH2) {
+                    // 获取h2后面的兄弟元素中的.intro内容
+                    let nextElement = authorH2.nextElementSibling as Element | null;
+                    while (nextElement) {
+                        const authorIntro = nextElement.querySelector('.intro');
+                        if (authorIntro) {
+                            return Array.from(authorIntro.querySelectorAll('p'))
+                                .map(p => (p as HTMLElement).textContent?.trim())
+                                .filter(text => text && text.length > 0)
+                                .join('\n\n');
+                        }
+                        // 如果当前元素没有.intro，继续查找下一个兄弟元素
+                        nextElement = nextElement.nextElementSibling as Element | null;
+                    }
+                }
+                
+                return null;
+            })()
         };
     } catch (error) {
         // 增强错误信息处理

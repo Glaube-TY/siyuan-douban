@@ -33,6 +33,8 @@
     "bookAddNotes": "生成读书笔记",
     "bookStartDate": "开始日期：",
     "bookFinishDate": "读完日期：",
+    "bookDescription": "书籍简介：",
+    "bookAuthorBio": "作者介绍：",
     "searchBook": "书籍搜索",
     "searchBookLoading": "正在搜索书籍...",
     "bookDatabaseID": "书籍数据库块ID：",
@@ -84,7 +86,7 @@
     "setNotesTemplateTitle": "微信读书笔记模板",
     "confirmSelect": "确认选择",
     "continueSync": "继续同步",
-    "selectBooksTip": "选择想要同步笔记的书籍，其中没有ISBN的可以手动填写以使其与数据库匹配。",
+    "selectBooksTip": "选择想要同步笔记的书籍，其中没有 ISBN 的可以手动填写或选择使用 BookID 进行同步。",
     "select": "选择",
     "selectAll": "选择全部",
     "bookTitle1": "书名",
@@ -183,5 +185,6 @@
     "firstDialog10": "腾讯频道",
     "firstDialog11": "继续",
     "firstDialog12": "不再提示",
-    "firstDialog13": "关闭"
+    "firstDialog13": "关闭",
+    "cookieTip": "请输入微信读书 Cookie，保存后切换标签页以刷新状态。"
 }
