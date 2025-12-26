@@ -180,8 +180,10 @@ export async function syncWereadNotes(plugin: any, cookies: string, isupdate: bo
                                 // 若有新增书籍或使用bookID同步的书籍，则更新ISBNColumn和bookIDColumn
                                 if (selectedBooks.length > 0 || useBookIDs.length > 0) {
                                     getdatabase = await fetchSyncPost('/api/av/getAttributeView', { "id": avID }); // 获取数据库最新数据
-                                    ISBNColumn = getdatabase.data.av.keyValues.find((item: any) => item.key.name === "ISBN").values || []; // 更新ISBNColumn
-                                    bookIDColumn = getdatabase.data.av.keyValues.find((item: any) => item.key.name === "bookID").values || []; // 更新bookIDColumn
+                                    const isbnKey = getdatabase.data.av.keyValues.find((item: any) => item.key.name === "ISBN");
+                                    const bookIDKey = getdatabase.data.av.keyValues.find((item: any) => item.key.name === "bookID");
+                                    ISBNColumn = isbnKey?.values || []; // 更新ISBNColumn
+                                    bookIDColumn = bookIDKey?.values || []; // 更新bookIDColumn
                                 }
 
                                 // 执行同步操作
