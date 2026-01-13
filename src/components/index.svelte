@@ -3,9 +3,9 @@
     import { I18N, showMessage, fetchPost } from "siyuan";
     import { sql } from "../api";
     import { fetchDoubanBook, fetchBookHtml } from "../utils/douban/book";
+    import { openInteractiveSearchWindow } from "../utils/douban/book/searchBook";
     import "./styles/main.scss";
     import { loadAVData } from "../utils/bookHandling";
-    import SearchBookDialog from "./common/searchBookDialog.svelte";
     import TemplateEditorDialog from "./common/templateEditorDialog.svelte";
     import BookSearchTab from "./tabs/BookSearchTab.svelte";
     import UserSettingsTab from "./tabs/UserSettingsTab.svelte";
@@ -39,10 +39,6 @@
     let showTemplateEditor = false;
     let noteTemplate = "";
     let originalTemplate = "";
-
-    let showSearchDialog = false;
-    let searchKeyword = "";
-    let webviewRef: any;
 
     const tabs = [
         "🔍 " + i18n.topTabname1,
@@ -98,20 +94,35 @@
                 bookInfo.addNotes = addNotes1;
                 inputVales = bookInfo.isbn;
             } else {
-                // 书名搜索模式：打开搜索弹窗
-                // 判断软件环境
-                if (
-                    !window.navigator.userAgent.includes("Electron") ||
-                    typeof window.require !== "function"
-                ) {
-                    showMessage(i18n.showMessage39);
-                } else {
-                    searchKeyword = encodeURIComponent(inputVales);
-                    showSearchDialog = true;
+                    // 书名搜索模式：使用 BrowserWindow 直接搜索
+                    // 判断软件环境
+                    if (
+                        !window.navigator.userAgent.includes("Electron") ||
+                        typeof window.require !== "function"
+                    ) {
+                        showMessage(i18n.showMessage39);
+                    } else {
+                        try {
+                            statusMessage = i18n.statusMessage2;
+                            const result = await openInteractiveSearchWindow(inputVales, i18n);
+                            
+                            if (result.success && result.html) {
+                                bookInfo = await fetchDoubanBook(result.html);
+                                statusMessage = i18n.statusMessage1;
+                                bookInfo.addNotes = addNotes1;
+                                inputVales = bookInfo.isbn;
+                                showMessage(`${i18n.showMessage7}《${bookInfo.title}》`, 3000);
+                            } else {
+                                throw new Error(result.error || "Search failed");
+                            }
+                        } catch (error) {
+                            statusMessage = `${i18n.showMessage8} ${error.message}`;
+                            console.error("Interactive BrowserWindow search failed:", error);
+                            console.error("Error stack:", error.stack);
+                            showMessage(`${i18n.showMessage8} ${error.message}`, 5000);
+                        }
+                    }
                 }
-            }
-
-            console.log(bookInfo);
         } catch (error) {
             statusMessage = error.message || i18n.statusMessage3;
             console.error("Book acquisition failed:", error);
@@ -296,25 +307,7 @@
     </div>
 </div>
 
-<SearchBookDialog
-    bind:plugin
-    bind:showSearchDialog
-    bind:searchKeyword
-    bind:webviewRef
-    on:close={() => (showSearchDialog = false)}
-    on:select={async ({ detail: html }) => {
-        try {
-            bookInfo = await fetchDoubanBook(html);
-            statusMessage = i18n.statusMessage1;
-            bookInfo.addNotes = addNotes1;
-            inputVales = bookInfo.isbn;
-            showMessage(`${i18n.showMessage7}《${bookInfo.title}》`, 3000);
-        } catch (error) {
-            showMessage(`${i18n.showMessage8} ${error.message}`, 5000);
-            console.error("Book analysis failed:", error);
-        }
-    }}
-/>
+
 
 <TemplateEditorDialog
     bind:showTemplateEditor

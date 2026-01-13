@@ -57,6 +57,12 @@
                                 }
                             }}>{plugin.i18n.confirm}</button
                         >
+                        <button
+                            class="b3-button dialog-btn b3-button--primary"
+                            on:click={() => {
+                                dispatch("browserWindowSearch");
+                            }}>🔄 {plugin.i18n.refreshSearch || "重新搜索"}</button
+                        >
 
                         <button
                             class="b3-button dialog-btn"
@@ -74,6 +80,8 @@
                     webpreferences="javascript=yes"
                     nodeintegration
                     disablewebsecurity
+                    useragent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36 Edg/124.0.0.0"
+                    httpreferrer="https://www.douban.com/"
                 ></webview>
             </div>
         </div>

@@ -3,24 +3,100 @@ import { formatTime } from './formatOp';
 
 export async function getImage(url: string) {
     try {
-        const response = await fetchSyncPost("/api/network/forwardProxy", {
-            url: url,
-            method: "GET",
-            timeout: 7000,
-            contentType: "image/jpeg",
-            headers: [
-                {
-                    name: "User-Agent",
-                    value: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36 Edg/124.0.0.0",
-                },
-            ],
-            payload: {},
-            payloadEncoding: "text",
-            responseEncoding: "base64",
+        if (typeof window.require !== "function") {
+            throw new Error("Electron environment required");
+        }
+
+        const remote = window.require('@electron/remote');
+        if (!remote) {
+            throw new Error("Remote module not available");
+        }
+
+        const { BrowserWindow } = remote;
+
+        // 解析URL获取域名和路径信息
+        const urlObj = new URL(url);
+        const path = urlObj.pathname + urlObj.search;
+        
+        // 从图片URL中提取书籍ID信息，构建动态referer
+        let bookId = '';
+        const pathMatch = path.match(/s(\d+)\.jpg$/);
+        if (pathMatch) {
+            bookId = pathMatch[1];
+        } else {
+            const altMatch = path.match(/(\d+)\.jpg$/);
+            if (altMatch) {
+                bookId = altMatch[1];
+            }
+        }
+        
+        if (!bookId) {
+            bookId = '37479747';
+        }
+        
+        const refererUrl = `https://book.douban.com/subject/${bookId}/?icn=index-latestbook-subject`;
+        
+        return new Promise((resolve, reject) => {
+            const imgWindow = new BrowserWindow({
+                width: 1,
+                height: 1,
+                show: false,
+                webPreferences: {
+                    nodeIntegration: false,
+                    contextIsolation: true,
+                    sandbox: false,
+                    webSecurity: false
+                }
+            });
+
+            imgWindow.webContents.session.webRequest.onBeforeSendHeaders((details, callback) => {
+                details.requestHeaders['accept'] = 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8';
+                details.requestHeaders['accept-encoding'] = 'gzip, deflate, br, zstd';
+                details.requestHeaders['accept-language'] = 'zh-CN,zh;q=0.9,en;q=0.8,en-GB;q=0.7,en-US;q=0.6';
+                details.requestHeaders['cache-control'] = 'max-age=0';
+                details.requestHeaders['referer'] = refererUrl;
+                details.requestHeaders['sec-ch-ua'] = '"Microsoft Edge";v="143", "Chromium";v="143", "Not A(Brand)";v="24"';
+                details.requestHeaders['sec-ch-ua-mobile'] = '?0';
+                details.requestHeaders['sec-ch-ua-platform'] = '"Windows"';
+                details.requestHeaders['sec-fetch-dest'] = 'image';
+                details.requestHeaders['sec-fetch-mode'] = 'cors';
+                details.requestHeaders['sec-fetch-site'] = 'cross-site';
+                details.requestHeaders['user-agent'] = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0';
+                callback({ requestHeaders: details.requestHeaders });
+            });
+
+            imgWindow.loadURL(url).then(() => {
+                imgWindow.webContents.executeJavaScript(`
+                    new Promise((resolve) => {
+                        const img = new Image();
+                        img.crossOrigin = 'anonymous';
+                        img.onload = () => {
+                            const canvas = document.createElement('canvas');
+                            canvas.width = img.width;
+                            canvas.height = img.height;
+                            const ctx = canvas.getContext('2d');
+                            ctx.drawImage(img, 0, 0);
+                            resolve(canvas.toDataURL('image/jpeg'));
+                        };
+                        img.onerror = () => resolve('');
+                        img.src = location.href;
+                    });
+                `).then((dataUrl) => {
+                    imgWindow.destroy();
+                    if (dataUrl) {
+                        resolve(dataUrl);
+                    } else {
+                        reject(new Error('Failed to convert image'));
+                    }
+                }).catch((error) => {
+                    imgWindow.destroy();
+                    reject(error);
+                });
+            }).catch((error) => {
+                imgWindow.destroy();
+                reject(error);
+            });
         });
-        const contentType =
-            response.data.headers["Content-Type"]?.[0] || "image/jpeg";
-        return `data:${contentType};base64,${response.data.body}`;
     } catch (error) {
         console.error("图片获取失败:", error);
         return "";
