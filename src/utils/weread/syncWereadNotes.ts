@@ -549,7 +549,7 @@ async function syncNotesProcess(plugin: any, cookies: string, notebooks: any): P
                         });
 
                         const chapterEndComments = (chapterComments.get(chapterUid) || [])
-                            .map(c => c.content);
+                            .map(c => c.content);;
 
                         const notesTemplateMatch = template.match(/\{\{#notes\}\}([\s\S]*?)\{\{\/notes\}\}/);
                         const notesTemplate = notesTemplateMatch ? notesTemplateMatch[1] : `- {{markText}}\n> 💬 {{content}}`;
@@ -562,14 +562,12 @@ async function syncNotesProcess(plugin: any, cookies: string, notebooks: any): P
                             const comments = allAbstractComments.get(`${h.chapterUid}_${h.range}`) || [];
 
                             if (comments.length > 0) {
-                                // 有匹配的评论（划线+评论）
-                                comments.forEach(comment => {
-                                    allNotes.push({
-                                        type: 'highlight_with_comment',
-                                        highlight: h,
-                                        comment: comment,
-                                        range: h.range
-                                    });
+                                // 有匹配的评论（划线+评论），将同一划线的所有评论合并到一个笔记条目中
+                                allNotes.push({
+                                    type: 'highlight_with_comments',
+                                    highlight: h,
+                                    comments: comments,
+                                    range: h.range
                                 });
 
                                 // 标记这个评论已经匹配
@@ -625,13 +623,21 @@ async function syncNotesProcess(plugin: any, cookies: string, notebooks: any): P
                                         .filter(line => line !== null && line.trim() !== '');
                                     break;
 
-                                case 'highlight_with_comment':
-                                    // 划线+评论
+                                case 'highlight_with_comments':
+                                    // 划线+多个评论，合并显示
+                                    const allComments = note.comments.map(c => c.content || '').filter(Boolean);
+                                    // 使用双换行符分隔多个评论，确保在思源笔记中被识别为独立的块
+                                    const combinedComments = allComments.join('\n\n> 💬 ');
+                                    const hasComments = allComments.length > 0;
                                     renderedLines = lines
                                         .map(line => {
+                                            // 如果没有评论，过滤掉包含{{highlightComment}}的行
+                                            if (!hasComments && line.includes('{{highlightComment}}')) {
+                                                return null;
+                                            }
                                             return line
                                                 .replace(/{{highlightText}}/g, note.highlight.markText)
-                                                .replace(/{{highlightComment}}/g, note.comment.content || '')
+                                                .replace(/{{highlightComment}}/g, combinedComments)
                                                 .replace(/{{chapterTitle}}/g, chapterInfo.title)
                                                 .replace(/{{notebookTitle}}/g, notebook.title);
                                         })
@@ -660,7 +666,7 @@ async function syncNotesProcess(plugin: any, cookies: string, notebooks: any): P
                         return {
                             chapterTitle: chapterInfo.title,
                             notes: notesData,
-                            chapterComments: chapterEndComments.join('\n')
+                            chapterComments: chapterEndComments.join('\n\n')
                         };
                     });
 
@@ -671,8 +677,8 @@ async function syncNotesProcess(plugin: any, cookies: string, notebooks: any): P
                     chapters: chaptersData,
                     globalComments: comments
                         .filter(c => !c.review.abstract && !c.review.contextAbstract)
-                        .map(c => `${c.review.content}`)
-                        .join('\n'),
+                        .map(c => c.review.content)
+                        .join('\n\n'),
                     bookInfo: notebook.bookDetails?.intro || '',
                     AISummary: notebook.bookDetails?.AISummary || '',
                     bestHighlights: notebook.bestHighlights?.bestBookMarks?.items?.map(item => item.markText) || []
@@ -689,13 +695,64 @@ async function syncNotesProcess(plugin: any, cookies: string, notebooks: any): P
                                             .map(note => note.formattedNote)
                                             .join('\n');
                                     })
-                                    .replace(/\{\{#chapterComments\}\}([\s\S]*?)\{\{\/chapterComments\}\}/g, (_, commentsTpl) =>
-                                        chapter.chapterComments ? commentsTpl.replace(/\{\{chapterComments\}\}/g, chapter.chapterComments) : ''
+                                    .replace(/\{\{#chapterComments\}\}([\s\S]*?)\{\{\/chapterComments\}\}/g, (_, commentsTpl) => {
+                                        if (!chapter.chapterComments) return '';
+                                        // 将模板按行分割
+                                        const lines = commentsTpl.split('\n');
+                                        // 找到包含{{chapterComments}}的行
+                                        const commentLineIndex = lines.findIndex(line => line.includes('{{chapterComments}}'));
+                                        if (commentLineIndex === -1) {
+                                            return commentsTpl.replace(/\{\{chapterComments\}\}/g, chapter.chapterComments);
+                                        }
+                                        // 提取标题部分（{{chapterComments}}之前的所有行）
+                                        const titleLines = lines.slice(0, commentLineIndex);
+                                        // 提取评论行格式（包含{{chapterComments}}的行）
+                                        const commentLineFormat = lines[commentLineIndex];
+                                        // 提取尾部部分（{{chapterComments}}之后的所有行）
+                                        const tailLines = lines.slice(commentLineIndex + 1);
+                                        // 将章节评论按行分割
+                                        const comments = chapter.chapterComments.split('\n\n');
+                                        // 为每个评论生成格式化行
+                                        const formattedCommentLines = comments.map(comment => 
+                                            commentLineFormat.replace(/\{\{chapterComments\}\}/g, comment)
+                                        );
+                                        // 组合最终结果：标题 + 格式化的评论行 + 尾部
+                                        return [...titleLines, ...formattedCommentLines, ...tailLines].join('\n\n');
+                                    }
                                     )
                             ).join('\n');
                         })
-                        .replace(/\{\{#globalComments\}\}([\s\S]*?)\{\{\/globalComments\}\}/g, (_, section) => {
-                            return variables.globalComments ? section : '';
+                        .replace(/\{\{#globalComments\}\}([\s\S]*?)\{\{\/globalComments\}\}/g, (_, commentsTpl) => {
+                            if (!variables.globalComments) return '';
+                            // 将模板按行分割
+                            const lines = commentsTpl.split('\n');
+                            // 找到包含{{globalComments}}的行
+                            const commentLineIndex = lines.findIndex(line => line.includes('{{globalComments}}'));
+                            if (commentLineIndex === -1) {
+                                return commentsTpl.replace(/\{\{globalComments\}\}/g, variables.globalComments);
+                            }
+                            // 提取标题部分（{{globalComments}}之前的所有行）
+                            const titleLines = lines.slice(0, commentLineIndex);
+                            // 提取评论行格式（包含{{globalComments}}的行）
+                            const commentLineFormat = lines[commentLineIndex];
+                            // 提取尾部部分（{{globalComments}}之后的所有行）
+                            const tailLines = lines.slice(commentLineIndex + 1);
+                            // 将书评按行分割
+                            const comments = variables.globalComments.split('\n\n');
+                            // 为每个评论生成格式化行
+                            const formattedCommentLines = comments.map(comment => 
+                                commentLineFormat.replace(/\{\{globalComments\}\}/g, comment)
+                            );
+                            // 组合最终结果：标题 + 格式化的评论行 + 尾部
+                            // 标题和第一个评论之间用单换行，多个评论之间用双换行
+                            let result = titleLines.join('\n');
+                            if (formattedCommentLines.length > 0) {
+                                result += '\n' + formattedCommentLines.join('\n\n');
+                            }
+                            if (tailLines.length > 0) {
+                                result += '\n' + tailLines.join('\n');
+                            }
+                            return result;
                         })
                         .replace(/\{\{#bookInfo\}\}([\s\S]*?)\{\{\/bookInfo\}\}/g, (_, section) => {
                             return variables.bookInfo ? section.replace(/\{\{bookInfo\}\}/g, variables.bookInfo) : '';

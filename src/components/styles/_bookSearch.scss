@@ -64,6 +64,8 @@
                 flex: 1;
                 background: var(--b3-theme-background);
                 border-color: var(--b3-border-color);
+                // 应用适配的主题色
+                color: var(--text-color);
 
                 &:hover {
                     transform: translateY(-1px);
@@ -81,6 +83,8 @@
                 background-repeat: no-repeat;
                 background-position: right 8px center;
                 transition: all 0.3s ease;
+                // 应用适配的主题色
+                color: var(--text-color);
 
                 &:hover {
                     border-color: var(--b3-theme-primary);
@@ -184,14 +188,13 @@
                 display: flex;
                 flex-direction: column;
                 margin-bottom: 0;
-                
+
                 label {
                     width: 100%;
                     display: flex;
                     flex-direction: column;
                     gap: 8px;
                     font-weight: 500;
-                    color: var(--b3-theme-on-surface);
                     height: 100%;
                 }
 
@@ -208,6 +211,7 @@
                     resize: vertical;
                     transition: all 0.2s ease;
                     flex: 1;
+                    color: var(--text-color);
 
                     &:hover {
                         border-color: var(--b3-theme-primary);
@@ -219,10 +223,6 @@
                         border-color: var(--b3-theme-primary);
                         box-shadow: 0 0 0 2px rgba(var(--b3-theme-primary-rgb), 0.2);
                         transform: translateY(-1px);
-                    }
-
-                    &::placeholder {
-                        color: var(--b3-theme-on-surface-variant);
                     }
                 }
             }
