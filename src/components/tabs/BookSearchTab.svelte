@@ -25,7 +25,7 @@
     $: if (bookInfo?.cover) {
         (async () => {
             try {
-                coverData = await getImage(bookInfo.cover);
+                coverData = String(await getImage(bookInfo.cover));
             } catch (error) {
                 console.error("Cover loading failed:", error);
                 coverData = "";

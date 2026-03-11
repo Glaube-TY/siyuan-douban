@@ -93,7 +93,7 @@ export async function loadAVData(avID: string, fullData: any, plugin: any) {
 
         // 下载封面
         const coverBase64Data = await getImage(fullData.cover);
-        fullData.cover = await downloadCover(coverBase64Data, fullData.title);
+        fullData.cover = await downloadCover(coverBase64Data as string, fullData.title);
 
         // 构建书籍数据并添加到数据库
         const blocksValues = buildBlocksValues(databaseKeys, fullData);
@@ -468,17 +468,31 @@ function buildBlocksValues(databaseKeys: any[], fullData: any) {
                 break;
 
             default:
-                // 对于未处理的字段，添加空值
+                // 对于未处理的字段，检查是否为思源内置类型
                 const keyType = key.type;
+                // created 和 updated 是思源内置类型，会自动处理，不需要手动添加values
+                if (keyType === "created" || keyType === "updated") {
+                    continue;
+                }
                 switch (keyType) {
                     case "text":
-                        keyValue.text = {};
+                        keyValue.text = {
+                            content: ""
+                        };
                         break;
                     case "number":
-                        keyValue.number = {};
+                        keyValue.number = {
+                            content: null,
+                            formattedContent: "",
+                            isNotEmpty: false
+                        };
                         break;
                     case "date":
-                        keyValue.date = {};
+                        keyValue.date = {
+                            content: null,
+                            isNotEmpty: false,
+                            isNotTime: true
+                        };
                         break;
                     case "select":
                         keyValue.mSelect = [];
@@ -487,10 +501,14 @@ function buildBlocksValues(databaseKeys: any[], fullData: any) {
                         keyValue.mAsset = [];
                         break;
                     case "block":
-                        keyValue.block = {};
+                        keyValue.block = {
+                            content: ""
+                        };
                         break;
                     default:
-                        keyValue.text = {};
+                        keyValue.text = {
+                            content: ""
+                        };
                 }
         }
 
