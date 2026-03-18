@@ -9,6 +9,7 @@
     "statusMessage3": "Unknown error, please check the console log",
     "databaseStatusMessage1": "Verifying database...",
     "databaseStatusMessage2": "Database verification passed ✅",
+    "databaseStatusMessage3": "❌ Please configure the database correctly in the settings to continue using this page",
     "placeholder1": "Enter book name or ISBN number (press Enter to confirm)",
     "placeholder2": "Enter note template (Markdown supported)",
     "addBookButton": "✅Add book",

@@ -40,6 +40,8 @@
     let noteTemplate = "";
     let originalTemplate = "";
 
+    let databaseStatus = "";
+
     const tabs = [
         "🔍 " + i18n.topTabname1,
         "⚙️ " + i18n.topTabname2,
@@ -94,35 +96,47 @@
                 bookInfo.addNotes = addNotes1;
                 inputVales = bookInfo.isbn;
             } else {
-                    // 书名搜索模式：使用 BrowserWindow 直接搜索
-                    // 判断软件环境
-                    if (
-                        !window.navigator.userAgent.includes("Electron") ||
-                        typeof window.require !== "function"
-                    ) {
-                        showMessage(i18n.showMessage39);
-                    } else {
-                        try {
-                            statusMessage = i18n.statusMessage2;
-                            const result = await openInteractiveSearchWindow(inputVales, i18n);
-                            
-                            if (result.success && result.html) {
-                                bookInfo = await fetchDoubanBook(result.html);
-                                statusMessage = i18n.statusMessage1;
-                                bookInfo.addNotes = addNotes1;
-                                inputVales = bookInfo.isbn;
-                                showMessage(`${i18n.showMessage7}《${bookInfo.title}》`, 3000);
-                            } else {
-                                throw new Error(result.error || "Search failed");
-                            }
-                        } catch (error) {
-                            statusMessage = `${i18n.showMessage8} ${error.message}`;
-                            console.error("Interactive BrowserWindow search failed:", error);
-                            console.error("Error stack:", error.stack);
-                            showMessage(`${i18n.showMessage8} ${error.message}`, 5000);
+                // 书名搜索模式：使用 BrowserWindow 直接搜索
+                // 判断软件环境
+                if (
+                    !window.navigator.userAgent.includes("Electron") ||
+                    typeof window.require !== "function"
+                ) {
+                    showMessage(i18n.showMessage39);
+                } else {
+                    try {
+                        statusMessage = i18n.statusMessage2;
+                        const result = await openInteractiveSearchWindow(
+                            inputVales,
+                            i18n,
+                        );
+
+                        if (result.success && result.html) {
+                            bookInfo = await fetchDoubanBook(result.html);
+                            statusMessage = i18n.statusMessage1;
+                            bookInfo.addNotes = addNotes1;
+                            inputVales = bookInfo.isbn;
+                            showMessage(
+                                `${i18n.showMessage7}《${bookInfo.title}》`,
+                                3000,
+                            );
+                        } else {
+                            throw new Error(result.error || "Search failed");
                         }
+                    } catch (error) {
+                        statusMessage = `${i18n.showMessage8} ${error.message}`;
+                        console.error(
+                            "Interactive BrowserWindow search failed:",
+                            error,
+                        );
+                        console.error("Error stack:", error.stack);
+                        showMessage(
+                            `${i18n.showMessage8} ${error.message}`,
+                            5000,
+                        );
                     }
                 }
+            }
         } catch (error) {
             statusMessage = error.message || i18n.statusMessage3;
             console.error("Book acquisition failed:", error);
@@ -191,6 +205,7 @@
     async function validateDatabaseID() {
         if (!bookDatabassID) {
             showMessage(i18n.showMessage3, 3000);
+            databaseStatus = "error";
             return;
         }
 
@@ -210,11 +225,13 @@
 
             avID = avDivMatch[1];
             databaseStatusMessage = i18n.databaseStatusMessage2;
+            databaseStatus = "success";
         } catch (error) {
             showMessage(`${i18n.showMessage4} ${error.message}`, 5000);
             databaseStatusMessage = `${i18n.showMessage4} ${error.message}`;
             bookDatabassID = "";
             avID = "";
+            databaseStatus = "error";
         }
     }
 
@@ -236,9 +253,7 @@
                 tempCategories = customCategories.join(", ") || "";
                 tempStatuses = customReadingStatuses.join(", ") || "";
 
-                if (bookDatabassID) {
-                    await validateDatabaseID();
-                }
+                await validateDatabaseID();
             }
         });
     });
@@ -276,6 +291,7 @@
                 bind:readingStatusIndex
                 on:fetchBookData={fetchBookData}
                 on:addBook={handleAddBook}
+                {databaseStatus}
             />
 
             <!-- 第二个标签页 - 用户设置 -->
@@ -298,7 +314,7 @@
             />
             <!-- 第三个标签页 - 微信读书设置-->
         {:else if activeTab === tabs[2]}
-            <WereadTab bind:plugin bind:i18n />
+            <WereadTab bind:plugin bind:i18n {databaseStatus} />
 
             <!-- 最后一个标签页 - 关于插件 -->
         {:else}
@@ -306,8 +322,6 @@
         {/if}
     </div>
 </div>
-
-
 
 <TemplateEditorDialog
     bind:showTemplateEditor

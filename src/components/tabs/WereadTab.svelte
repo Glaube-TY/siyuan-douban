@@ -29,6 +29,8 @@
     export let wereadTemplates = "";
     export let wereadPositionMark = "";
 
+    export let databaseStatus = "";
+
     let autoSync = false;
     let isSyncing = false;
     let userVid = "";
@@ -305,182 +307,193 @@
 </script>
 
 <div class="wereadSetting">
-    <div style="margin-bottom: 10px;">
-        <label for="tutorial">
-            {i18n.tutorial}<a
-                id="tutorial"
-                href="https://ttl8ygt82u.feishu.cn/wiki/TVR2wczSKiy2HSk7PyQcMGuNnyc"
-                >{i18n.tutorialLink}</a
-            ></label
-        >
-    </div>
-    <div class="cookie-weread-setting">
-        <button
-            class="scan-qrcode"
-            on:click={async () => {
-                const autoCookies = await createWereadQRCodeDialog(i18n, true);
-
-                const savedata = {
-                    cookies: autoCookies,
-                    isQRCode: true,
-                };
-                plugin.saveData("weread_cookie", savedata);
-
-                const result = checkWrVid(autoCookies);
-                userVid = result.userVid;
-
-                if (userVid) {
-                    verifyCookie(plugin, autoCookies, userVid).then(
-                        (verifyResult) => {
-                            checkMessage = verifyResult.message;
-                        },
+    {#if databaseStatus === "error"}
+        <div class="error-message">{i18n.databaseStatusMessage3}</div>
+    {:else if databaseStatus === "success"}
+        <div style="margin-bottom: 10px;">
+            <label for="tutorial">
+                {i18n.tutorial}<a
+                    id="tutorial"
+                    href="https://ttl8ygt82u.feishu.cn/wiki/TVR2wczSKiy2HSk7PyQcMGuNnyc"
+                    >{i18n.tutorialLink}</a
+                ></label
+            >
+        </div>
+        <div class="cookie-weread-setting">
+            <button
+                class="scan-qrcode"
+                on:click={async () => {
+                    const autoCookies = await createWereadQRCodeDialog(
+                        i18n,
+                        true,
                     );
-                }
-            }}>{i18n.scanQRCodeLogin}</button
-        >
-        <button
-            on:click={createWereadDialog(plugin, cookies, (newCookies) => {
-                cookies = newCookies;
-                const savedata = {
-                    cookies: newCookies,
-                    isQRCode: false,
-                };
-                plugin.saveData("weread_cookie", savedata);
 
-                const result = checkWrVid(newCookies);
-                userVid = result.userVid;
-                // 验证登录信息
-                if (userVid) {
-                    verifyCookie(plugin, cookies, userVid).then(
-                        (verifyResult) => {
-                            checkMessage = verifyResult.message;
-                        },
-                    );
-                } else {
-                    checkMessage = i18n.checkMessage6;
-                }
-            })}>{i18n.fillCookie}</button
-        >
-        <span class="checking">{checkMessage}</span>
-    </div>
-    <div class="weread-notebooks-info">
-        {#if checkMessage.includes("✅")}
-            {#if notebooksInfo}
-                {@html notebooksInfo}
-                <div class="booksinfo-button">
-                    {#if notebooksList.length > 0}
-                        <button
-                            on:click={createNotebooksDialog(
-                                plugin,
-                                notebooksList,
-                            )}>{i18n.hasNotesBooks}</button
+                    const savedata = {
+                        cookies: autoCookies,
+                        isQRCode: true,
+                    };
+                    plugin.saveData("weread_cookie", savedata);
+
+                    const result = checkWrVid(autoCookies);
+                    userVid = result.userVid;
+
+                    if (userVid) {
+                        verifyCookie(plugin, autoCookies, userVid).then(
+                            (verifyResult) => {
+                                checkMessage = verifyResult.message;
+                            },
+                        );
+                    }
+                }}>{i18n.scanQRCodeLogin}</button
+            >
+            <button
+                on:click={createWereadDialog(plugin, cookies, (newCookies) => {
+                    cookies = newCookies;
+                    const savedata = {
+                        cookies: newCookies,
+                        isQRCode: false,
+                    };
+                    plugin.saveData("weread_cookie", savedata);
+
+                    const result = checkWrVid(newCookies);
+                    userVid = result.userVid;
+                    // 验证登录信息
+                    if (userVid) {
+                        verifyCookie(plugin, cookies, userVid).then(
+                            (verifyResult) => {
+                                checkMessage = verifyResult.message;
+                            },
+                        );
+                    } else {
+                        checkMessage = i18n.checkMessage6;
+                    }
+                })}>{i18n.fillCookie}</button
+            >
+            <span class="checking">{checkMessage}</span>
+        </div>
+        <div class="weread-notebooks-info">
+            {#if checkMessage.includes("✅")}
+                {#if notebooksInfo}
+                    {@html notebooksInfo}
+                    <div class="booksinfo-button">
+                        {#if notebooksList.length > 0}
+                            <button
+                                on:click={createNotebooksDialog(
+                                    plugin,
+                                    notebooksList,
+                                )}>{i18n.hasNotesBooks}</button
+                            >
+                        {/if}
+                        <button on:click={openBookShelf}
+                            >{i18n.bookShelf}</button
                         >
+                    </div>
+                    {#if loadingBookShelf}
+                        <div class="loading-notice">
+                            ⌛ {i18n.loadingBookShelf}
+                        </div>
                     {/if}
-                    <button on:click={openBookShelf}>{i18n.bookShelf}</button>
-                </div>
-                {#if loadingBookShelf}
-                    <div class="loading-notice">⌛ {i18n.loadingBookShelf}</div>
+                {:else}
+                    <div class="loading-notice">⌛ {i18n.loadingBookInfo}</div>
+                    <div class="loading-notice">
+                        {i18n.loadingBookInfoTip}
+                    </div>
                 {/if}
             {:else}
-                <div class="loading-notice">⌛ {i18n.loadingBookInfo}</div>
-                <div class="loading-notice">
-                    {i18n.loadingBookInfoTip}
+                <div class="cookie-warning">
+                    {i18n.pleaseFillCookie}
                 </div>
             {/if}
-        {:else}
-            <div class="cookie-warning">
-                {i18n.pleaseFillCookie}
+        </div>
+        <div class="weread-custom-books">
+            <button on:click={createManageISBNDialog}
+                >{i18n.manageCustomISBNBooks}</button
+            >
+            <button on:click={createIgnoredBooksDialog}
+                >{i18n.manageIgnoredBooks}</button
+            >
+            <button on:click={createWereadUseBookIDBooksDialog}
+                >{i18n.manageUseBookIDBooks}</button
+            >
+        </div>
+        <div class="weread-notes-template">
+            <button
+                on:click={createWereadNotesTemplateDialog(
+                    i18n,
+                    (newWereadTemplates) => {
+                        wereadTemplates = newWereadTemplates;
+                        plugin.saveData("weread_templates", newWereadTemplates);
+                    },
+                    wereadTemplates,
+                )}>{i18n.setNotesTemplate}</button
+            >
+            <label title={i18n.notesSyncPositionTip}
+                >{i18n.positionMark}:
+                <input type="text" bind:value={wereadPositionMark} />
+            </label>
+            <button
+                on:click={async () => {
+                    await plugin.saveData(
+                        "weread_position_mark",
+                        wereadPositionMark,
+                    );
+                    showMessage(i18n.showMessage14);
+                }}
+            >
+                {i18n.confirm}
+            </button>
+        </div>
+        <div class="sync-setting">
+            <button
+                disabled={!notebooksInfo}
+                on:click={async () => {
+                    if (!wereadTemplates) {
+                        showMessage(i18n.showMessage25);
+                        return;
+                    }
+
+                    if (!checkMessage.includes("✅")) {
+                        showMessage(i18n.showMessage15);
+                        return;
+                    }
+                    isSyncing = true;
+                    await syncWereadNotes(plugin, cookies, false);
+                    isSyncing = false;
+                }}>{i18n.syncAll}</button
+            >
+            <button
+                disabled={!notebooksInfo}
+                on:click={async () => {
+                    if (!wereadTemplates) {
+                        showMessage(i18n.showMessage25);
+                        return;
+                    }
+                    if (!checkMessage.includes("✅")) {
+                        showMessage(i18n.showMessage15);
+                        return;
+                    }
+                    isSyncing = true;
+                    await syncWereadNotes(plugin, cookies, true);
+                    isSyncing = false;
+                }}>{i18n.updateSync}</button
+            >
+            <label>
+                <input
+                    type="checkbox"
+                    title={i18n.autoSyncTip}
+                    bind:checked={autoSync}
+                    on:change={() => {
+                        plugin.saveData("weread_settings", { autoSync });
+                    }}
+                />
+                {i18n.autoSync}
+            </label>
+        </div>
+        {#if isSyncing}
+            <div class="syncing-notice">
+                <span class="syncing-title">⏳ {i18n.syncing}</span>
+                <span class="tip">{i18n.syncingTip}</span>
             </div>
         {/if}
-    </div>
-    <div class="weread-custom-books">
-        <button on:click={createManageISBNDialog}
-            >{i18n.manageCustomISBNBooks}</button
-        >
-        <button on:click={createIgnoredBooksDialog}
-            >{i18n.manageIgnoredBooks}</button
-        >
-        <button on:click={createWereadUseBookIDBooksDialog}
-            >{i18n.manageUseBookIDBooks}</button
-        >
-    </div>
-    <div class="weread-notes-template">
-        <button
-            on:click={createWereadNotesTemplateDialog(
-                i18n,
-                (newWereadTemplates) => {
-                    wereadTemplates = newWereadTemplates;
-                    plugin.saveData("weread_templates", newWereadTemplates);
-                },
-                wereadTemplates,
-            )}>{i18n.setNotesTemplate}</button
-        >
-        <label title={i18n.notesSyncPositionTip}
-            >{i18n.positionMark}:
-            <input type="text" bind:value={wereadPositionMark} />
-        </label>
-        <button
-            on:click={async () => {
-                await plugin.saveData(
-                    "weread_position_mark",
-                    wereadPositionMark,
-                );
-                showMessage(i18n.showMessage14);
-            }}
-        >
-            {i18n.confirm}
-        </button>
-    </div>
-    <div class="sync-setting">
-        <button
-            disabled={!notebooksInfo}
-            on:click={async () => {
-                if (!wereadTemplates) {
-                    showMessage(i18n.showMessage25);
-                    return;
-                }
-
-                if (!checkMessage.includes("✅")) {
-                    showMessage(i18n.showMessage15);
-                    return;
-                }
-                isSyncing = true;
-                await syncWereadNotes(plugin, cookies, false);
-                isSyncing = false;
-            }}>{i18n.syncAll}</button
-        >
-        <button
-            disabled={!notebooksInfo}
-            on:click={async () => {
-                if (!wereadTemplates) {
-                    showMessage(i18n.showMessage25);
-                    return;
-                }
-                if (!checkMessage.includes("✅")) {
-                    showMessage(i18n.showMessage15);
-                    return;
-                }
-                isSyncing = true;
-                await syncWereadNotes(plugin, cookies, true);
-                isSyncing = false;
-            }}>{i18n.updateSync}</button
-        >
-        <label>
-            <input
-                type="checkbox"
-                title={i18n.autoSyncTip}
-                bind:checked={autoSync}
-                on:change={() => {
-                    plugin.saveData("weread_settings", { autoSync });
-                }}
-            />
-            {i18n.autoSync}
-        </label>
-    </div>
-    {#if isSyncing}
-        <div class="syncing-notice">
-            <span class="syncing-title">⏳ {i18n.syncing}</span>
-            <span class="tip">{i18n.syncingTip}</span>
-        </div>
     {/if}
 </div>

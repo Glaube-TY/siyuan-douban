@@ -9,6 +9,7 @@
     "statusMessage3": "未知错误，请检查控制台日志",
     "databaseStatusMessage1": "验证数据库中...",
     "databaseStatusMessage2": "数据库验证通过 ✅",
+    "databaseStatusMessage3": "❌ 请在设置中正确配置数据库以继续使用改页面",
     "placeholder1": "输入书名或ISBN号（回车确认）",
     "placeholder2": "输入读书笔记模板（支持Markdown）",
     "addBookButton": "✅添加书籍",
