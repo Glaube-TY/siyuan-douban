@@ -10,20 +10,92 @@ import WereadNewBooks from "@/components/common/wereadNewBooksDialog.svelte";
 
 type NoteContent = {
     formattedNote: string;
+    createTime1?: string;
+    createTime2?: string;
+    createTime3?: string;
+    createTime4?: string;
+    createTime5?: string;
+    createTime6?: string;
+    createTime7?: string;
+    createTime8?: string;
+    createTime9?: string;
+    createTime10?: string;
 };
+
+type TimeFormat = {
+    dateSeparator: string;
+    timeSeparator: string;
+    showSeconds: boolean;
+    useChineseUnit: boolean;
+    padZero: boolean;
+};
+
+const TIME_FORMATS: Record<string, TimeFormat> = {
+    'createTime1': { dateSeparator: '/', timeSeparator: ':', showSeconds: false, useChineseUnit: false, padZero: true },
+    'createTime2': { dateSeparator: '-', timeSeparator: ':', showSeconds: false, useChineseUnit: false, padZero: true },
+    'createTime3': { dateSeparator: '.', timeSeparator: ':', showSeconds: false, useChineseUnit: false, padZero: true },
+    'createTime4': { dateSeparator: '年', timeSeparator: '时', showSeconds: false, useChineseUnit: true, padZero: true },
+    'createTime5': { dateSeparator: '年', timeSeparator: '时', showSeconds: false, useChineseUnit: true, padZero: false },
+    'createTime6': { dateSeparator: '/', timeSeparator: ':', showSeconds: true, useChineseUnit: false, padZero: true },
+    'createTime7': { dateSeparator: '-', timeSeparator: ':', showSeconds: true, useChineseUnit: false, padZero: true },
+    'createTime8': { dateSeparator: '.', timeSeparator: ':', showSeconds: true, useChineseUnit: false, padZero: true },
+    'createTime9': { dateSeparator: '年', timeSeparator: '时', showSeconds: true, useChineseUnit: true, padZero: true },
+    'createTime10': { dateSeparator: '年', timeSeparator: '时', showSeconds: true, useChineseUnit: true, padZero: false },
+};
+
+function formatTimestamp(timestamp: number, formatKey: string = 'createTime1'): string {
+    if (!timestamp) {
+        return '';
+    }
+    const date = new Date(timestamp * 1000);
+    const format = TIME_FORMATS[formatKey] || TIME_FORMATS['createTime1'];
+
+    const year = date.getFullYear();
+    const month = format.padZero ? String(date.getMonth() + 1).padStart(2, '0') : date.getMonth() + 1;
+    const day = format.padZero ? String(date.getDate()).padStart(2, '0') : date.getDate();
+    const hour = format.padZero ? String(date.getHours()).padStart(2, '0') : date.getHours();
+    const minute = format.padZero ? String(date.getMinutes()).padStart(2, '0') : date.getMinutes();
+    const second = format.padZero ? String(date.getSeconds()).padStart(2, '0') : date.getSeconds();
+
+    let result: string;
+    if (format.useChineseUnit) {
+        result = `${year}${format.dateSeparator}${month}月${day}日 ${hour}${format.timeSeparator}${minute}分`;
+        if (format.showSeconds) {
+            result += `${second}秒`;
+        }
+    } else {
+        const datePart = `${year}${format.dateSeparator}${month}${format.dateSeparator}${day}`;
+        let timePart = `${hour}${format.timeSeparator}${minute}`;
+        if (format.showSeconds) {
+            timePart += `${format.timeSeparator}${second}`;
+        }
+        result = `${datePart} ${timePart}`;
+    }
+    return result;
+}
 
 type ChapterContent = {
     chapterTitle: string;
     notes: NoteContent[];
-    chapterComments: string;
+    chapterComments: { content: string; createTime1: string; createTime2: string; createTime3: string; createTime4: string; createTime5: string; createTime6: string; createTime7: string; createTime8: string; createTime9: string; createTime10: string }[];
 };
 
 type TemplateVariables = {
     notebookTitle: string;
     isbn: string;
     updateTime: string;
+    updateTime1: string;
+    updateTime2: string;
+    updateTime3: string;
+    updateTime4: string;
+    updateTime5: string;
+    updateTime6: string;
+    updateTime7: string;
+    updateTime8: string;
+    updateTime9: string;
+    updateTime10: string;
     chapters: ChapterContent[];
-    globalComments: string;
+    globalComments: { content: string; createTime1: string; createTime2: string; createTime3: string; createTime4: string; createTime5: string; createTime6: string; createTime7: string; createTime8: string; createTime9: string; createTime10: string }[];
     bookInfo: string;
     AISummary: string;
     bestHighlights: string[];
@@ -272,7 +344,7 @@ export async function syncWereadNotes(plugin: any, cookies: string, isupdate: bo
         if (selectedBooksForSync && selectedBooksForSync.length > 0) {
             const selectedIsbns = new Set(selectedBooksForSync.map(book => book.isbn?.toString()).filter(Boolean));
             const selectedBookIDs = new Set(selectedBooksForSync.map(book => book.bookID?.toString()).filter(Boolean));
-            
+
             const additionalBooks = cloudNotebooksList.filter(item => {
                 // 通过ISBN匹配
                 if (item.isbn && selectedIsbns.has(item.isbn?.toString())) {
@@ -290,7 +362,7 @@ export async function syncWereadNotes(plugin: any, cookies: string, isupdate: bo
         // 如果有使用bookID同步的书籍（来自useBookIDs），强制包含这些书籍
         if (useBookIDs && useBookIDs.length > 0) {
             const useBookIDSet = new Set(useBookIDs.map(book => book.bookID?.toString()).filter(Boolean));
-            const additionalUseBookIDBooks = cloudNotebooksList.filter(item => 
+            const additionalUseBookIDBooks = cloudNotebooksList.filter(item =>
                 item.bookID && useBookIDSet.has(item.bookID?.toString()) &&
                 !awaitSyncBooksList.some(syncBook => syncBook.bookID === item.bookID)
             );
@@ -307,7 +379,7 @@ export async function syncWereadNotes(plugin: any, cookies: string, isupdate: bo
                 }
                 return null;
             }).filter(Boolean));
-            
+
             const additionalBooks = cloudNotebooksList.filter(item => {
                 if (item.bookID && useBookIDBooksSet.has(item.bookID.toString())) {
                     return !awaitSyncBooksList.some(syncBook => syncBook.bookID === item.bookID);
@@ -347,7 +419,7 @@ export async function syncWereadNotes(plugin: any, cookies: string, isupdate: bo
             if (selectedBooksForSync && selectedBooksForSync.length > 0) {
                 const selectedIsbns = new Set(selectedBooksForSync.map(book => book.isbn?.toString()).filter(Boolean));
                 const selectedBookIDs = new Set(selectedBooksForSync.map(book => book.bookID?.toString()).filter(Boolean));
-                
+
                 const selectedBooksInCloud = awaitSyncBooksList.filter(item =>
                     (item.isbn && selectedIsbns.has(item.isbn?.toString())) ||
                     (item.bookID && selectedBookIDs.has(item.bookID?.toString()))
@@ -355,7 +427,7 @@ export async function syncWereadNotes(plugin: any, cookies: string, isupdate: bo
 
                 // 合并并去重，确保选中的书籍都在同步列表中
                 const needSyncKeys = new Set(booksNeedSync.map(book => book.isbn || book.bookID));
-                const additionalBooks = selectedBooksInCloud.filter(book => 
+                const additionalBooks = selectedBooksInCloud.filter(book =>
                     !needSyncKeys.has(book.isbn || book.bookID)
                 );
 
@@ -373,7 +445,7 @@ export async function syncWereadNotes(plugin: any, cookies: string, isupdate: bo
 
                 // 合并并去重
                 const needSyncKeys = new Set(booksNeedSync.map(book => book.isbn || book.bookID));
-                const additionalBooks = useBookIDBooksInCloud.filter(book => 
+                const additionalBooks = useBookIDBooksInCloud.filter(book =>
                     !needSyncKeys.has(book.bookID)
                 );
 
@@ -549,7 +621,21 @@ async function syncNotesProcess(plugin: any, cookies: string, notebooks: any): P
                         });
 
                         const chapterEndComments = (chapterComments.get(chapterUid) || [])
-                            .map(c => c.content);;
+                            .map(c => {
+                                return {
+                                    content: c.content,
+                                    createTime1: formatTimestamp(c.createTime, 'createTime1'),
+                                    createTime2: formatTimestamp(c.createTime, 'createTime2'),
+                                    createTime3: formatTimestamp(c.createTime, 'createTime3'),
+                                    createTime4: formatTimestamp(c.createTime, 'createTime4'),
+                                    createTime5: formatTimestamp(c.createTime, 'createTime5'),
+                                    createTime6: formatTimestamp(c.createTime, 'createTime6'),
+                                    createTime7: formatTimestamp(c.createTime, 'createTime7'),
+                                    createTime8: formatTimestamp(c.createTime, 'createTime8'),
+                                    createTime9: formatTimestamp(c.createTime, 'createTime9'),
+                                    createTime10: formatTimestamp(c.createTime, 'createTime10')
+                                };
+                            });
 
                         const notesTemplateMatch = template.match(/\{\{#notes\}\}([\s\S]*?)\{\{\/notes\}\}/);
                         const notesTemplate = notesTemplateMatch ? notesTemplateMatch[1] : `- {{markText}}\n> 💬 {{content}}`;
@@ -562,22 +648,43 @@ async function syncNotesProcess(plugin: any, cookies: string, notebooks: any): P
                             const comments = allAbstractComments.get(`${h.chapterUid}_${h.range}`) || [];
 
                             if (comments.length > 0) {
-                                // 有匹配的评论（划线+评论），将同一划线的所有评论合并到一个笔记条目中
+                                // 有匹配的评论（划线+评论），取最新评论时间
+                                const latestCommentTime = Math.max(...comments.map(c => c.createTime || 0));
                                 allNotes.push({
                                     type: 'highlight_with_comments',
                                     highlight: h,
                                     comments: comments,
-                                    range: h.range
+                                    range: h.range,
+                                    createTime1: formatTimestamp(latestCommentTime, 'createTime1'),
+                                    createTime2: formatTimestamp(latestCommentTime, 'createTime2'),
+                                    createTime3: formatTimestamp(latestCommentTime, 'createTime3'),
+                                    createTime4: formatTimestamp(latestCommentTime, 'createTime4'),
+                                    createTime5: formatTimestamp(latestCommentTime, 'createTime5'),
+                                    createTime6: formatTimestamp(latestCommentTime, 'createTime6'),
+                                    createTime7: formatTimestamp(latestCommentTime, 'createTime7'),
+                                    createTime8: formatTimestamp(latestCommentTime, 'createTime8'),
+                                    createTime9: formatTimestamp(latestCommentTime, 'createTime9'),
+                                    createTime10: formatTimestamp(latestCommentTime, 'createTime10')
                                 });
 
                                 // 标记这个评论已经匹配
                                 allAbstractComments.delete(`${h.chapterUid}_${h.range}`);
                             } else {
-                                // 纯划线笔记
+                                // 纯划线笔记，使用划线时间
                                 allNotes.push({
                                     type: 'highlight_only',
                                     highlight: h,
-                                    range: h.range
+                                    range: h.range,
+                                    createTime1: formatTimestamp(h.createTime, 'createTime1'),
+                                    createTime2: formatTimestamp(h.createTime, 'createTime2'),
+                                    createTime3: formatTimestamp(h.createTime, 'createTime3'),
+                                    createTime4: formatTimestamp(h.createTime, 'createTime4'),
+                                    createTime5: formatTimestamp(h.createTime, 'createTime5'),
+                                    createTime6: formatTimestamp(h.createTime, 'createTime6'),
+                                    createTime7: formatTimestamp(h.createTime, 'createTime7'),
+                                    createTime8: formatTimestamp(h.createTime, 'createTime8'),
+                                    createTime9: formatTimestamp(h.createTime, 'createTime9'),
+                                    createTime10: formatTimestamp(h.createTime, 'createTime10')
                                 });
                             }
                         });
@@ -591,7 +698,17 @@ async function syncNotesProcess(plugin: any, cookies: string, notebooks: any): P
                                     allNotes.push({
                                         type: 'comment_only',
                                         comment: comment,
-                                        range: commentRange
+                                        range: commentRange,
+                                        createTime1: formatTimestamp(comment.createTime, 'createTime1'),
+                                        createTime2: formatTimestamp(comment.createTime, 'createTime2'),
+                                        createTime3: formatTimestamp(comment.createTime, 'createTime3'),
+                                        createTime4: formatTimestamp(comment.createTime, 'createTime4'),
+                                        createTime5: formatTimestamp(comment.createTime, 'createTime5'),
+                                        createTime6: formatTimestamp(comment.createTime, 'createTime6'),
+                                        createTime7: formatTimestamp(comment.createTime, 'createTime7'),
+                                        createTime8: formatTimestamp(comment.createTime, 'createTime8'),
+                                        createTime9: formatTimestamp(comment.createTime, 'createTime9'),
+                                        createTime10: formatTimestamp(comment.createTime, 'createTime10')
                                     });
                                 });
                             }
@@ -617,6 +734,16 @@ async function syncNotesProcess(plugin: any, cookies: string, notebooks: any): P
                                                 return null;
                                             }
                                             return line.replace(/{{highlightText}}/g, note.highlight.markText)
+                                                .replace(/{{createTime1}}/g, note.createTime1 || '')
+                                                .replace(/{{createTime2}}/g, note.createTime2 || '')
+                                                .replace(/{{createTime3}}/g, note.createTime3 || '')
+                                                .replace(/{{createTime4}}/g, note.createTime4 || '')
+                                                .replace(/{{createTime5}}/g, note.createTime5 || '')
+                                                .replace(/{{createTime6}}/g, note.createTime6 || '')
+                                                .replace(/{{createTime7}}/g, note.createTime7 || '')
+                                                .replace(/{{createTime8}}/g, note.createTime8 || '')
+                                                .replace(/{{createTime9}}/g, note.createTime9 || '')
+                                                .replace(/{{createTime10}}/g, note.createTime10 || '')
                                                 .replace(/{{chapterTitle}}/g, chapterInfo.title)
                                                 .replace(/{{notebookTitle}}/g, notebook.title);
                                         })
@@ -638,6 +765,16 @@ async function syncNotesProcess(plugin: any, cookies: string, notebooks: any): P
                                             return line
                                                 .replace(/{{highlightText}}/g, note.highlight.markText)
                                                 .replace(/{{highlightComment}}/g, combinedComments)
+                                                .replace(/{{createTime1}}/g, note.createTime1 || '')
+                                                .replace(/{{createTime2}}/g, note.createTime2 || '')
+                                                .replace(/{{createTime3}}/g, note.createTime3 || '')
+                                                .replace(/{{createTime4}}/g, note.createTime4 || '')
+                                                .replace(/{{createTime5}}/g, note.createTime5 || '')
+                                                .replace(/{{createTime6}}/g, note.createTime6 || '')
+                                                .replace(/{{createTime7}}/g, note.createTime7 || '')
+                                                .replace(/{{createTime8}}/g, note.createTime8 || '')
+                                                .replace(/{{createTime9}}/g, note.createTime9 || '')
+                                                .replace(/{{createTime10}}/g, note.createTime10 || '')
                                                 .replace(/{{chapterTitle}}/g, chapterInfo.title)
                                                 .replace(/{{notebookTitle}}/g, notebook.title);
                                         })
@@ -651,6 +788,16 @@ async function syncNotesProcess(plugin: any, cookies: string, notebooks: any): P
                                             return line
                                                 .replace(/{{highlightText}}/g, note.comment.abstract || '[评论]')
                                                 .replace(/{{highlightComment}}/g, note.comment.content || '')
+                                                .replace(/{{createTime1}}/g, note.createTime1 || '')
+                                                .replace(/{{createTime2}}/g, note.createTime2 || '')
+                                                .replace(/{{createTime3}}/g, note.createTime3 || '')
+                                                .replace(/{{createTime4}}/g, note.createTime4 || '')
+                                                .replace(/{{createTime5}}/g, note.createTime5 || '')
+                                                .replace(/{{createTime6}}/g, note.createTime6 || '')
+                                                .replace(/{{createTime7}}/g, note.createTime7 || '')
+                                                .replace(/{{createTime8}}/g, note.createTime8 || '')
+                                                .replace(/{{createTime9}}/g, note.createTime9 || '')
+                                                .replace(/{{createTime10}}/g, note.createTime10 || '')
                                                 .replace(/{{chapterTitle}}/g, chapterInfo.title)
                                                 .replace(/{{notebookTitle}}/g, notebook.title);
                                         })
@@ -666,7 +813,7 @@ async function syncNotesProcess(plugin: any, cookies: string, notebooks: any): P
                         return {
                             chapterTitle: chapterInfo.title,
                             notes: notesData,
-                            chapterComments: chapterEndComments.join('\n\n')
+                            chapterComments: chapterEndComments
                         };
                     });
 
@@ -674,11 +821,34 @@ async function syncNotesProcess(plugin: any, cookies: string, notebooks: any): P
                     notebookTitle: notebook.title,
                     isbn: notebook.isbn,
                     updateTime: new Date(notebook.updatedTime * 1000).toLocaleString(),
+                    updateTime1: formatTimestamp(notebook.updatedTime, 'createTime1'),
+                    updateTime2: formatTimestamp(notebook.updatedTime, 'createTime2'),
+                    updateTime3: formatTimestamp(notebook.updatedTime, 'createTime3'),
+                    updateTime4: formatTimestamp(notebook.updatedTime, 'createTime4'),
+                    updateTime5: formatTimestamp(notebook.updatedTime, 'createTime5'),
+                    updateTime6: formatTimestamp(notebook.updatedTime, 'createTime6'),
+                    updateTime7: formatTimestamp(notebook.updatedTime, 'createTime7'),
+                    updateTime8: formatTimestamp(notebook.updatedTime, 'createTime8'),
+                    updateTime9: formatTimestamp(notebook.updatedTime, 'createTime9'),
+                    updateTime10: formatTimestamp(notebook.updatedTime, 'createTime10'),
                     chapters: chaptersData,
                     globalComments: comments
                         .filter(c => !c.review.abstract && !c.review.contextAbstract)
-                        .map(c => c.review.content)
-                        .join('\n\n'),
+                        .map(c => {
+                                return {
+                                content: c.review.content,
+                                createTime1: formatTimestamp(c.review.createTime, 'createTime1'),
+                                createTime2: formatTimestamp(c.review.createTime, 'createTime2'),
+                                createTime3: formatTimestamp(c.review.createTime, 'createTime3'),
+                                createTime4: formatTimestamp(c.review.createTime, 'createTime4'),
+                                createTime5: formatTimestamp(c.review.createTime, 'createTime5'),
+                                createTime6: formatTimestamp(c.review.createTime, 'createTime6'),
+                                createTime7: formatTimestamp(c.review.createTime, 'createTime7'),
+                                createTime8: formatTimestamp(c.review.createTime, 'createTime8'),
+                                createTime9: formatTimestamp(c.review.createTime, 'createTime9'),
+                                createTime10: formatTimestamp(c.review.createTime, 'createTime10')
+                            };
+                        }),
                     bookInfo: notebook.bookDetails?.intro || '',
                     AISummary: notebook.bookDetails?.AISummary || '',
                     bestHighlights: notebook.bestHighlights?.bestBookMarks?.items?.map(item => item.markText) || []
@@ -696,63 +866,44 @@ async function syncNotesProcess(plugin: any, cookies: string, notebooks: any): P
                                             .join('\n');
                                     })
                                     .replace(/\{\{#chapterComments\}\}([\s\S]*?)\{\{\/chapterComments\}\}/g, (_, commentsTpl) => {
-                                        if (!chapter.chapterComments) return '';
-                                        // 将模板按行分割
-                                        const lines = commentsTpl.split('\n');
-                                        // 找到包含{{chapterComments}}的行
-                                        const commentLineIndex = lines.findIndex(line => line.includes('{{chapterComments}}'));
-                                        if (commentLineIndex === -1) {
-                                            return commentsTpl.replace(/\{\{chapterComments\}\}/g, chapter.chapterComments);
-                                        }
-                                        // 提取标题部分（{{chapterComments}}之前的所有行）
-                                        const titleLines = lines.slice(0, commentLineIndex);
-                                        // 提取评论行格式（包含{{chapterComments}}的行）
-                                        const commentLineFormat = lines[commentLineIndex];
-                                        // 提取尾部部分（{{chapterComments}}之后的所有行）
-                                        const tailLines = lines.slice(commentLineIndex + 1);
-                                        // 将章节评论按行分割
-                                        const comments = chapter.chapterComments.split('\n\n');
-                                        // 为每个评论生成格式化行
-                                        const formattedCommentLines = comments.map(comment => 
-                                            commentLineFormat.replace(/\{\{chapterComments\}\}/g, comment)
-                                        );
-                                        // 组合最终结果：标题 + 格式化的评论行 + 尾部
-                                        return [...titleLines, ...formattedCommentLines, ...tailLines].join('\n\n');
-                                    }
-                                    )
+                                        if (!chapter.chapterComments || chapter.chapterComments.length === 0) return '';
+                                        // 为每个章节评论生成格式化内容，替换模板中的所有变量
+                                        const formattedComments = chapter.chapterComments.map(c => {
+                                            return commentsTpl
+                                                .replace(/\{\{chapterComments\}\}/g, c.content)
+                                                .replace(/\{\{createTime1\}\}/g, c.createTime1)
+                                                .replace(/\{\{createTime2\}\}/g, c.createTime2)
+                                                .replace(/\{\{createTime3\}\}/g, c.createTime3)
+                                                .replace(/\{\{createTime4\}\}/g, c.createTime4)
+                                                .replace(/\{\{createTime5\}\}/g, c.createTime5)
+                                                .replace(/\{\{createTime6\}\}/g, c.createTime6)
+                                                .replace(/\{\{createTime7\}\}/g, c.createTime7)
+                                                .replace(/\{\{createTime8\}\}/g, c.createTime8)
+                                                .replace(/\{\{createTime9\}\}/g, c.createTime9)
+                                                .replace(/\{\{createTime10\}\}/g, c.createTime10);
+                                        });
+                                        return formattedComments.join('\n\n');
+                                    })
                             ).join('\n');
                         })
                         .replace(/\{\{#globalComments\}\}([\s\S]*?)\{\{\/globalComments\}\}/g, (_, commentsTpl) => {
-                            if (!variables.globalComments) return '';
-                            // 将模板按行分割
-                            const lines = commentsTpl.split('\n');
-                            // 找到包含{{globalComments}}的行
-                            const commentLineIndex = lines.findIndex(line => line.includes('{{globalComments}}'));
-                            if (commentLineIndex === -1) {
-                                return commentsTpl.replace(/\{\{globalComments\}\}/g, variables.globalComments);
-                            }
-                            // 提取标题部分（{{globalComments}}之前的所有行）
-                            const titleLines = lines.slice(0, commentLineIndex);
-                            // 提取评论行格式（包含{{globalComments}}的行）
-                            const commentLineFormat = lines[commentLineIndex];
-                            // 提取尾部部分（{{globalComments}}之后的所有行）
-                            const tailLines = lines.slice(commentLineIndex + 1);
-                            // 将书评按行分割
-                            const comments = variables.globalComments.split('\n\n');
-                            // 为每个评论生成格式化行
-                            const formattedCommentLines = comments.map(comment => 
-                                commentLineFormat.replace(/\{\{globalComments\}\}/g, comment)
-                            );
-                            // 组合最终结果：标题 + 格式化的评论行 + 尾部
-                            // 标题和第一个评论之间用单换行，多个评论之间用双换行
-                            let result = titleLines.join('\n');
-                            if (formattedCommentLines.length > 0) {
-                                result += '\n' + formattedCommentLines.join('\n\n');
-                            }
-                            if (tailLines.length > 0) {
-                                result += '\n' + tailLines.join('\n');
-                            }
-                            return result;
+                            if (!variables.globalComments || variables.globalComments.length === 0) return '';
+                            // 为每个书评生成格式化内容，替换模板中的所有变量
+                            const formattedComments = variables.globalComments.map(c => {
+                                return commentsTpl
+                                    .replace(/\{\{globalComments\}\}/g, c.content)
+                                    .replace(/\{\{createTime1\}\}/g, c.createTime1)
+                                    .replace(/\{\{createTime2\}\}/g, c.createTime2)
+                                    .replace(/\{\{createTime3\}\}/g, c.createTime3)
+                                    .replace(/\{\{createTime4\}\}/g, c.createTime4)
+                                    .replace(/\{\{createTime5\}\}/g, c.createTime5)
+                                    .replace(/\{\{createTime6\}\}/g, c.createTime6)
+                                    .replace(/\{\{createTime7\}\}/g, c.createTime7)
+                                    .replace(/\{\{createTime8\}\}/g, c.createTime8)
+                                    .replace(/\{\{createTime9\}\}/g, c.createTime9)
+                                    .replace(/\{\{createTime10\}\}/g, c.createTime10);
+                            });
+                            return formattedComments.join('\n\n');
                         })
                         .replace(/\{\{#bookInfo\}\}([\s\S]*?)\{\{\/bookInfo\}\}/g, (_, section) => {
                             return variables.bookInfo ? section.replace(/\{\{bookInfo\}\}/g, variables.bookInfo) : '';
@@ -761,13 +912,13 @@ async function syncNotesProcess(plugin: any, cookies: string, notebooks: any): P
                             return variables.AISummary ? section.replace(/\{\{AISummary\}\}/g, variables.AISummary) : '';
                         })
                         .replace(/\{\{#bestHighlights\}\}([\s\S]*?)\{\{\/bestHighlights\}\}/g, (_, section) => {
-                            return variables.bestHighlights.length > 0 
-                                ? variables.bestHighlights.map(highlight => 
+                            return variables.bestHighlights.length > 0
+                                ? variables.bestHighlights.map(highlight =>
                                     section.replace(/\{\{bestHighlight\}\}/g, highlight)
                                 ).join('\n')
                                 : '';
                         })
-                        .replace(/\{(\w+)\}/g, (_, key) => variables[key] || '');
+                        .replace(/\{\{(\w+)\}\}/g, (_, key) => variables[key] || '');
                 };
 
                 const noteContent = renderTemplate(template);

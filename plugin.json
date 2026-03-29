@@ -2,7 +2,7 @@
   "name": "siyuan-douban",
   "author": "Glaube-TY",
   "url": "https://github.com/Glaube-TY/siyuan-douban",
-  "version": "2.9.5",
+  "version": "2.10.0",
   "minAppVersion": "3.3.0",
   "backends": [
     "windows",
@@ -28,7 +28,7 @@
   },
   "funding": {
     "custom": [
-      "https://ttl8ygt82u.feishu.cn/wiki/VZdjwDNxWi4j0jkdyxMcOg2VnFf?from=from_copylink"
+      "https://blog.glaube-ty.top/da-shang"
     ]
   },
   "keywords": [

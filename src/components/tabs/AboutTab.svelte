@@ -12,7 +12,8 @@
         douban: "https://book.douban.com/",
         weread: "https://weread.qq.com/",
         issues: "https://github.com/Glaube-TY/siyuan-douban/issues",
-        tencent: "https://pd.qq.com/s/724c4lpoc"
+        tencent: "https://pd.qq.com/s/724c4lpoc",
+        myblog: "https://blog.glaube-ty.top/du-shu-bi-ji-cha-jian"
     };
 </script>
 
@@ -33,7 +34,8 @@
             <span class="icon">📜</span>
             <div>
                 <p class="label">{i18n.pluginTutorial}：</p>
-                <a href={LINKS.feishu} class="link">{i18n.pluginTutorialLink}</a>
+                <p><a href={LINKS.myblog} class="link">{i18n.pluginTutorialLink}</a></p>
+                <p><a href={LINKS.feishu} class="link">{i18n.pluginTutorialLink1}</a></p>
             </div>
         </div>
 

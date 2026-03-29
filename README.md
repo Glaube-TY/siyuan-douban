@@ -12,6 +12,24 @@
             <li style="margin: 0.5em 0; padding: 8px 12px; background: #f8fafc; border-radius: 6px;">📗 Auto-sync Weread notes (v2.0.0 supported)</li>
         </ul>
         <div style="margin: 1.5em 0; border-top: 1px solid #eee;"></div>
+        <a href="https://blog.glaube-ty.top/du-shu-bi-ji-cha-jian" 
+           style="display: inline-flex; 
+                  align-items: center; 
+                  padding: 10px 20px; 
+                  background: #2d8cf0; 
+                  color: white; 
+                  border-radius: 6px; 
+                  text-decoration: none;
+                  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+                  transform: translateY(0);
+                  box-shadow: 0 4px 6px rgba(45,140,240,0.1);
+                  border: 1px solid rgba(45,140,240,0.2);"
+           onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 12px rgba(45,140,240,0.2)'"
+           onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 6px rgba(45,140,240,0.1)'"
+           onmousedown="this.style.transform='translateY(1px)'"
+           onmouseup="this.style.transform='translateY(-2px)'">
+            📖 Detailed usage tutorial
+        </a>
         <a href="https://ttl8ygt82u.feishu.cn/wiki/VZdjwDNxWi4j0jkdyxMcOg2VnFf?from=from_copylink" 
            style="display: inline-flex; 
                   align-items: center; 
@@ -28,7 +46,7 @@
            onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 6px rgba(45,140,240,0.1)'"
            onmousedown="this.style.transform='translateY(1px)'"
            onmouseup="this.style.transform='translateY(-2px)'">
-            📖 Detailed usage tutorial (important)
+            📖 Detailed usage tutorial (standby)
         </a>
     </div>
     <div style="margin: 1.5em 0; padding: 1.5em; background: #fff9f2; border-left: 4px solid #ffc107; border-radius: 8px;">
@@ -40,7 +58,7 @@
                  style="width: 600px; border-radius: 8px; margin-bottom: 1em;">
         </div>
         <div style="text-align: center;">
-            <a href="https://ttl8ygt82u.feishu.cn/wiki/VZdjwDNxWi4j0jkdyxMcOg2VnFf#share-AlWNdLXSPo4nonxhsUOcP7tYnnb" 
+            <a href="https://blog.glaube-ty.top/da-shang" 
                 style="display: inline-flex; 
                         align-items: center; 
                         padding: 12px 24px; 
@@ -64,7 +82,7 @@
         <h2 style="color: #2d8cf0; margin: 0 0 1em;">📅 Update log</h2>
         <p style="margin: 0.5em 0;">This section will no longer display the update log. Please click the button below 👇 to view the complete update log.</p>
         <div style="text-align: center;">
-        <a href="https://ttl8ygt82u.feishu.cn/wiki/KbpBw3NoCiCeyqkRb0iceTRtnKh" 
+        <a href="https://blog.glaube-ty.top/archives/019d1eb8-849f-707f-91c8-d32b7094af98" 
            style="display: inline-flex;
                   align-items: center;
                   padding: 12px 24px;

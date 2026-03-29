@@ -314,7 +314,7 @@
             <label for="tutorial">
                 {i18n.tutorial}<a
                     id="tutorial"
-                    href="https://ttl8ygt82u.feishu.cn/wiki/TVR2wczSKiy2HSk7PyQcMGuNnyc"
+                    href="https://blog.glaube-ty.top/archives/019d1f09-0d1c-71b5-a53d-395321304440"
                     >{i18n.tutorialLink}</a
                 ></label
             >
