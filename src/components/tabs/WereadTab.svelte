@@ -2,6 +2,7 @@
     import { showMessage, I18N } from "siyuan";
     import { onMount } from "svelte";
     import { svelteDialog } from "@/libs/dialog";
+    import PromiseLimitPool from "@/libs/promise-pool";
     import {
         createWereadDialog,
         createWereadQRCodeDialog,
@@ -10,6 +11,7 @@
         createWereadNotesTemplateDialog,
         checkWrVid,
         verifyCookie,
+        verifyCookieByForwardProxy,
     } from "@/utils/weread/loginWeread";
     import {
         getNotebooks,
@@ -17,6 +19,7 @@
         getBookShelf,
     } from "@/utils/weread/wereadInterface";
     import { syncWereadNotes } from "@/utils/weread/syncWereadNotes";
+    import { loadPluginData, DEFAULT_WEREAD_COOKIE, DEFAULT_WEREAD_SETTINGS } from "@/utils/core/configDefaults";
 
     import wereadManageISBN from "@/components/common/wereadManageISBN.svelte";
     import wereadIgnoredBooksDialog from "@/components/common/wereadIgnoredBooksDialog.svelte";
@@ -44,9 +47,9 @@
 
     onMount(async () => {
         // 加载本地配置
-        const savedcookies = await plugin.loadData("weread_cookie");
+        const savedcookies = await loadPluginData(plugin, "weread_cookie", DEFAULT_WEREAD_COOKIE);
         wereadPositionMark = await plugin.loadData("weread_position_mark");
-        const wereadSetting = await plugin.loadData("weread_settings");
+        const wereadSetting = await loadPluginData(plugin, "weread_settings", DEFAULT_WEREAD_SETTINGS);
         autoSync = wereadSetting.autoSync;
         const savedTemplates = await plugin.loadData("weread_templates");
         if (savedTemplates) {
@@ -55,6 +58,8 @@
 
         // 检查并更新登录信息
         cookies = savedcookies.cookies;
+        let shouldLoadNotebooks = false;
+
         if (cookies) {
             // 从 cookie 中获取用户ID
             const result = checkWrVid(cookies);
@@ -74,39 +79,54 @@
                     // 判断上一次是否是扫码登录
                     if (savedcookies.isQRCode) {
                         checkMessage = i18n.checkMessage1;
-                        // 创建不可见的登陆窗口用于刷新登录信息
-                        const updatedCookes = await createWereadQRCodeDialog(
-                            i18n,
-                            false,
-                        );
-
-                        const savedata = {
-                            cookies: updatedCookes,
-                            isQRCode: true,
-                        };
-                        plugin.saveData("weread_cookie", savedata);
-
-                        // 更新全局cookies变量
-                        cookies = updatedCookes;
-
-                        const result = checkWrVid(updatedCookes);
-                        userVid = result.userVid;
-
-                        // 验证登录信息
-                        if (userVid) {
-                            verifyCookie(plugin, updatedCookes, userVid).then(
-                                (verifyResult) => {
-                                    checkMessage = verifyResult.message;
-                                },
+                        try {
+                            // 创建不可见的登陆窗口用于刷新登录信息
+                            const updatedCookes = await createWereadQRCodeDialog(
+                                i18n,
+                                false,
                             );
-                        } else {
+
+                            const savedata = {
+                                cookies: updatedCookes,
+                                isQRCode: true,
+                            };
+                            await plugin.saveData("weread_cookie", savedata);
+
+                            // 更新全局cookies变量
+                            cookies = updatedCookes;
+
+                            const result = checkWrVid(updatedCookes);
+                            userVid = result.userVid;
+
+                            // 验证登录信息
+                            if (userVid) {
+                                const verifyResult = await verifyCookie(plugin, updatedCookes, userVid);
+                                checkMessage = verifyResult.message;
+
+                                // 验证成功后标记需要加载书单
+                                if (verifyResult.success) {
+                                    shouldLoadNotebooks = true;
+                                }
+                            } else {
+                                checkMessage = i18n.checkMessage6;
+                                showMessage(i18n.checkMessage6);
+                                return;
+                            }
+                        } catch (error) {
                             checkMessage = i18n.checkMessage6;
+                            showMessage(i18n.checkMessage6);
                             return;
                         }
                     }
+                } else if (verifyResult.success) {
+                    // 登录有效，标记需要加载书单
+                    shouldLoadNotebooks = true;
                 }
 
-                await getNotebooksList();
+                // 统一加载书单（最多一次）
+                if (shouldLoadNotebooks) {
+                    await getNotebooksList();
+                }
             } else {
                 showMessage(i18n.showMessage16);
             }
@@ -123,31 +143,59 @@
 
         const basicBooks = notebookdata.books;
 
-        notebooksList = await Promise.all(
-            basicBooks.map(async (b: any) => {
-                const details = await getBook(plugin, cookies, b.bookId);
-                return {
-                    noteCount: b.noteCount,
-                    reviewCount: b.reviewCount,
-                    updatedTime: b.sort,
-                    bookID: details.bookId,
-                    title: details.title,
-                    author: details.author,
-                    cover: details.cover,
-                    format: details.format,
-                    price: details.price,
-                    introduction: details.intro,
-                    publishTime: details.publishTime,
-                    category: details.category,
-                    isbn: details.isbn,
-                    publisher: details.publisher,
-                    totalWords: details.totalWords,
-                    star: details.newRating,
-                    ratingCount: details.ratingCount,
-                    AISummary: details.AISummary,
-                };
-            }),
-        );
+        // 使用并发池限制批量请求（并发数：5）
+        const notebookPool = new PromiseLimitPool<{
+            noteCount: number;
+            reviewCount: number;
+            updatedTime: number;
+            bookID: string;
+            title: string;
+            author: string;
+            cover: string;
+            format: string;
+            price: number;
+            introduction: string;
+            publishTime: string;
+            category: string;
+            isbn: string;
+            publisher: string;
+            totalWords: number;
+            star: number;
+            ratingCount: number;
+            AISummary: string;
+        }>(5);
+
+        basicBooks.forEach((b: any) => {
+            notebookPool.add(async () => {
+                try {
+                    const details = await getBook(plugin, cookies, b.bookId);
+                    return {
+                        noteCount: b.noteCount,
+                        reviewCount: b.reviewCount,
+                        updatedTime: b.sort,
+                        bookID: details.bookId,
+                        title: details.title,
+                        author: details.author,
+                        cover: details.cover,
+                        format: details.format,
+                        price: details.price,
+                        introduction: details.intro,
+                        publishTime: details.publishTime,
+                        category: details.category,
+                        isbn: details.isbn,
+                        publisher: details.publisher,
+                        totalWords: details.totalWords,
+                        star: details.newRating,
+                        ratingCount: details.ratingCount,
+                        AISummary: details.AISummary,
+                    };
+                } catch {
+                    return null;
+                }
+            });
+        });
+
+        notebooksList = (await notebookPool.awaitAll()).filter((item) => item !== null) as typeof notebooksList;
 
         await plugin.saveData("temporary_weread_notebooksList", notebooksList);
 
@@ -180,36 +228,63 @@
             const bookShelfInfo = await getBookShelf(plugin, cookies, userVid);
             const basicshelf = bookShelfInfo.books;
 
-            const shelfList = await Promise.all(
-                basicshelf.map(async (b: any) => {
-                    const details = await getBook(plugin, cookies, b.bookId);
-                    return {
-                        noteCount:
-                            notebooksList.find(
-                                (n) => n.bookID === details.bookId,
-                            )?.noteCount || 0,
-                        reviewCount:
-                            notebooksList.find(
-                                (n) => n.bookID === details.bookId,
-                            )?.reviewCount || 0,
-                        bookID: details.bookId,
-                        title: details.title,
-                        author: details.author,
-                        cover: details.cover,
-                        format: details.format,
-                        price: details.price,
-                        introduction: details.intro,
-                        publishTime: details.publishTime,
-                        category: details.category,
-                        isbn: details.isbn,
-                        publisher: details.publisher,
-                        totalWords: details.totalWords,
-                        star: details.newRating,
-                        ratingCount: details.ratingCount,
-                        AISummary: details.AISummary,
-                    };
-                }),
-            );
+            // 使用并发池限制批量请求（并发数：5）
+            const shelfPool = new PromiseLimitPool<{
+                noteCount: number;
+                reviewCount: number;
+                bookID: string;
+                title: string;
+                author: string;
+                cover: string;
+                format: string;
+                price: number;
+                introduction: string;
+                publishTime: string;
+                category: string;
+                isbn: string;
+                publisher: string;
+                totalWords: number;
+                star: number;
+                ratingCount: number;
+                AISummary: string;
+            }>(5);
+
+            basicshelf.forEach((b: any) => {
+                shelfPool.add(async () => {
+                    try {
+                        const details = await getBook(plugin, cookies, b.bookId);
+                        return {
+                            noteCount:
+                                notebooksList.find(
+                                    (n) => n.bookID === details.bookId,
+                                )?.noteCount || 0,
+                            reviewCount:
+                                notebooksList.find(
+                                    (n) => n.bookID === details.bookId,
+                                )?.reviewCount || 0,
+                            bookID: details.bookId,
+                            title: details.title,
+                            author: details.author,
+                            cover: details.cover,
+                            format: details.format,
+                            price: details.price,
+                            introduction: details.intro,
+                            publishTime: details.publishTime,
+                            category: details.category,
+                            isbn: details.isbn,
+                            publisher: details.publisher,
+                            totalWords: details.totalWords,
+                            star: details.newRating,
+                            ratingCount: details.ratingCount,
+                            AISummary: details.AISummary,
+                        };
+                    } catch {
+                        return null;
+                    }
+                });
+            });
+
+            const shelfList = (await shelfPool.awaitAll()).filter((item) => item !== null);
 
             const showDialog = createBookShelfDialog(plugin, shelfList);
             showDialog();
@@ -323,47 +398,62 @@
             <button
                 class="scan-qrcode"
                 on:click={async () => {
-                    const autoCookies = await createWereadQRCodeDialog(
-                        i18n,
-                        true,
-                    );
-
-                    const savedata = {
-                        cookies: autoCookies,
-                        isQRCode: true,
-                    };
-                    plugin.saveData("weread_cookie", savedata);
-
-                    const result = checkWrVid(autoCookies);
-                    userVid = result.userVid;
-
-                    if (userVid) {
-                        verifyCookie(plugin, autoCookies, userVid).then(
-                            (verifyResult) => {
-                                checkMessage = verifyResult.message;
-                            },
+                    try {
+                        const autoCookies = await createWereadQRCodeDialog(
+                            i18n,
+                            true,
                         );
+
+                        // 更新当前组件内存中的 cookies
+                        cookies = autoCookies;
+
+                        const savedata = {
+                            cookies: autoCookies,
+                            isQRCode: true,
+                        };
+                        await plugin.saveData("weread_cookie", savedata);
+
+                        const result = checkWrVid(autoCookies);
+                        userVid = result.userVid;
+
+                        if (userVid) {
+                            const verifyResult = await verifyCookie(plugin, autoCookies, userVid);
+                            checkMessage = verifyResult.message;
+                            
+                            // 验证成功后刷新页面状态
+                            if (verifyResult.success) {
+                                await getNotebooksList();
+                            }
+                        } else {
+                            checkMessage = i18n.checkMessage6;
+                            showMessage(i18n.checkMessage6);
+                        }
+                    } catch (error) {
+                        checkMessage = i18n.checkMessage6;
+                        showMessage(i18n.checkMessage6);
                     }
                 }}>{i18n.scanQRCodeLogin}</button
             >
             <button
-                on:click={createWereadDialog(plugin, cookies, (newCookies) => {
+                on:click={createWereadDialog(plugin, cookies, async (newCookies) => {
                     cookies = newCookies;
                     const savedata = {
                         cookies: newCookies,
                         isQRCode: false,
                     };
-                    plugin.saveData("weread_cookie", savedata);
+                    await plugin.saveData("weread_cookie", savedata);
 
                     const result = checkWrVid(newCookies);
                     userVid = result.userVid;
-                    // 验证登录信息
+                    // 验证登录信息（手动填 Cookie 使用基于显式 Cookie 字符串的校验）
                     if (userVid) {
-                        verifyCookie(plugin, cookies, userVid).then(
-                            (verifyResult) => {
-                                checkMessage = verifyResult.message;
-                            },
-                        );
+                        const verifyResult = await verifyCookieByForwardProxy(plugin, newCookies, userVid);
+                        checkMessage = verifyResult.message;
+
+                        // 验证成功后刷新页面状态（与扫码登录保持一致）
+                        if (verifyResult.success) {
+                            await getNotebooksList();
+                        }
                     } else {
                         checkMessage = i18n.checkMessage6;
                     }
@@ -420,9 +510,9 @@
             <button
                 on:click={createWereadNotesTemplateDialog(
                     i18n,
-                    (newWereadTemplates) => {
+                    async (newWereadTemplates) => {
                         wereadTemplates = newWereadTemplates;
-                        plugin.saveData("weread_templates", newWereadTemplates);
+                        await plugin.saveData("weread_templates", newWereadTemplates);
                     },
                     wereadTemplates,
                 )}>{i18n.setNotesTemplate}</button
@@ -482,8 +572,8 @@
                     type="checkbox"
                     title={i18n.autoSyncTip}
                     bind:checked={autoSync}
-                    on:change={() => {
-                        plugin.saveData("weread_settings", { autoSync });
+                    on:change={async () => {
+                        await plugin.saveData("weread_settings", { autoSync });
                     }}
                 />
                 {i18n.autoSync}

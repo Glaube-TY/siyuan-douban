@@ -1,5 +1,6 @@
 import { fetchSyncPost } from "siyuan";
 import { formatTime } from './formatOp';
+import { logError } from './logger';
 
 export async function getImage(url: string) {
     try {
@@ -98,7 +99,7 @@ export async function getImage(url: string) {
             });
         });
     } catch (error) {
-        console.error("图片获取失败:", error);
+        logError("core/getImg", "图片获取失败", error);
         return "";
     }
 }

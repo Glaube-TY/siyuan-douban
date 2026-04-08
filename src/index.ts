@@ -6,6 +6,7 @@ import setPage from "./components/index.svelte";
 import { svelteDialog } from "./libs/dialog";
 import * as sdk from "@siyuan-community/siyuan-sdk";
 import { syncWereadNotes } from "./utils/weread/syncWereadNotes";
+import { loadPluginData, DEFAULT_WEREAD_SETTINGS, DEFAULT_WEREAD_COOKIE } from "./utils/core/configDefaults";
 import {
     createWereadQRCodeDialog,
     checkWrVid,
@@ -15,6 +16,57 @@ import {
     getNotebooks,
     getBook,
 } from "@/utils/weread/wereadInterface";
+import PromiseLimitPool from "./libs/promise-pool";
+import type { WereadBookSummary, WereadBookDetail } from "./utils/weread/types";
+
+const BOOK_DETAILS_CONCURRENCY = 4;
+
+async function buildTemporaryNotebookList(plugin: PluginDouban, cookies: string, bookCache: Map<string, Promise<WereadBookDetail>>): Promise<WereadBookSummary[]> {
+    const notebookdata = await getNotebooks(plugin, cookies);
+    const basicBooks = notebookdata.books;
+    const pool = new PromiseLimitPool<WereadBookSummary>(BOOK_DETAILS_CONCURRENCY);
+    const getBookCached = (bookId: string) => {
+        if (bookCache.has(bookId)) {
+            return bookCache.get(bookId)!;
+        }
+        const promise = getBook(plugin, cookies, bookId);
+        bookCache.set(bookId, promise);
+        return promise;
+    };
+    for (const b of basicBooks) {
+        pool.add(async () => {
+            const details = await getBookCached(b.bookId);
+            return {
+                noteCount: b.noteCount,
+                reviewCount: b.reviewCount,
+                updatedTime: b.sort,
+                bookID: details.bookId,
+                title: details.title,
+                author: details.author,
+                cover: details.cover,
+                format: details.format,
+                price: details.price,
+                introduction: details.intro,
+                publishTime: details.publishTime,
+                category: details.category,
+                isbn: details.isbn,
+                publisher: details.publisher,
+                totalWords: details.totalWords,
+                star: details.newRating,
+                ratingCount: details.ratingCount,
+                AISummary: details.AISummary,
+            };
+        });
+    }
+    const notebooksList = await pool.awaitAll();
+    return notebooksList;
+}
+
+async function handleVerifiedCookieSync(plugin: PluginDouban, cookies: string, bookCache: Map<string, Promise<WereadBookDetail>>) {
+    const notebooksList = await buildTemporaryNotebookList(plugin, cookies, bookCache);
+    await plugin.saveData("temporary_weread_notebooksList", notebooksList);
+    await syncWereadNotes(plugin, cookies, true, bookCache);
+}
 
 const STORAGE_NAME = "menu-config";
 
@@ -59,42 +111,47 @@ export default class PluginDouban extends Plugin {
     }
 
     async onLayoutReady() {
-        const wereadSetting = await this.loadData("weread_settings");
+        const wereadSetting = await loadPluginData(this, "weread_settings", DEFAULT_WEREAD_SETTINGS);
         const autoSync = wereadSetting.autoSync;
-        const savedCookie = await this.loadData("weread_cookie");
+        const savedCookie = await loadPluginData(this, "weread_cookie", DEFAULT_WEREAD_COOKIE);
         const cookies = savedCookie.cookies;
         let userVid = "";
 
         if (autoSync) {
-            if (savedCookie) {
-                const result = checkWrVid(cookies);
-                userVid = result.userVid;
+            if (!cookies || cookies.length === 0) {
+                showMessage(this.i18n.showMessage22);
+                return;
+            }
 
-                if (!userVid && !savedCookie.isQRCode) {
-                    showMessage(this.i18n.showMessage17);
-                    return
-                }
+            const result = checkWrVid(cookies);
+            userVid = result.userVid;
 
-                if (userVid) {
-                    const verifyResult = await verifyCookie(
-                        this,
-                        cookies,
-                        userVid,
-                    );
+            if (!userVid && !savedCookie.isQRCode) {
+                showMessage(this.i18n.showMessage17);
+                return
+            }
 
-                    if (verifyResult.loginDue) {
-                        if (!window.navigator.userAgent.includes("Electron") || typeof window.require !== "function") {
-                            return;
-                        }
+            if (userVid) {
+                const verifyResult = await verifyCookie(
+                    this,
+                    cookies,
+                    userVid,
+                );
 
-                        showMessage(this.i18n.showMessage19)
+                if (verifyResult.loginDue) {
+                    if (!window.navigator.userAgent.includes("Electron") || typeof window.require !== "function") {
+                        return;
+                    }
+
+                    showMessage(this.i18n.showMessage19)
+                    try {
                         const autoCookies = await createWereadQRCodeDialog(this.i18n, false);
 
                         const savedata = {
                             cookies: autoCookies,
                             isQRCode: true,
                         };
-                        this.saveData("weread_cookie", savedata);
+                        await this.saveData("weread_cookie", savedata);
 
                         const result = checkWrVid(autoCookies);
                         userVid = result.userVid;
@@ -104,75 +161,23 @@ export default class PluginDouban extends Plugin {
 
                             if (verifyResult.success) {
                                 showMessage(this.i18n.showMessage20);
-                                // 在登录成功后，用新的cookie获取notebooksList并保存
-                                const notebookdata = await getNotebooks(this, autoCookies);
-                                const basicBooks = notebookdata.books;
-                                const notebooksList = await Promise.all(
-                                    basicBooks.map(async (b: any) => {
-                                        const details = await getBook(this, autoCookies, b.bookId);
-                                        return {
-                                            noteCount: b.noteCount,
-                                            reviewCount: b.reviewCount,
-                                            updatedTime: b.sort,
-                                            bookID: details.bookId,
-                                            title: details.title,
-                                            author: details.author,
-                                            cover: details.cover,
-                                            format: details.format,
-                                            price: details.price,
-                                            introduction: details.intro,
-                                            publishTime: details.publishTime,
-                                            category: details.category,
-                                            isbn: details.isbn,
-                                            publisher: details.publisher,
-                                            totalWords: details.totalWords,
-                                            star: details.newRating,
-                                            ratingCount: details.ratingCount,
-                                            AISummary: details.AISummary,
-                                        };
-                                    }),
-                                );
-
-                                await this.saveData("temporary_weread_notebooksList", notebooksList);
-                                await syncWereadNotes(this, autoCookies, true);
+                                // 在登录成功后，用新的 cookie 获取 notebooksList 并保存
+                                const bookCache = new Map<string, Promise<WereadBookDetail>>();
+                                await handleVerifiedCookieSync(this, autoCookies, bookCache);
+                            } else {
+                                showMessage(this.i18n.showMessage18);
                             }
+                        } else {
+                            showMessage(this.i18n.showMessage18);
                         }
-                    } else if (verifyResult.success) {
-                        showMessage(this.i18n.showMessage21);
-                        const notebookdata = await getNotebooks(this, cookies);
-                        const basicBooks = notebookdata.books;
-                        const notebooksList = await Promise.all(
-                            basicBooks.map(async (b: any) => {
-                                const details = await getBook(this, cookies, b.bookId);
-                                return {
-                                    noteCount: b.noteCount,
-                                    reviewCount: b.reviewCount,
-                                    updatedTime: b.sort,
-                                    bookID: details.bookId,
-                                    title: details.title,
-                                    author: details.author,
-                                    cover: details.cover,
-                                    format: details.format,
-                                    price: details.price,
-                                    introduction: details.intro,
-                                    publishTime: details.publishTime,
-                                    category: details.category,
-                                    isbn: details.isbn,
-                                    publisher: details.publisher,
-                                    totalWords: details.totalWords,
-                                    star: details.newRating,
-                                    ratingCount: details.ratingCount,
-                                    AISummary: details.AISummary,
-                                };
-                            }),
-                        );
-
-                        await this.saveData("temporary_weread_notebooksList", notebooksList);
-                        await syncWereadNotes(this, cookies, true);
+                    } catch (error) {
+                        showMessage(this.i18n.showMessage18);
                     }
+                } else if (verifyResult.success) {
+                    showMessage(this.i18n.showMessage21);
+                    const bookCache = new Map<string, Promise<WereadBookDetail>>();
+                    await handleVerifiedCookieSync(this, cookies, bookCache);
                 }
-            } else {
-                showMessage(this.i18n.showMessage22)
             }
         }
     }

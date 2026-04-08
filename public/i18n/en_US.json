@@ -134,6 +134,7 @@
     "showMessage15": "❌ Please fill in a valid WeRead Cookie first before synchronization",
     "showMessage16": "❌Login information verification failed. Please try again.",
     "showMessage17": "❌Cookies format is incorrect, please re-enter!",
+    "showMessage18": "❌Login refresh failed, please scan QR code to log in again",
     "showMessage19": "🔄Login has expired, logging in again...",
     "showMessage20": "✅Login successful, syncing notes...",
     "showMessage21": "Syncing WeRead notes...",

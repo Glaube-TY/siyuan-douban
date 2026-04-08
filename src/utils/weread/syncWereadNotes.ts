@@ -1,15 +1,22 @@
 import { fetchPost, fetchSyncPost, showMessage } from "siyuan";
 import { svelteDialog } from "@/libs/dialog";
 import { sql } from "@/api";
-import { getBookComments, getBookHighlights, getBook, getBookBestHighlights } from "@/utils/weread/wereadInterface";
+import { getBookComments, getBookHighlights, getBook, getBookBestHighlights, getBookChapterInfos } from "@/utils/weread/wereadInterface";
 import { fetchBookHtml } from "@/utils/douban/book/getWebPage";
 import { fetchDoubanBook } from "@/utils/douban/book/fetchBook";
 import { loadAVData } from "@/utils/bookHandling/index";
 import { addUseBookIDsToDatabase } from "@/utils/weread/addUseBookIDs";
 import WereadNewBooks from "@/components/common/wereadNewBooksDialog.svelte";
+import PromiseLimitPool from "@/libs/promise-pool";
+import { updateEndBlocks } from "./updateWereadBlocks";
+import { saveIgnoredBooks, saveCustomBooksISBN, saveUseBookIDBooks } from "./wereadSyncStorage";
+import { logError } from "../core/logger";
+import type { WereadPluginLike, WereadBookDetail, SyncNotebookRecord, EnhancedSyncNotebookRecord } from "./types";
 
 type NoteContent = {
     formattedNote: string;
+    highlightText?: string;      // 划线文本（层级章节模板兼容）
+    highlightComment?: string;   // 划线评论/想法（层级章节模板兼容）
     createTime1?: string;
     createTime2?: string;
     createTime3?: string;
@@ -74,11 +81,20 @@ function formatTimestamp(timestamp: number, formatKey: string = 'createTime1'): 
     return result;
 }
 
-type ChapterContent = {
-    chapterTitle: string;
+// ========== 固定四级路径章节结构（新方案） ==========
+
+/** 扁平化章节项（单一章节模板模式） */
+type FlatChapterItem = {
+    chapterUid?: number;
+    chapterTitle1: string;
+    chapterTitle2: string;
+    chapterTitle3: string;
+    chapterTitle4: string;
     notes: NoteContent[];
     chapterComments: { content: string; createTime1: string; createTime2: string; createTime3: string; createTime4: string; createTime5: string; createTime6: string; createTime7: string; createTime8: string; createTime9: string; createTime10: string }[];
 };
+
+
 
 type TemplateVariables = {
     notebookTitle: string;
@@ -94,15 +110,27 @@ type TemplateVariables = {
     updateTime8: string;
     updateTime9: string;
     updateTime10: string;
-    chapters: ChapterContent[];
+    chapters: FlatChapterItem[];  // 扁平化章节项数组
     globalComments: { content: string; createTime1: string; createTime2: string; createTime3: string; createTime4: string; createTime5: string; createTime6: string; createTime7: string; createTime8: string; createTime9: string; createTime10: string }[];
     bookInfo: string;
     AISummary: string;
     bestHighlights: string[];
 };
 
-export async function syncWereadNotes(plugin: any, cookies: string, isupdate: boolean) {
-    const oldNotebooks = await plugin.loadData("weread_notebooks"); // 获取上一次的同步数据
+export async function syncWereadNotes(plugin: WereadPluginLike, cookies: string, isupdate: boolean, bookCache?: Map<string, Promise<WereadBookDetail>>) {
+    // 使用传入的缓存或创建新的局部缓存
+    const effectiveBookCache = bookCache ?? new Map<string, Promise<WereadBookDetail>>();
+    // 缓存读取包装函数
+    const getBookCached = (bookId: string) => {
+        if (effectiveBookCache.has(bookId)) {
+            return effectiveBookCache.get(bookId)!;
+        }
+        const promise = getBook(plugin, cookies, bookId);
+        effectiveBookCache.set(bookId, promise);
+        return promise;
+    };
+
+    const oldNotebooks: SyncNotebookRecord[] = await plugin.loadData("weread_notebooks") || []; // 获取上一次的同步数据
 
     // 若选择的是更新同步并且之前没有同步过则要求进行一次完整同步
     if (!oldNotebooks && isupdate) {
@@ -110,7 +138,7 @@ export async function syncWereadNotes(plugin: any, cookies: string, isupdate: bo
         return;
     }
 
-    let cloudNotebooksList = await getPersonalNotebooks(plugin); // 获取预加载的云端书籍笔记列表
+    let cloudNotebooksList: SyncNotebookRecord[] = await getPersonalNotebooks(plugin); // 获取预加载的云端书籍笔记列表
 
     // 获取插件配置并提取数据库ID
     const avID = (await sql(`SELECT * FROM blocks WHERE id = "${(await plugin.loadData("settings.json"))?.bookDatabaseID || ""}"`))[0]?.markdown?.match(/data-av-id="([^"]+)"/)?.[1] || ""; // 加载配置、查询数据库、提取avID
@@ -200,11 +228,11 @@ export async function syncWereadNotes(plugin: any, cookies: string, isupdate: bo
                                     // 通过bookID逐个获取所有书籍的详细信息并导入数据库
                                     for (const bookItem of useBookIDs) {
                                         try {
-                                            const bookDetail = await getBook(plugin, cookies, bookItem.bookID);
+                                            const bookDetail = await getBookCached(bookItem.bookID);
                                             await addUseBookIDsToDatabase(plugin, avID, bookDetail);
                                             importBooksNumber++; // 成功导入书籍数量增加
                                         } catch (error) {
-                                            console.error(`获取书籍 ${bookItem.bookID} 详细信息失败:`, error);
+                                            logError("weread/syncWereadNotes", `获取书籍 ${bookItem.bookID} 详细信息失败`, error);
                                         }
                                     }
                                 }
@@ -241,7 +269,7 @@ export async function syncWereadNotes(plugin: any, cookies: string, isupdate: bo
 
                                             importBooksNumber++; // 成功导入书籍数量增加
                                         } catch (error) {
-                                            console.error(`导入书籍 ${book.title} 失败:`, error); // 导入失败日志
+                                            logError("weread/syncWereadNotes", `导入书籍 ${book.title} 失败`, error);
                                             showMessage(`${plugin.i18n.showMessage40}《${book.title}》`); // "❌ 导入失败："
                                         }
                                     }
@@ -262,12 +290,12 @@ export async function syncWereadNotes(plugin: any, cookies: string, isupdate: bo
                                 try {
                                     await syncBooks(selectedBooks, useBookIDs);
                                 } catch (error) {
-                                    console.error("同步失败:", error);
+                                    logError("weread/syncWereadNotes", "同步失败", error);
                                     showMessage(plugin.i18n.showMessage33, 3000); // "同步失败，请检查控制台日志"
                                     return; // 退出函数，不继续执行后续操作
                                 }
                             } catch (error) {
-                                console.error("批量导入失败:", error);
+                                logError("weread/syncWereadNotes", "批量导入失败", error);
                                 showMessage(plugin.i18n.showMessage31, 3000); // "批量导入失败，请检查控制台日志"
                                 dialog.close(); // 关闭新增书籍弹窗
                                 return; // 退出函数，不继续执行后续操作
@@ -284,12 +312,12 @@ export async function syncWereadNotes(plugin: any, cookies: string, isupdate: bo
                                 try {
                                     await syncBooks();
                                 } catch (error) {
-                                    console.error("同步失败:", error);
+                                    logError("weread/syncWereadNotes", "同步失败", error);
                                     showMessage(plugin.i18n.showMessage33, 3000); // "同步失败，请检查控制台日志"
                                     return; // 退出函数，不继续执行后续操作
                                 }
                             } catch (error) {
-                                console.error("同步失败:", error);
+                                logError("weread/syncWereadNotes", "同步失败", error);
                                 showMessage(plugin.i18n.showMessage33, 3000); // "同步失败，请检查控制台日志"
                                 dialog.close(); // 关闭新增书籍弹窗
                                 return; // 退出函数，不继续执行后续操作
@@ -309,7 +337,7 @@ export async function syncWereadNotes(plugin: any, cookies: string, isupdate: bo
         try {
             await syncBooks();
         } catch (error) {
-            console.error("同步失败:", error);
+            logError("weread/syncWereadNotes", "同步失败", error);
             showMessage(plugin.i18n.showMessage33, 3000); // "同步失败，请检查控制台日志"
             return; // 退出函数，不继续执行后续操作
         }
@@ -473,16 +501,16 @@ export async function syncWereadNotes(plugin: any, cookies: string, isupdate: bo
             });
 
             // 为需要同步的书籍添加blockID
-            const booksToSync = booksNeedSync.map((book: any) => ({
+            const booksToSync: SyncNotebookRecord[] = booksNeedSync.map((book: any) => ({
                 ...book,
                 blockID: blockMap.get(book.isbn?.toString()) || blockMap.get(book.bookID?.toString()) || null
             }));
 
             // 执行同步
-            await syncNotesProcess(plugin, cookies, booksToSync);
+            await syncNotesProcess(plugin, cookies, booksToSync, bookCache);
 
             // 更新本地存储的同步记录
-            const updatedNotebooks = awaitSyncBooksList.map((book: any) => ({
+            const updatedNotebooks: SyncNotebookRecord[] = awaitSyncBooksList.map((book: any) => ({
                 ...book,
                 blockID: blockMap.get(book.isbn?.toString()) || blockMap.get(book.bookID?.toString()) || null
             }));
@@ -505,16 +533,16 @@ export async function syncWereadNotes(plugin: any, cookies: string, isupdate: bo
             });
 
             // 为所有需要同步的书籍添加blockID
-            const booksToSync = awaitSyncBooksList.map((book: any) => ({
+            const booksToSync: SyncNotebookRecord[] = awaitSyncBooksList.map((book: any) => ({
                 ...book,
                 blockID: blockMap.get(book.isbn?.toString()) || blockMap.get(book.bookID?.toString()) || null
             }));
 
             // 执行同步
-            await syncNotesProcess(plugin, cookies, booksToSync);
+            await syncNotesProcess(plugin, cookies, booksToSync, bookCache);
 
             // 更新本地存储的同步记录
-            const updatedNotebooks = awaitSyncBooksList.map((book: any) => ({
+            const updatedNotebooks: SyncNotebookRecord[] = awaitSyncBooksList.map((book: any) => ({
                 ...book,
                 blockID: blockMap.get(book.isbn?.toString()) || blockMap.get(book.bookID?.toString()) || null
             }));
@@ -526,7 +554,509 @@ export async function syncWereadNotes(plugin: any, cookies: string, isupdate: bo
     }
 }
 
-async function syncNotesProcess(plugin: any, cookies: string, notebooks: any): Promise<void> {
+const NOTEBOOK_ENHANCE_CONCURRENCY = 3;
+
+// ========== 章节目录层级重建（第二步新增） ==========
+
+/** 章节层级节点 */
+interface ChapterHierarchyNode {
+    chapterUid: number;
+    chapterIdx: number;
+    title: string;
+    level: number;
+    children: ChapterHierarchyNode[];
+    parentUid: number | null;
+}
+
+/** 章节层级结构 */
+interface ChapterHierarchy {
+    rootChapters: ChapterHierarchyNode[];
+    nodeByUid: Map<number, ChapterHierarchyNode>;
+    parentUidByUid: Map<number, number | null>;
+}
+
+/**
+ * 从平铺目录数据重建章节层级结构
+ * 使用栈式算法处理任意层级（当前主要支持 level 1/2）
+ */
+function buildChapterHierarchy(chapterInfos: { updated?: Array<{ chapterUid: number; chapterIdx: number; title: string; level: number }> } | null): ChapterHierarchy {
+    const emptyResult: ChapterHierarchy = {
+        rootChapters: [],
+        nodeByUid: new Map(),
+        parentUidByUid: new Map()
+    };
+
+    if (!chapterInfos?.updated || !Array.isArray(chapterInfos.updated) || chapterInfos.updated.length === 0) {
+        return emptyResult;
+    }
+
+    const rootChapters: ChapterHierarchyNode[] = [];
+    const nodeByUid = new Map<number, ChapterHierarchyNode>();
+    const parentUidByUid = new Map<number, number | null>();
+    
+    // 使用栈来追踪当前路径上的节点（按层级）
+    // stack[level] = 该层级最后一个遇到的节点
+    const stack: (ChapterHierarchyNode | null)[] = [];
+
+    for (const item of chapterInfos.updated) {
+        const node: ChapterHierarchyNode = {
+            chapterUid: item.chapterUid,
+            chapterIdx: item.chapterIdx,
+            title: item.title,
+            level: item.level,
+            children: [],
+            parentUid: null
+        };
+
+        // 清理栈中比当前层级更深或同级的节点
+        // 栈只需要保留到当前 level - 1 的节点
+        for (let i = stack.length - 1; i >= item.level; i--) {
+            stack[i] = null;
+        }
+
+        // 找父节点：栈中 item.level - 1 位置的节点
+        const parentLevel = item.level - 1;
+        const parentNode = parentLevel >= 0 && parentLevel < stack.length ? stack[parentLevel] : null;
+
+        if (parentNode) {
+            // 有父节点，建立父子关系
+            node.parentUid = parentNode.chapterUid;
+            parentNode.children.push(node);
+            parentUidByUid.set(node.chapterUid, parentNode.chapterUid);
+        } else {
+            // 没有父节点，作为根节点
+            rootChapters.push(node);
+            parentUidByUid.set(node.chapterUid, null);
+        }
+
+        // 将当前节点放入栈的对应位置
+        stack[item.level] = node;
+        // 清理更深层的位置
+        for (let i = item.level + 1; i < stack.length; i++) {
+            stack[i] = null;
+        }
+
+        nodeByUid.set(node.chapterUid, node);
+    }
+
+    return {
+        rootChapters,
+        nodeByUid,
+        parentUidByUid
+    };
+}
+
+/**
+ * 构建多级路径章节数据（主方案）
+ * 将层级树转换为 chapters 结构：一级章 + 最多四级标题路径
+ */
+/**
+ * 构建扁平化章节项数组
+ * 每个具体章节节点对应一个 FlatChapterItem，包含完整标题路径、直属笔记和章节评论
+ */
+function buildFlatChapters(
+    hierarchy: ChapterHierarchy,
+    highlightsByChapter: Map<number, any[]>,
+    chapterComments: Map<number, any[]>,
+    abstractComments: Map<string, any[]>,
+    notesTemplate: string,
+    notebookTitle: string
+): FlatChapterItem[] {
+    const result: FlatChapterItem[] = [];
+
+    // 辅助函数：构建单个节点的笔记
+    function buildNodeNotes(chapterUid: number, chapterTitle: string): NoteContent[] {
+        const highlights = highlightsByChapter.get(chapterUid) || [];
+        return highlights.map(highlight => {
+            const key = `${highlight.chapterUid}_${highlight.range}`;
+            const linkedComments = abstractComments.get(key) || [];
+            const commentText = linkedComments.map((c: any) => c.content).join('\n> 💬 ');
+
+            return {
+                formattedNote: formatNote(notesTemplate, { ...highlight, commentText, chapterTitle }, notebookTitle),
+                highlightText: highlight.markText || '',
+                highlightComment: commentText,
+                createTime1: formatTimestamp(highlight.createTime, 'createTime1'),
+                createTime2: formatTimestamp(highlight.createTime, 'createTime2'),
+                createTime3: formatTimestamp(highlight.createTime, 'createTime3'),
+                createTime4: formatTimestamp(highlight.createTime, 'createTime4'),
+                createTime5: formatTimestamp(highlight.createTime, 'createTime5'),
+                createTime6: formatTimestamp(highlight.createTime, 'createTime6'),
+                createTime7: formatTimestamp(highlight.createTime, 'createTime7'),
+                createTime8: formatTimestamp(highlight.createTime, 'createTime8'),
+                createTime9: formatTimestamp(highlight.createTime, 'createTime9'),
+                createTime10: formatTimestamp(highlight.createTime, 'createTime10'),
+            };
+        });
+    }
+
+    // 辅助函数：构建章节评论
+    function buildNodeComments(chapterUid: number) {
+        const comments = chapterComments.get(chapterUid) || [];
+        return comments.map(comment => ({
+            content: comment.content || '',
+            createTime1: formatTimestamp(comment.createTime, 'createTime1'),
+            createTime2: formatTimestamp(comment.createTime, 'createTime2'),
+            createTime3: formatTimestamp(comment.createTime, 'createTime3'),
+            createTime4: formatTimestamp(comment.createTime, 'createTime4'),
+            createTime5: formatTimestamp(comment.createTime, 'createTime5'),
+            createTime6: formatTimestamp(comment.createTime, 'createTime6'),
+            createTime7: formatTimestamp(comment.createTime, 'createTime7'),
+            createTime8: formatTimestamp(comment.createTime, 'createTime8'),
+            createTime9: formatTimestamp(comment.createTime, 'createTime9'),
+            createTime10: formatTimestamp(comment.createTime, 'createTime10'),
+        }));
+    }
+
+    // 辅助函数：递归处理章节树，为每个节点生成 FlatChapterItem
+    function processNode(
+        node: ChapterHierarchyNode,
+        path: string[]
+    ) {
+        const currentPath = [...path, node.title];
+        const notes = buildNodeNotes(node.chapterUid, node.title);
+        const comments = buildNodeComments(node.chapterUid);
+
+        // 确定各级标题（最多四级，超过的拼接到第四级）
+        let title1 = '';
+        let title2 = '';
+        let title3 = '';
+        let title4 = '';
+
+        if (currentPath.length >= 1) title1 = currentPath[0];
+        if (currentPath.length >= 2) title2 = currentPath[1];
+        if (currentPath.length >= 3) title3 = currentPath[2];
+        if (currentPath.length >= 4) {
+            // 超过四级：将剩余路径拼接到第四级
+            const remaining = currentPath.slice(3);
+            title4 = remaining.join(' / ');
+        }
+
+        // 只有有内容时才生成章节项
+        if (notes.length > 0 || comments.length > 0) {
+            result.push({
+                chapterUid: node.chapterUid,
+                chapterTitle1: title1,
+                chapterTitle2: title2,
+                chapterTitle3: title3,
+                chapterTitle4: title4,
+                notes: notes,
+                chapterComments: comments,
+            });
+        }
+
+        // 递归处理子节点
+        if (node.children && node.children.length > 0) {
+            for (const child of node.children) {
+                processNode(child, currentPath);
+            }
+        }
+    }
+
+    // 处理每个一级章节（根节点）
+    for (const rootNode of hierarchy.rootChapters) {
+        processNode(rootNode, []);
+    }
+
+    return result;
+}
+
+// 将划线按章节分组
+function groupHighlightsByChapter(highlights: any): Map<number, any[]> {
+    const highlightsByChapter = new Map();
+    if (highlights?.updated && Array.isArray(highlights.updated)) {
+        highlights.updated.forEach(h => {
+            const chapterUid = h.chapterUid;
+            if (!highlightsByChapter.has(chapterUid)) {
+                highlightsByChapter.set(chapterUid, []);
+            }
+            highlightsByChapter.get(chapterUid).push(h);
+        });
+    }
+    return highlightsByChapter;
+}
+
+// 分类评论：正文评论和章节评论
+// 规则：优先判断 range，有 range 的是划线评论；没有 range 的是章节评论
+function classifyComments(comments: any[]): { 
+    abstractComments: Map<string, any[]>; 
+    chapterComments: Map<number, any[]>; 
+} {
+    const abstractComments = new Map();
+    const chapterComments = new Map();
+
+    comments.forEach((comment: any) => {
+        const review = comment.review;
+        // 优先判断 range：有 range 的是划线评论
+        if (review.range) {
+            const key = `${review.chapterUid}_${review.range}`;
+            if (!abstractComments.has(key)) {
+                abstractComments.set(key, []);
+            }
+            abstractComments.get(key).push(review);
+        } else if (review.chapterUid) {
+            // 没有 range 但有 chapterUid 的是章节评论
+            if (!chapterComments.has(review.chapterUid)) {
+                chapterComments.set(review.chapterUid, []);
+            }
+            chapterComments.get(review.chapterUid).push(review);
+        }
+    });
+
+    return { abstractComments, chapterComments };
+}
+
+/**
+ * 格式化单条笔记（用于层级章节构建）
+ * 简化版：只处理基础模板替换
+ */
+function formatNote(notesTemplate: string, highlight: any, notebookTitle: string): string {
+    return notesTemplate
+        .replace(/\{\{highlightText\}\}/g, highlight.markText || '')
+        .replace(/\{\{highlightComment\}\}/g, highlight.commentText || '')
+        .replace(/\{\{createTime1\}\}/g, formatTimestamp(highlight.createTime, 'createTime1'))
+        .replace(/\{\{createTime2\}\}/g, formatTimestamp(highlight.createTime, 'createTime2'))
+        .replace(/\{\{createTime3\}\}/g, formatTimestamp(highlight.createTime, 'createTime3'))
+        .replace(/\{\{createTime4\}\}/g, formatTimestamp(highlight.createTime, 'createTime4'))
+        .replace(/\{\{createTime5\}\}/g, formatTimestamp(highlight.createTime, 'createTime5'))
+        .replace(/\{\{createTime6\}\}/g, formatTimestamp(highlight.createTime, 'createTime6'))
+        .replace(/\{\{createTime7\}\}/g, formatTimestamp(highlight.createTime, 'createTime7'))
+        .replace(/\{\{createTime8\}\}/g, formatTimestamp(highlight.createTime, 'createTime8'))
+        .replace(/\{\{createTime9\}\}/g, formatTimestamp(highlight.createTime, 'createTime9'))
+        .replace(/\{\{createTime10\}\}/g, formatTimestamp(highlight.createTime, 'createTime10'))
+        .replace(/\{\{chapterTitle\}\}/g, highlight.chapterTitle || '')
+        .replace(/\{\{notebookTitle\}\}/g, notebookTitle);
+}
+
+/**
+ * 渲染笔记模板，在没有评论时删除包含 {{highlightComment}} 的整行
+ * 与旧 chapters 路径的行为保持一致
+ */
+function renderNoteTemplateWithOptionalComment(
+    notesTemplate: string,
+    note: {
+        highlightText?: string;
+        highlightComment?: string;
+        createTime1?: string;
+        createTime2?: string;
+        createTime3?: string;
+        createTime4?: string;
+        createTime5?: string;
+        createTime6?: string;
+        createTime7?: string;
+        createTime8?: string;
+        createTime9?: string;
+        createTime10?: string;
+    }
+): string {
+    const hasComment = !!(note.highlightComment && note.highlightComment.trim());
+    const lines = notesTemplate.split('\n');
+
+    const renderedLines = lines
+        .map(line => {
+            // 如果没有评论，且该行包含 {{highlightComment}}，则删除整行
+            if (!hasComment && line.includes('{{highlightComment}}')) {
+                return null;
+            }
+            // 正常替换所有变量
+            return line
+                .replace(/\{\{highlightText\}\}/g, note.highlightText || '')
+                .replace(/\{\{highlightComment\}\}/g, note.highlightComment || '')
+                .replace(/\{\{createTime1\}\}/g, note.createTime1 || '')
+                .replace(/\{\{createTime2\}\}/g, note.createTime2 || '')
+                .replace(/\{\{createTime3\}\}/g, note.createTime3 || '')
+                .replace(/\{\{createTime4\}\}/g, note.createTime4 || '')
+                .replace(/\{\{createTime5\}\}/g, note.createTime5 || '')
+                .replace(/\{\{createTime6\}\}/g, note.createTime6 || '')
+                .replace(/\{\{createTime7\}\}/g, note.createTime7 || '')
+                .replace(/\{\{createTime8\}\}/g, note.createTime8 || '')
+                .replace(/\{\{createTime9\}\}/g, note.createTime9 || '')
+                .replace(/\{\{createTime10\}\}/g, note.createTime10 || '');
+        })
+        .filter((line): line is string => line !== null && line.trim() !== '');
+
+    return renderedLines.join('\n');
+}
+
+/**
+ * 生成“显示用章节数组”，对连续祖先标题进行去重
+ * 规则：与前一项比较，前缀连续相同的标题置为空字符串
+ */
+function generateDedupedDisplayChapters(chapters: FlatChapterItem[]): FlatChapterItem[] {
+    if (chapters.length === 0) return [];
+
+    const result: FlatChapterItem[] = [];
+    let prev: FlatChapterItem | null = null;
+
+    for (const curr of chapters) {
+        // 深拷贝当前项，避免修改原始数据
+        const displayItem: FlatChapterItem = {
+            ...curr,
+            chapterComments: [...curr.chapterComments],
+            notes: [...curr.notes],
+        };
+
+        if (prev) {
+            // 规则1：如果 chapterTitle1 相同，置为空
+            if (prev.chapterTitle1 === curr.chapterTitle1) {
+                displayItem.chapterTitle1 = '';
+
+                // 规则2：如果 chapterTitle1 和 chapterTitle2 都相同，且当前 chapterTitle2 非空
+                if (prev.chapterTitle2 === curr.chapterTitle2 && curr.chapterTitle2) {
+                    displayItem.chapterTitle2 = '';
+
+                    // 规则3：如果 chapterTitle1/2/3 都相同，且当前 chapterTitle3 非空
+                    if (prev.chapterTitle3 === curr.chapterTitle3 && curr.chapterTitle3) {
+                        displayItem.chapterTitle3 = '';
+
+                        // 规则4：如果 chapterTitle1/2/3/4 都相同，且当前 chapterTitle4 非空
+                        if (prev.chapterTitle4 === curr.chapterTitle4 && curr.chapterTitle4) {
+                            displayItem.chapterTitle4 = '';
+                        }
+                    }
+                }
+            }
+        }
+
+        result.push(displayItem);
+        prev = curr; // 注意：prev 指向原始数据，不是 displayItem
+    }
+
+    return result;
+}
+
+// 渲染微信读书笔记模板（单一扁平 chapters 模式）
+function renderWereadTemplate(template: string, variables: TemplateVariables): string {
+    return template
+        // 扁平化章节渲染
+        .replace(/\{\{#chapters\}\}([\s\S]*?)\{\{\/chapters\}\}/g, (_, chapterTpl) => {
+            if (!variables.chapters || variables.chapters.length === 0) return '';
+
+            // 生成“显示用章节数组”，对连续祖先标题进行去重
+            const displayChapters = generateDedupedDisplayChapters(variables.chapters);
+
+            return displayChapters.map(flatItem => {
+                let itemResult = chapterTpl;
+
+                // 1. 渲染 chapterTitle 块（同时处理 1~4 级标题）
+                itemResult = itemResult.replace(/\{\{#chapterTitle\}\}([\s\S]*?)\{\{\/chapterTitle\}\}/g, (_, titleTpl) => {
+                    let titleResult = titleTpl;
+                    if (flatItem.chapterTitle1) titleResult = titleResult.replace(/\{\{chapterTitle1\}\}/g, flatItem.chapterTitle1);
+                    if (flatItem.chapterTitle2) titleResult = titleResult.replace(/\{\{chapterTitle2\}\}/g, flatItem.chapterTitle2);
+                    if (flatItem.chapterTitle3) titleResult = titleResult.replace(/\{\{chapterTitle3\}\}/g, flatItem.chapterTitle3);
+                    if (flatItem.chapterTitle4) titleResult = titleResult.replace(/\{\{chapterTitle4\}\}/g, flatItem.chapterTitle4);
+                    // 删除包含未替换的 {{chapterTitleX}} 变量的整行
+                    titleResult = titleResult.split('\n').filter(line => !line.match(/\{\{chapterTitle[1-4]\}\}/)).join('\n');
+                    return titleResult;
+                });
+
+                // 2. 渲染 chapterComments（由模板位置决定前后顺序）
+                itemResult = itemResult.replace(/\{\{#chapterComments\}\}([\s\S]*?)\{\{\/chapterComments\}\}/g, (_, commentsTpl) => {
+                    if (!flatItem.chapterComments || flatItem.chapterComments.length === 0) return '';
+                    return flatItem.chapterComments.map(c => {
+                        return commentsTpl
+                            .replace(/\{\{chapterComments\}\}/g, c.content)
+                            .replace(/\{\{createTime1\}\}/g, c.createTime1)
+                            .replace(/\{\{createTime2\}\}/g, c.createTime2)
+                            .replace(/\{\{createTime3\}\}/g, c.createTime3)
+                            .replace(/\{\{createTime4\}\}/g, c.createTime4)
+                            .replace(/\{\{createTime5\}\}/g, c.createTime5)
+                            .replace(/\{\{createTime6\}\}/g, c.createTime6)
+                            .replace(/\{\{createTime7\}\}/g, c.createTime7)
+                            .replace(/\{\{createTime8\}\}/g, c.createTime8)
+                            .replace(/\{\{createTime9\}\}/g, c.createTime9)
+                            .replace(/\{\{createTime10\}\}/g, c.createTime10);
+                    }).join('\n\n');
+                });
+
+                // 3. 渲染 notes
+                itemResult = itemResult.replace(/\{\{#notes\}\}([\s\S]*?)\{\{\/notes\}\}/g, (_, notesTpl) => {
+                    if (!flatItem.notes || flatItem.notes.length === 0) return '';
+                    return flatItem.notes.map(note => {
+                        return renderNoteTemplateWithOptionalComment(notesTpl, note);
+                    }).join('\n');
+                });
+
+                return itemResult;
+            }).join('\n');
+        })
+        .replace(/\{\{#globalComments\}\}([\s\S]*?)\{\{\/globalComments\}\}/g, (_, commentsTpl) => {
+            if (!variables.globalComments || variables.globalComments.length === 0) return '';
+            const formattedComments = variables.globalComments.map(c => {
+                return commentsTpl
+                    .replace(/\{\{globalComments\}\}/g, c.content)
+                    .replace(/\{\{createTime1\}\}/g, c.createTime1)
+                    .replace(/\{\{createTime2\}\}/g, c.createTime2)
+                    .replace(/\{\{createTime3\}\}/g, c.createTime3)
+                    .replace(/\{\{createTime4\}\}/g, c.createTime4)
+                    .replace(/\{\{createTime5\}\}/g, c.createTime5)
+                    .replace(/\{\{createTime6\}\}/g, c.createTime6)
+                    .replace(/\{\{createTime7\}\}/g, c.createTime7)
+                    .replace(/\{\{createTime8\}\}/g, c.createTime8)
+                    .replace(/\{\{createTime9\}\}/g, c.createTime9)
+                    .replace(/\{\{createTime10\}\}/g, c.createTime10);
+            });
+            return formattedComments.join('\n\n');
+        })
+        .replace(/\{\{#bookInfo\}\}([\s\S]*?)\{\{\/bookInfo\}\}/g, (_, section) => {
+            return variables.bookInfo ? section.replace(/\{\{bookInfo\}\}/g, variables.bookInfo) : '';
+        })
+        .replace(/\{\{#AISummary\}\}([\s\S]*?)\{\{\/AISummary\}\}/g, (_, section) => {
+            return variables.AISummary ? section.replace(/\{\{AISummary\}\}/g, variables.AISummary) : '';
+        })
+        .replace(/\{\{#bestHighlights\}\}([\s\S]*?)\{\{\/bestHighlights\}\}/g, (_, section) => {
+            return variables.bestHighlights.length > 0
+                ? variables.bestHighlights.map(highlight =>
+                    section.replace(/\{\{bestHighlight\}\}/g, highlight)
+                ).join('\n')
+                : '';
+        })
+        .replace(/\{\{(\w+)\}\}/g, (_, key) => (variables as any)[key] || '');
+}
+
+// 构建模板变量
+function buildTemplateVariables(
+    notebook: any,
+    comments: any[],
+    chapters: FlatChapterItem[] = []
+): TemplateVariables {
+    return {
+        notebookTitle: notebook.title,
+        isbn: notebook.isbn,
+        updateTime: new Date(notebook.updatedTime * 1000).toLocaleString(),
+        updateTime1: formatTimestamp(notebook.updatedTime, 'createTime1'),
+        updateTime2: formatTimestamp(notebook.updatedTime, 'createTime2'),
+        updateTime3: formatTimestamp(notebook.updatedTime, 'createTime3'),
+        updateTime4: formatTimestamp(notebook.updatedTime, 'createTime4'),
+        updateTime5: formatTimestamp(notebook.updatedTime, 'createTime5'),
+        updateTime6: formatTimestamp(notebook.updatedTime, 'createTime6'),
+        updateTime7: formatTimestamp(notebook.updatedTime, 'createTime7'),
+        updateTime8: formatTimestamp(notebook.updatedTime, 'createTime8'),
+        updateTime9: formatTimestamp(notebook.updatedTime, 'createTime9'),
+        updateTime10: formatTimestamp(notebook.updatedTime, 'createTime10'),
+        chapters: chapters,  // 扁平化章节项数组
+        globalComments: comments
+            .filter(c => !c.review.abstract && !c.review.contextAbstract)
+            .map(c => ({
+                content: c.review.content,
+                createTime1: formatTimestamp(c.review.createTime, 'createTime1'),
+                createTime2: formatTimestamp(c.review.createTime, 'createTime2'),
+                createTime3: formatTimestamp(c.review.createTime, 'createTime3'),
+                createTime4: formatTimestamp(c.review.createTime, 'createTime4'),
+                createTime5: formatTimestamp(c.review.createTime, 'createTime5'),
+                createTime6: formatTimestamp(c.review.createTime, 'createTime6'),
+                createTime7: formatTimestamp(c.review.createTime, 'createTime7'),
+                createTime8: formatTimestamp(c.review.createTime, 'createTime8'),
+                createTime9: formatTimestamp(c.review.createTime, 'createTime9'),
+                createTime10: formatTimestamp(c.review.createTime, 'createTime10')
+            })),
+        bookInfo: notebook.bookDetails?.intro || '',
+        AISummary: notebook.bookDetails?.AISummary || '',
+        bestHighlights: notebook.bestHighlights?.bestBookMarks?.items?.map((item: any) => item.markText) || []
+    };
+}
+
+async function syncNotesProcess(plugin: WereadPluginLike, cookies: string, notebooks: SyncNotebookRecord[], bookCache?: Map<string, Promise<WereadBookDetail>>): Promise<void> {
     // 加载微信读书笔记同步模板
     const template = await plugin.loadData("weread_templates");
     // 检查模板
@@ -535,16 +1065,30 @@ async function syncNotesProcess(plugin: any, cookies: string, notebooks: any): P
         return;
     }
 
-    // 并行获取所有书籍的划线和评论
-    const enhancedNotebooks = await Promise.all(
-        notebooks.map(async (notebook: any) => ({
+    // 使用传入的缓存或创建新的局部缓存
+    const effectiveBookCache = bookCache ?? new Map<string, Promise<WereadBookDetail>>();
+    const getBookCached = (bookId: string) => {
+        if (effectiveBookCache.has(bookId)) {
+            return effectiveBookCache.get(bookId)!;
+        }
+        const promise = getBook(plugin, cookies, bookId);
+        effectiveBookCache.set(bookId, promise);
+        return promise;
+    };
+
+    // 并发获取所有书籍的划线、评论和目录信息
+    const pool = new PromiseLimitPool<EnhancedSyncNotebookRecord>(NOTEBOOK_ENHANCE_CONCURRENCY);
+    for (const notebook of notebooks) {
+        pool.add(async () => ({
             ...notebook,
             highlights: await getBookHighlights(plugin, cookies, notebook.bookID),
             comments: await getBookComments(plugin, cookies, notebook.bookID),
-            bookDetails: await getBook(plugin, cookies, notebook.bookID),
-            bestHighlights: await getBookBestHighlights(plugin, cookies, notebook.bookID)
-        }))
-    );
+            bookDetails: await getBookCached(notebook.bookID),
+            bestHighlights: await getBookBestHighlights(plugin, cookies, notebook.bookID),
+            chapterInfos: await getBookChapterInfos(plugin, cookies, notebook.bookID)
+        }));
+    }
+    const enhancedNotebooks: EnhancedSyncNotebookRecord[] = await pool.awaitAll();
 
     // 并行处理所有书籍的更新
     const updatePromises = enhancedNotebooks
@@ -552,376 +1096,33 @@ async function syncNotesProcess(plugin: any, cookies: string, notebooks: any): P
         .map(async notebook => {
             try {
                 const highlights = notebook.highlights;
-                const chapterMap = new Map();
+                const comments = notebook.comments?.reviews || [];
 
-                // 从划线笔记中获取章节信息
-                if (highlights.chapters && Array.isArray(highlights.chapters)) {
-                    highlights.chapters.forEach(chapter => {
-                        chapterMap.set(chapter.chapterUid, {
-                            title: chapter.title,
-                            chapterIdx: chapter.chapterIdx
-                        });
-                    });
-                }
+                // 使用纯数据函数构建章节信息
+                const highlightsByChapter = groupHighlightsByChapter(highlights);
+                const { abstractComments, chapterComments } = classifyComments(comments);
 
-                // 从评论中提取章节信息（处理只有评论没有划线的情况）
-                const comments = notebook.comments?.reviews;
-                if (comments && Array.isArray(comments)) {
-                    comments.forEach((comment: any) => {
-                        const review = comment.review;
-                        if (review.chapterUid && !chapterMap.has(review.chapterUid)) {
-                            // 如果章节信息不存在，创建一个新的章节条目
-                            chapterMap.set(review.chapterUid, {
-                                title: review.chapterTitle || `章节 ${review.chapterUid}`,
-                                chapterIdx: review.chapterIdx || review.chapterUid || 0
-                            });
-                        }
-                    });
-                }
+                const notesTemplateMatch = template.match(/\{\{#notes\}\}([\s\S]*?)\{\{\/notes\}\}/);
+                // 兜底模板使用与 formatNote 一致的字段协议
+                const notesTemplate = notesTemplateMatch ? notesTemplateMatch[1] : `- {{highlightText}}\n> 💬 {{highlightComment}}\n- {{createTime7}}`;
 
-                const highlightsByChapter = new Map();
-                if (highlights?.updated && Array.isArray(highlights.updated)) {
-                    highlights.updated.forEach(h => {
-                        const chapterUid = h.chapterUid;
-                        if (!highlightsByChapter.has(chapterUid)) {
-                            highlightsByChapter.set(chapterUid, []);
-                        }
-                        highlightsByChapter.get(chapterUid).push(h);
-                    });
-                }
+                // 构建层级章节结构
+                const hierarchy = buildChapterHierarchy(notebook.chapterInfos);
 
-                const chapterComments = new Map();
+                // 构建扁平化章节结构
+                const chapters = hierarchy.rootChapters.length > 0
+                    ? buildFlatChapters(
+                        hierarchy,
+                        highlightsByChapter,
+                        chapterComments,
+                        abstractComments,
+                        notesTemplate,
+                        notebook.title
+                    )
+                    : [];
 
-                // 首先收集所有有abstract的评论（正文评论）
-                const allAbstractComments = new Map();
-                comments.forEach((comment: any) => {
-                    const review = comment.review;
-                    if (review.abstract) {
-                        const key = `${review.chapterUid}_${review.range}`;
-                        if (!allAbstractComments.has(key)) {
-                            allAbstractComments.set(key, []);
-                        }
-                        allAbstractComments.get(key).push(review);
-                    } else if (!review.range) {
-                        // 没有abstract且没有range的是章节评论
-                        if (!chapterComments.has(review.chapterUid)) {
-                            chapterComments.set(review.chapterUid, []);
-                        }
-                        chapterComments.get(review.chapterUid).push(review);
-                    }
-                });
-
-                const chaptersData: ChapterContent[] = Array.from(chapterMap.entries())
-                    .sort((a, b) => a[1].chapterIdx - b[1].chapterIdx)
-                    .map(([chapterUid, chapterInfo]) => {
-                        const chapterHighlights = highlightsByChapter.get(chapterUid) || [];
-                        const sortedHighlights = chapterHighlights.sort((a, b) => {
-                            const getStart = (range) => parseInt((range || '').split('-')[0]) || 0;
-                            return getStart(a.range) - getStart(b.range);
-                        });
-
-                        const chapterEndComments = (chapterComments.get(chapterUid) || [])
-                            .map(c => {
-                                return {
-                                    content: c.content,
-                                    createTime1: formatTimestamp(c.createTime, 'createTime1'),
-                                    createTime2: formatTimestamp(c.createTime, 'createTime2'),
-                                    createTime3: formatTimestamp(c.createTime, 'createTime3'),
-                                    createTime4: formatTimestamp(c.createTime, 'createTime4'),
-                                    createTime5: formatTimestamp(c.createTime, 'createTime5'),
-                                    createTime6: formatTimestamp(c.createTime, 'createTime6'),
-                                    createTime7: formatTimestamp(c.createTime, 'createTime7'),
-                                    createTime8: formatTimestamp(c.createTime, 'createTime8'),
-                                    createTime9: formatTimestamp(c.createTime, 'createTime9'),
-                                    createTime10: formatTimestamp(c.createTime, 'createTime10')
-                                };
-                            });
-
-                        const notesTemplateMatch = template.match(/\{\{#notes\}\}([\s\S]*?)\{\{\/notes\}\}/);
-                        const notesTemplate = notesTemplateMatch ? notesTemplateMatch[1] : `- {{markText}}\n> 💬 {{content}}`;
-
-                        // 收集所有笔记（划线+评论），保持它们在原文中的相对顺序
-                        const allNotes = [];
-
-                        // 1. 先收集所有划线笔记（包括有评论和无评论的）
-                        sortedHighlights.forEach(h => {
-                            const comments = allAbstractComments.get(`${h.chapterUid}_${h.range}`) || [];
-
-                            if (comments.length > 0) {
-                                // 有匹配的评论（划线+评论），取最新评论时间
-                                const latestCommentTime = Math.max(...comments.map(c => c.createTime || 0));
-                                allNotes.push({
-                                    type: 'highlight_with_comments',
-                                    highlight: h,
-                                    comments: comments,
-                                    range: h.range,
-                                    createTime1: formatTimestamp(latestCommentTime, 'createTime1'),
-                                    createTime2: formatTimestamp(latestCommentTime, 'createTime2'),
-                                    createTime3: formatTimestamp(latestCommentTime, 'createTime3'),
-                                    createTime4: formatTimestamp(latestCommentTime, 'createTime4'),
-                                    createTime5: formatTimestamp(latestCommentTime, 'createTime5'),
-                                    createTime6: formatTimestamp(latestCommentTime, 'createTime6'),
-                                    createTime7: formatTimestamp(latestCommentTime, 'createTime7'),
-                                    createTime8: formatTimestamp(latestCommentTime, 'createTime8'),
-                                    createTime9: formatTimestamp(latestCommentTime, 'createTime9'),
-                                    createTime10: formatTimestamp(latestCommentTime, 'createTime10')
-                                });
-
-                                // 标记这个评论已经匹配
-                                allAbstractComments.delete(`${h.chapterUid}_${h.range}`);
-                            } else {
-                                // 纯划线笔记，使用划线时间
-                                allNotes.push({
-                                    type: 'highlight_only',
-                                    highlight: h,
-                                    range: h.range,
-                                    createTime1: formatTimestamp(h.createTime, 'createTime1'),
-                                    createTime2: formatTimestamp(h.createTime, 'createTime2'),
-                                    createTime3: formatTimestamp(h.createTime, 'createTime3'),
-                                    createTime4: formatTimestamp(h.createTime, 'createTime4'),
-                                    createTime5: formatTimestamp(h.createTime, 'createTime5'),
-                                    createTime6: formatTimestamp(h.createTime, 'createTime6'),
-                                    createTime7: formatTimestamp(h.createTime, 'createTime7'),
-                                    createTime8: formatTimestamp(h.createTime, 'createTime8'),
-                                    createTime9: formatTimestamp(h.createTime, 'createTime9'),
-                                    createTime10: formatTimestamp(h.createTime, 'createTime10')
-                                });
-                            }
-                        });
-
-                        // 2. 收集未匹配到划线的评论（只评论笔记）
-                        allAbstractComments.forEach((comments, key) => {
-                            const [commentChapterUid, commentRange] = key.split('_');
-
-                            if (commentChapterUid == chapterUid) {
-                                comments.forEach(comment => {
-                                    allNotes.push({
-                                        type: 'comment_only',
-                                        comment: comment,
-                                        range: commentRange,
-                                        createTime1: formatTimestamp(comment.createTime, 'createTime1'),
-                                        createTime2: formatTimestamp(comment.createTime, 'createTime2'),
-                                        createTime3: formatTimestamp(comment.createTime, 'createTime3'),
-                                        createTime4: formatTimestamp(comment.createTime, 'createTime4'),
-                                        createTime5: formatTimestamp(comment.createTime, 'createTime5'),
-                                        createTime6: formatTimestamp(comment.createTime, 'createTime6'),
-                                        createTime7: formatTimestamp(comment.createTime, 'createTime7'),
-                                        createTime8: formatTimestamp(comment.createTime, 'createTime8'),
-                                        createTime9: formatTimestamp(comment.createTime, 'createTime9'),
-                                        createTime10: formatTimestamp(comment.createTime, 'createTime10')
-                                    });
-                                });
-                            }
-                        });
-
-                        // 3. 按 range 统一排序所有笔记
-                        allNotes.sort((a, b) => {
-                            const getStart = (range) => parseInt((range || '').split('-')[0]) || 0;
-                            return getStart(a.range) - getStart(b.range);
-                        });
-
-                        // 4. 统一渲染所有笔记
-                        const notesData = allNotes.map(note => {
-                            const lines = notesTemplate.split('\n');
-                            let renderedLines;
-
-                            switch (note.type) {
-                                case 'highlight_only':
-                                    // 纯划线笔记
-                                    renderedLines = lines
-                                        .map(line => {
-                                            if (line.includes('{{highlightComment}}')) {
-                                                return null;
-                                            }
-                                            return line.replace(/{{highlightText}}/g, note.highlight.markText)
-                                                .replace(/{{createTime1}}/g, note.createTime1 || '')
-                                                .replace(/{{createTime2}}/g, note.createTime2 || '')
-                                                .replace(/{{createTime3}}/g, note.createTime3 || '')
-                                                .replace(/{{createTime4}}/g, note.createTime4 || '')
-                                                .replace(/{{createTime5}}/g, note.createTime5 || '')
-                                                .replace(/{{createTime6}}/g, note.createTime6 || '')
-                                                .replace(/{{createTime7}}/g, note.createTime7 || '')
-                                                .replace(/{{createTime8}}/g, note.createTime8 || '')
-                                                .replace(/{{createTime9}}/g, note.createTime9 || '')
-                                                .replace(/{{createTime10}}/g, note.createTime10 || '')
-                                                .replace(/{{chapterTitle}}/g, chapterInfo.title)
-                                                .replace(/{{notebookTitle}}/g, notebook.title);
-                                        })
-                                        .filter(line => line !== null && line.trim() !== '');
-                                    break;
-
-                                case 'highlight_with_comments':
-                                    // 划线+多个评论，合并显示
-                                    const allComments = note.comments.map(c => c.content || '').filter(Boolean);
-                                    // 使用双换行符分隔多个评论，确保在思源笔记中被识别为独立的块
-                                    const combinedComments = allComments.join('\n\n> 💬 ');
-                                    const hasComments = allComments.length > 0;
-                                    renderedLines = lines
-                                        .map(line => {
-                                            // 如果没有评论，过滤掉包含{{highlightComment}}的行
-                                            if (!hasComments && line.includes('{{highlightComment}}')) {
-                                                return null;
-                                            }
-                                            return line
-                                                .replace(/{{highlightText}}/g, note.highlight.markText)
-                                                .replace(/{{highlightComment}}/g, combinedComments)
-                                                .replace(/{{createTime1}}/g, note.createTime1 || '')
-                                                .replace(/{{createTime2}}/g, note.createTime2 || '')
-                                                .replace(/{{createTime3}}/g, note.createTime3 || '')
-                                                .replace(/{{createTime4}}/g, note.createTime4 || '')
-                                                .replace(/{{createTime5}}/g, note.createTime5 || '')
-                                                .replace(/{{createTime6}}/g, note.createTime6 || '')
-                                                .replace(/{{createTime7}}/g, note.createTime7 || '')
-                                                .replace(/{{createTime8}}/g, note.createTime8 || '')
-                                                .replace(/{{createTime9}}/g, note.createTime9 || '')
-                                                .replace(/{{createTime10}}/g, note.createTime10 || '')
-                                                .replace(/{{chapterTitle}}/g, chapterInfo.title)
-                                                .replace(/{{notebookTitle}}/g, notebook.title);
-                                        })
-                                        .filter(line => line !== null && line.trim() !== '');
-                                    break;
-
-                                case 'comment_only':
-                                    // 只评论笔记
-                                    renderedLines = lines
-                                        .map(line => {
-                                            return line
-                                                .replace(/{{highlightText}}/g, note.comment.abstract || '[评论]')
-                                                .replace(/{{highlightComment}}/g, note.comment.content || '')
-                                                .replace(/{{createTime1}}/g, note.createTime1 || '')
-                                                .replace(/{{createTime2}}/g, note.createTime2 || '')
-                                                .replace(/{{createTime3}}/g, note.createTime3 || '')
-                                                .replace(/{{createTime4}}/g, note.createTime4 || '')
-                                                .replace(/{{createTime5}}/g, note.createTime5 || '')
-                                                .replace(/{{createTime6}}/g, note.createTime6 || '')
-                                                .replace(/{{createTime7}}/g, note.createTime7 || '')
-                                                .replace(/{{createTime8}}/g, note.createTime8 || '')
-                                                .replace(/{{createTime9}}/g, note.createTime9 || '')
-                                                .replace(/{{createTime10}}/g, note.createTime10 || '')
-                                                .replace(/{{chapterTitle}}/g, chapterInfo.title)
-                                                .replace(/{{notebookTitle}}/g, notebook.title);
-                                        })
-                                        .filter(line => line !== null && line.trim() !== '');
-                                    break;
-                            }
-
-                            const renderedNote = renderedLines.join('\n');
-
-                            return { formattedNote: renderedNote, range: note.range };
-                        });
-
-                        return {
-                            chapterTitle: chapterInfo.title,
-                            notes: notesData,
-                            chapterComments: chapterEndComments
-                        };
-                    });
-
-                const variables: TemplateVariables = {
-                    notebookTitle: notebook.title,
-                    isbn: notebook.isbn,
-                    updateTime: new Date(notebook.updatedTime * 1000).toLocaleString(),
-                    updateTime1: formatTimestamp(notebook.updatedTime, 'createTime1'),
-                    updateTime2: formatTimestamp(notebook.updatedTime, 'createTime2'),
-                    updateTime3: formatTimestamp(notebook.updatedTime, 'createTime3'),
-                    updateTime4: formatTimestamp(notebook.updatedTime, 'createTime4'),
-                    updateTime5: formatTimestamp(notebook.updatedTime, 'createTime5'),
-                    updateTime6: formatTimestamp(notebook.updatedTime, 'createTime6'),
-                    updateTime7: formatTimestamp(notebook.updatedTime, 'createTime7'),
-                    updateTime8: formatTimestamp(notebook.updatedTime, 'createTime8'),
-                    updateTime9: formatTimestamp(notebook.updatedTime, 'createTime9'),
-                    updateTime10: formatTimestamp(notebook.updatedTime, 'createTime10'),
-                    chapters: chaptersData,
-                    globalComments: comments
-                        .filter(c => !c.review.abstract && !c.review.contextAbstract)
-                        .map(c => {
-                                return {
-                                content: c.review.content,
-                                createTime1: formatTimestamp(c.review.createTime, 'createTime1'),
-                                createTime2: formatTimestamp(c.review.createTime, 'createTime2'),
-                                createTime3: formatTimestamp(c.review.createTime, 'createTime3'),
-                                createTime4: formatTimestamp(c.review.createTime, 'createTime4'),
-                                createTime5: formatTimestamp(c.review.createTime, 'createTime5'),
-                                createTime6: formatTimestamp(c.review.createTime, 'createTime6'),
-                                createTime7: formatTimestamp(c.review.createTime, 'createTime7'),
-                                createTime8: formatTimestamp(c.review.createTime, 'createTime8'),
-                                createTime9: formatTimestamp(c.review.createTime, 'createTime9'),
-                                createTime10: formatTimestamp(c.review.createTime, 'createTime10')
-                            };
-                        }),
-                    bookInfo: notebook.bookDetails?.intro || '',
-                    AISummary: notebook.bookDetails?.AISummary || '',
-                    bestHighlights: notebook.bestHighlights?.bestBookMarks?.items?.map(item => item.markText) || []
-                };
-
-                const renderTemplate = (tpl: string) => {
-                    return tpl
-                        .replace(/\{\{#chapters\}\}([\s\S]*?)\{\{\/chapters\}\}/g, (_, section) => {
-                            return variables.chapters.map(chapter =>
-                                section
-                                    .replace(/\{\{chapterTitle\}\}/g, chapter.chapterTitle)
-                                    .replace(/\{\{#notes\}\}([\s\S]*?)\{\{\/notes\}\}/g, () => {
-                                        return chapter.notes
-                                            .map(note => note.formattedNote)
-                                            .join('\n');
-                                    })
-                                    .replace(/\{\{#chapterComments\}\}([\s\S]*?)\{\{\/chapterComments\}\}/g, (_, commentsTpl) => {
-                                        if (!chapter.chapterComments || chapter.chapterComments.length === 0) return '';
-                                        // 为每个章节评论生成格式化内容，替换模板中的所有变量
-                                        const formattedComments = chapter.chapterComments.map(c => {
-                                            return commentsTpl
-                                                .replace(/\{\{chapterComments\}\}/g, c.content)
-                                                .replace(/\{\{createTime1\}\}/g, c.createTime1)
-                                                .replace(/\{\{createTime2\}\}/g, c.createTime2)
-                                                .replace(/\{\{createTime3\}\}/g, c.createTime3)
-                                                .replace(/\{\{createTime4\}\}/g, c.createTime4)
-                                                .replace(/\{\{createTime5\}\}/g, c.createTime5)
-                                                .replace(/\{\{createTime6\}\}/g, c.createTime6)
-                                                .replace(/\{\{createTime7\}\}/g, c.createTime7)
-                                                .replace(/\{\{createTime8\}\}/g, c.createTime8)
-                                                .replace(/\{\{createTime9\}\}/g, c.createTime9)
-                                                .replace(/\{\{createTime10\}\}/g, c.createTime10);
-                                        });
-                                        return formattedComments.join('\n\n');
-                                    })
-                            ).join('\n');
-                        })
-                        .replace(/\{\{#globalComments\}\}([\s\S]*?)\{\{\/globalComments\}\}/g, (_, commentsTpl) => {
-                            if (!variables.globalComments || variables.globalComments.length === 0) return '';
-                            // 为每个书评生成格式化内容，替换模板中的所有变量
-                            const formattedComments = variables.globalComments.map(c => {
-                                return commentsTpl
-                                    .replace(/\{\{globalComments\}\}/g, c.content)
-                                    .replace(/\{\{createTime1\}\}/g, c.createTime1)
-                                    .replace(/\{\{createTime2\}\}/g, c.createTime2)
-                                    .replace(/\{\{createTime3\}\}/g, c.createTime3)
-                                    .replace(/\{\{createTime4\}\}/g, c.createTime4)
-                                    .replace(/\{\{createTime5\}\}/g, c.createTime5)
-                                    .replace(/\{\{createTime6\}\}/g, c.createTime6)
-                                    .replace(/\{\{createTime7\}\}/g, c.createTime7)
-                                    .replace(/\{\{createTime8\}\}/g, c.createTime8)
-                                    .replace(/\{\{createTime9\}\}/g, c.createTime9)
-                                    .replace(/\{\{createTime10\}\}/g, c.createTime10);
-                            });
-                            return formattedComments.join('\n\n');
-                        })
-                        .replace(/\{\{#bookInfo\}\}([\s\S]*?)\{\{\/bookInfo\}\}/g, (_, section) => {
-                            return variables.bookInfo ? section.replace(/\{\{bookInfo\}\}/g, variables.bookInfo) : '';
-                        })
-                        .replace(/\{\{#AISummary\}\}([\s\S]*?)\{\{\/AISummary\}\}/g, (_, section) => {
-                            return variables.AISummary ? section.replace(/\{\{AISummary\}\}/g, variables.AISummary) : '';
-                        })
-                        .replace(/\{\{#bestHighlights\}\}([\s\S]*?)\{\{\/bestHighlights\}\}/g, (_, section) => {
-                            return variables.bestHighlights.length > 0
-                                ? variables.bestHighlights.map(highlight =>
-                                    section.replace(/\{\{bestHighlight\}\}/g, highlight)
-                                ).join('\n')
-                                : '';
-                        })
-                        .replace(/\{\{(\w+)\}\}/g, (_, key) => variables[key] || '');
-                };
-
-                const noteContent = renderTemplate(template);
+                const variables = buildTemplateVariables(notebook, comments, chapters);
+                const noteContent = renderWereadTemplate(template, variables);
 
                 const wereadPositionMark = await plugin.loadData("weread_position_mark");
                 try {
@@ -934,11 +1135,11 @@ async function syncNotesProcess(plugin: any, cookies: string, notebooks: any): P
                     showMessage(`${plugin.i18n.showMessage34}《${notebook.title}》`, 2000);
                 } catch (error) {
                     showMessage(`${plugin.i18n.showMessage35}《${notebook.title}》${plugin.i18n.showMessage36}`, 2000);
-                    console.error(`更新失败:`, error);
+                    logError("weread/syncWereadNotes", `更新书籍《${notebook.title}》失败`, error);
                 }
             } catch (error) {
                 showMessage(`${plugin.i18n.showMessage35}《${notebook.title}》${plugin.i18n.showMessage36}`, 2000);
-                console.error(`更新失败:`, error);
+                logError("weread/syncWereadNotes", `更新书籍《${notebook.title}》失败`, error);
             }
         });
 
@@ -947,11 +1148,79 @@ async function syncNotesProcess(plugin: any, cookies: string, notebooks: any): P
     });
 }
 
+// 校验并重建临时笔记本列表
+async function ensureTemporaryWereadNotebooksList(plugin: WereadPluginLike, cookies: string): Promise<any[]> {
+    const cachedList: any[] = await plugin.loadData("temporary_weread_notebooksList") || [];
+
+    // 校验缓存是否有效
+    const isValidCache = Array.isArray(cachedList) && cachedList.length > 0 && cachedList.every((book: any) => {
+        return (
+            book.bookID &&
+            typeof book.bookID === "string" &&
+            book.bookID.trim() !== "" &&
+            book.title &&
+            typeof book.title === "string" &&
+            book.updatedTime !== undefined
+        );
+    });
+
+    if (isValidCache) {
+        return cachedList;
+    }
+
+    // 缓存无效，需要重建
+    try {
+        const { getNotebooks, getBook } = await import("./wereadInterface");
+        const notebookdata = await getNotebooks(plugin, cookies);
+        const basicBooks = notebookdata.books || [];
+
+        const rebuiltList: any[] = [];
+        for (const b of basicBooks) {
+            try {
+                const details = await getBook(plugin, cookies, b.bookId);
+                rebuiltList.push({
+                    noteCount: b.noteCount,
+                    reviewCount: b.reviewCount,
+                    updatedTime: b.sort,
+                    bookID: details.bookId,
+                    title: details.title,
+                    author: details.author,
+                    cover: details.cover,
+                    format: details.format,
+                    price: details.price,
+                    introduction: details.intro,
+                    publishTime: details.publishTime,
+                    category: details.category,
+                    isbn: details.isbn,
+                    publisher: details.publisher,
+                    totalWords: details.totalWords,
+                    star: details.newRating,
+                    ratingCount: details.ratingCount,
+                    AISummary: details.AISummary,
+                });
+            } catch {
+                // 单本获取失败不影响其他书
+            }
+        }
+
+        await plugin.saveData("temporary_weread_notebooksList", rebuiltList);
+        return rebuiltList;
+    } catch {
+        // 重建失败时返回空数组
+        return [];
+    }
+}
+
 // 获取预加载的云端书籍笔记列表，排除已忽略的书籍和融合了自定义ISBN的书籍
-async function getPersonalNotebooks(plugin: any) {
-    const notebooksList = await plugin.loadData("temporary_weread_notebooksList"); // 获取预加载的云端书籍笔记列表
-    const ignoredBooks = await plugin.loadData('weread_ignoredBooks') || []; // 获取已忽略的书籍列表
-    const ignoredBookIDs = new Set(ignoredBooks.map((b: any) => b.bookID?.toString() || "")); // 获取已忽略的书籍ID列表
+async function getPersonalNotebooks(plugin: WereadPluginLike): Promise<SyncNotebookRecord[]> {
+    // 获取 cookies 用于可能的缓存重建
+    const savedcookies = await plugin.loadData("weread_cookie") || {};
+    const cookies = savedcookies.cookies || "";
+
+    // 使用校验后的列表
+    const notebooksList: SyncNotebookRecord[] = await ensureTemporaryWereadNotebooksList(plugin, cookies);
+    const ignoredBooks: SyncNotebookRecord[] = await plugin.loadData('weread_ignoredBooks') || []; // 获取已忽略的书籍列表
+    const ignoredBookIDs = new Set(ignoredBooks.map((b) => b.bookID?.toString() || "")); // 获取已忽略的书籍ID列表
     const ignoredIsbns = new Set(ignoredBooks.map((b: any) => b.isbn?.toString() || "")); // 获取已忽略的ISBN列表
 
     // 筛选过滤掉忽略书籍书籍
@@ -987,9 +1256,9 @@ async function getPersonalNotebooks(plugin: any) {
         const resolvedISBN = hasISBN ? book.isbn : customISBNMap.get(book.bookID?.toString()) || "";
 
         return {
-            isbn: resolvedISBN,
-            bookID: book.bookID,
-            title: book.title,
+            isbn: resolvedISBN || "",
+            bookID: book.bookID || "",
+            title: book.title || book.bookID || "未命名书籍",
             updatedTime: book.updatedTime
         };
     });
@@ -997,121 +1266,3 @@ async function getPersonalNotebooks(plugin: any) {
     return basicNotebooks;
 }
 
-async function updateEndBlocks(plugin: any, blockID: string, wereadPositionMark: string, noteContent: any) {
-    // 检查 blockID 是否存在
-    if (!blockID) {
-        throw new Error("blockID 不存在");
-    }
-
-    try {
-        const childBlocks = await plugin.client.getChildBlocks({
-            id: blockID,
-        });
-
-        // 检查是否有子块
-        if (!childBlocks || !childBlocks.data || childBlocks.data.length === 0) {
-            throw new Error(`书籍 blockID ${blockID} 不存在子块`);
-        }
-
-        const data = childBlocks.data || [];
-        const targetContent = wereadPositionMark;
-
-        let targetBlock = data.find((block: { content: string; }) => block.content === targetContent);
-        let targetBlockID: string | null = null;
-        let idsList: string[] = [];
-
-        if (targetBlock) {
-            targetBlockID = targetBlock.id;
-            const targetIndex = data.indexOf(targetBlock);
-            idsList = data.slice(targetIndex + 1).map(block => block.id);
-
-            for (const id of idsList) {
-                try {
-                    await plugin.client.deleteBlock({ id });
-                } catch (error) {
-                    console.error(`删除块 ${id} 时出错：`, error);
-                }
-            }
-        } else {
-            // 如果没有找到标记块，则在文档末尾添加标记块
-            const lastBlock = data.length > 0 ? data[data.length - 1] : null;
-            const markBlockID = await plugin.client.insertBlock({
-                data: targetContent,
-                dataType: "markdown",
-                previousID: lastBlock ? lastBlock.id : blockID,
-            });
-
-            // 使用新插入的标记块作为目标块
-            targetBlockID = markBlockID.data[0].doOperations[0].id;
-        }
-
-        await plugin.client.insertBlock({
-            data: noteContent,
-            dataType: "markdown",
-            previousID: targetBlockID,
-        });
-    } catch (error) {
-        console.error(`获取子块或更新块时出错，blockID: ${blockID}`, error);
-        // 重新抛出错误，以便在调用函数中处理
-        throw error;
-    }
-}
-
-async function saveIgnoredBooks(plugin: any, newIgnoredBooks: any[]) {
-    const existingIgnored = await plugin.loadData('weread_ignoredBooks') || [];
-    const merged = [...existingIgnored, ...newIgnoredBooks];
-    const uniqueMap = new Map();
-    merged.forEach(book => {
-        const bookID = book.bookID?.toString();
-        if (bookID) {
-            uniqueMap.set(bookID, book);
-        }
-    });
-
-    const finalIgnoredBooks = Array.from(uniqueMap.values());
-
-    await plugin.saveData('weread_ignoredBooks', finalIgnoredBooks);
-}
-
-// 保存自定义书籍ISBN
-async function saveCustomBooksISBN(plugin: any, selectedBooks: any[], cloudNotebooksList: any[]) {
-    const customBooks = selectedBooks
-        .filter(book => {
-            const originalBook = cloudNotebooksList.find(original => original.bookID === book.bookID);
-            const shouldSave = originalBook && originalBook.isbn === "" && book.isbn !== "";
-            return shouldSave;
-        })
-        .map(({ title, isbn, bookID }) => ({
-            title,
-            customISBN: isbn,
-            bookID: bookID,
-        }));
-
-    if (customBooks.length > 0) {
-        const existingCustom = await plugin.loadData("weread_customBooksISBN") || [];
-
-        const merged = [...existingCustom, ...customBooks];
-        const customMap = new Map(merged.map(item => [item.bookID, item]));
-        const finalCustomBooks = Array.from(customMap.values());
-
-        await plugin.saveData("weread_customBooksISBN", finalCustomBooks);
-    }
-}
-
-// 保存使用bookID同步的书籍信息
-async function saveUseBookIDBooks(plugin: any, useBookIDBooks: any[]) {
-    const existingUseBookID = await plugin.loadData("weread_useBookIDBooks") || [];
-
-    const merged = [...existingUseBookID, ...useBookIDBooks];
-    const useBookIDMap = new Map();
-    merged.forEach(book => {
-        const bookID = book.bookID?.toString();
-        if (bookID) {
-            useBookIDMap.set(bookID, book);
-        }
-    });
-
-    const finalUseBookIDBooks = Array.from(useBookIDMap.values());
-
-    await plugin.saveData("weread_useBookIDBooks", finalUseBookIDBooks);
-}

@@ -1,8 +1,9 @@
 import { fetchSyncPost } from "siyuan";
-import { changeMainKeyName } from '../bookHandling/changeMainKeyName';
-import { generateUniqueBlocked, parseDateToTimestamp } from '../core/formatOp';
-import { sql, setBlockAttrs } from "@/api";
+import { parseDateToTimestamp } from '../core/formatOp';
+import { sql } from "@/api";
 import { getImage, downloadCover } from "@/utils/core/getImg";
+import { ensureAttributeViewKeys, appendBookToAttributeView } from '../bookHandling/ensureAttributeViewKeys';
+import { bindBookToNote } from '../bookHandling/bindBookToNote';
 
 // 添加 useBookID 书籍到数据库
 export async function addUseBookIDsToDatabase(plugin: any, avID: string, bookDetail: any) {
@@ -31,7 +32,6 @@ export async function addUseBookIDsToDatabase(plugin: any, avID: string, bookDet
             // 如果有需要清理的blockID，则调用removeAttributeViewBlocks方法
             if (blockIDsToRemove.length > 0) {
                 await fetchSyncPost('/api/av/removeAttributeViewBlocks', { "avID": avID, "srcIDs": blockIDsToRemove });
-                console.log(`清理了 ${blockIDsToRemove.length} 个不匹配的blockID`);
 
                 // 重新获取数据库信息
                 getdatabase = await fetchSyncPost("/api/av/getAttributeView", { "id": avID, });
@@ -58,72 +58,23 @@ export async function addUseBookIDsToDatabase(plugin: any, avID: string, bookDet
         }
     }
 
-    let databaseKeys: any;
-    // 获取数据库详细列配置
-    await fetchSyncPost("/api/av/getAttributeViewKeysByAvID", { avID: avID, }).then((res) => databaseKeys = res.data);
-
-    // 检查数据库主键是否为书名
-    if (databaseKeys[0].name !== "书名") { await changeMainKeyName(avID); }
-
     // 定义书籍属性列
     const requiredBookAttributes = ["书名", "封面", "作者", "译者", "出版社", "出版年", "ISBN", "定价", "书籍分类", "微信读书评分", "微信读书评分人数", "bookID"].reverse();
 
-    // 检查数据库列中否存在书籍属性并添加缺失的书籍属性列
-    for (const attributeName of requiredBookAttributes) {
-        const existingAttribute = databaseKeys.find((key: { name: string }) => key.name === attributeName); // 检查数据库列中是否存在该属性列
-
-        // 如果不存在，则添加该属性列
-        if (!existingAttribute) {
-            await fetchSyncPost("/api/av/addAttributeViewKey", {
-                avID: avID,
-                keyID: generateUniqueBlocked(),
-                keyName: attributeName,
-                keyType: getAttributeType(attributeName), // 根据属性名确定类型
-                keyIcon: "",
-                previousKeyID: databaseKeys.at(-1)?.id || "", // 在最后一个属性之后添加
-            });
-        }
-    }
-
-    // 获取更新后的数据库列配置
-    await fetchSyncPost("/api/av/getAttributeViewKeysByAvID", {
-        avID: avID,
-    }).then((res) => databaseKeys = res.data);
+    // 确保数据库包含所有必需的属性列
+    const databaseKeys = await ensureAttributeViewKeys(avID, requiredBookAttributes, getAttributeType);
 
     // 下载封面
-    const coverBase64Data = await getImage(bookDetail.cover); // 下载封面图片的 Base64 数据
+    const coverBase64Data = await getImage(bookDetail.cover) as string; // 下载封面图片的 Base64 数据
     bookDetail.cover = await downloadCover(coverBase64Data, bookDetail.title); // 下载封面图片并保存到本地
 
-    // 构建书籍数据
-    const blocksValues = buildBlocksValues(databaseKeys, bookDetail);
-
-    // 添加书籍数据到数据库
-    await fetchSyncPost("/api/av/appendAttributeViewDetachedBlocksWithValues", {
-        avID: avID,
-        blocksValues: [blocksValues]
-    });
-
-    // 获取添加书籍后的数据库信息并匹配新添加的书籍行的 blockID
-    const updatedDatabase = await fetchSyncPost("/api/av/getAttributeView", { "id": avID, });
-    const updatedDatabaseKeyValues = updatedDatabase.data.av.keyValues;
-    const bookNameKeyNew = updatedDatabaseKeyValues.find((kv: any) => kv.key.name === "书名"); // 查找 书名 列
-    let blockID = null;
-    let matchingValue = null;
-    if (bookNameKeyNew) {
-        // 查找匹配 书名 的书籍
-        matchingValue = bookNameKeyNew.values.find((value: any) => {
-            return value.block && value.block.content === bookDetail.title;
-        });
-
-        if (matchingValue) {
-            blockID = matchingValue.blockID;
-        }
-    }
-
-    // 如果找不到 blockID，则抛出错误
-    if (!blockID) {
-        throw new Error("无法找到新添加书籍的 blockID");
-    }
+    // 添加书籍数据到数据库并回查 blockID
+    const { blockID, matchingValue } = await appendBookToAttributeView(
+        avID,
+        databaseKeys,
+        bookDetail,
+        buildBlocksValues
+    );
 
     const setting = await plugin.loadData("settings.json");
 
@@ -223,32 +174,8 @@ export async function addUseBookIDsToDatabase(plugin: any, avID: string, bookDet
         })
     }
 
-    // 给文档添加数据库属性链接
-    await setBlockAttrs(blockID, {
-        'custom-avs': avID
-    });
-
-    // 将数据库与读书笔记绑定
-    await fetchSyncPost('/api/av/setAttributeViewBlockAttr', {
-        "avID": avID,
-        "keyID": matchingValue.keyID,
-        "rowID": blockID,
-        'value': {
-            "id": matchingValue.id,
-            "keyID": matchingValue.keyID,
-            "blockID": blockID,
-            "type": "block",
-            "isDetached": false,
-            "createdAt": matchingValue.createdAt,
-            "updatedAt": matchingValue.updatedAt,
-            "block": {
-                "id": blockID,
-                "content": matchingValue.block.content,
-                "created": matchingValue.block.created,
-                "updated": matchingValue.block.updated
-            }
-        }
-    })
+    // 绑定数据库与读书笔记
+    await bindBookToNote(avID, blockID, matchingValue);
 
     return {
         code: 0,

@@ -133,6 +133,7 @@
     "showMessage15": "❌请先填写有效的微信读书 Cookie 再进行同步",
     "showMessage16": "❌登录信息验证失败，请重试",
     "showMessage17": "❌Cookies 格式不正确，请重新输入！",
+    "showMessage18": "❌登录刷新失败，请重新扫码登录",
     "showMessage19": "🔄登录已过期，正在重新登录...",
     "showMessage20": "✅登录成功，正在同步笔记...",
     "showMessage21": "正在同步微信读书笔记...",

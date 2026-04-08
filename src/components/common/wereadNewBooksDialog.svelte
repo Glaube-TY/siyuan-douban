@@ -18,10 +18,17 @@
     ) => void;
     export let onCancel: () => void;
 
-    let originalISBNs = new Map(books.map((book) => [book.bookID, book.isbn]));
+    let originalISBNs = new Map(books.map((book) => [book.bookID, book.isbn ?? ""]));
     let selectedBooks = [];
     let ignoredBooks = [];
     let useBookIDs = [];
+
+    // 归一化 ISBN 避免 UI 异常
+    books.forEach((book) => {
+        if (book.isbn === undefined || book.isbn === null) {
+            book.isbn = "";
+        }
+    });
 
     const isValidISBN = (isbn: string) => {
         const cleaned = isbn.replace(/[-\s]/g, "");
@@ -158,7 +165,7 @@
                                      useBookIDs.some((b) => b.bookID === book.bookID)}
                         />
                     </td>
-                    <td>{book.title}</td>
+                    <td>{book.title || book.bookID || "未命名书籍"}</td>
                     <td>
                         <input
                             type="text"

@@ -1,4 +1,5 @@
 import { fetchSyncPost, fetchPost } from "siyuan";
+import { logError } from "../core/logger";
 
 // ==== 将主键名改为“书名” ====
 export async function changeMainKeyName(avID: any) {
@@ -28,9 +29,9 @@ export async function changeMainKeyName(avID: any) {
             // 刷新数据库视图
             fetchPost("/api/ui/reloadAttributeView", { id: avID });
         } else {
-            console.error("Invalid data structure - keyValues not found or empty");
+            logError("bookHandling/changeMainKeyName", "Invalid data structure - keyValues not found or empty");
         }
     } catch (error) {
-        console.error("Error processing file:", error);
+        logError("bookHandling/changeMainKeyName", "Error processing file", error);
     }
 }
