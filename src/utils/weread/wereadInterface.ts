@@ -9,10 +9,14 @@ import type {
     WereadChapterInfosBookRecord
 } from "./types";
 
-interface ForwardProxyResponse {
+/** ForwardProxy 原始响应结构（思源代理层包装） */
+interface ForwardProxyRawResponse {
+    code: number;
+    msg: string;
     data: {
         status: number;
         body: string;
+        contentType?: string;
     };
 }
 
@@ -26,20 +30,73 @@ function getHeaders(cookies: string) {
     };
 }
 
-function checkResponse<T>(response: ForwardProxyResponse): T {
-    if (response.data.status !== 200) {
-        showMessage("⚠️ 微信读书 Cookie 失效，请前往插件设置中更新", 5000);
-        throw new Error('Request failed with status: ' + response.data.status);
+function parseForwardProxyJsonBody<T>(response: unknown): T {
+    const proxyResponse = response as ForwardProxyRawResponse;
+
+    // 检查思源代理层状态码
+    if (proxyResponse.code !== 0) {
+        throw new Error(`ForwardProxy failed: code=${proxyResponse.code}, msg=${proxyResponse.msg || 'unknown'}`);
     }
-    return JSON.parse(response.data.body);
+
+    // 检查 HTTP 响应状态
+    if (!proxyResponse.data || proxyResponse.data.status !== 200) {
+        showMessage("⚠️ 微信读书 Cookie 失效，请前往插件设置中更新", 5000);
+        throw new Error(`HTTP request failed with status: ${proxyResponse.data?.status}`);
+    }
+
+    const body = proxyResponse.data.body;
+
+    // 检查 body 是否为空
+    if (!body || body === '') {
+        throw new Error('Response body is empty');
+    }
+
+    // 检查 contentType 是否为 JSON（如果存在）
+    const contentType = proxyResponse.data.contentType || '';
+    const isJsonContent = contentType.includes('application/json') || contentType.includes('text/plain');
+
+    if (!isJsonContent && contentType !== '') {
+        console.warn(`[weread] Unexpected content type: ${contentType}`);
+    }
+
+    // 解析 JSON body
+    try {
+        const parsed = JSON.parse(body);
+        return parsed as T;
+    } catch (e) {
+        throw new Error(`Failed to parse JSON body: ${e instanceof Error ? e.message : 'unknown error'}`);
+    }
 }
 
+
+
 interface NotebooksResponse {
+    synckey?: number;
+    totalBookCount?: number;
     books: Array<{
         bookId: string;
         noteCount: number;
         reviewCount: number;
         sort: number;
+        style?: number;
+        reviewId?: string;
+        book?: {
+            bookId: string;
+            title: string;
+            author: string;
+            cover: string;
+            format: string;
+            price: number;
+            intro: string;
+            publishTime: string;
+            category: string;
+            isbn: string;
+            publisher: string;
+            totalWords: number;
+            newRating: number;
+            ratingCount: number;
+            AISummary: string;
+        };
     }>;
 }
 
@@ -50,7 +107,7 @@ export async function getNotebooks(plugin: WereadPluginLike, cookies: string): P
         method: "GET" as const,
         headers: [{ ...getHeaders(cookies) }],
     });
-    return checkResponse<NotebooksResponse>(response);
+    return parseForwardProxyJsonBody<NotebooksResponse>(response);
 }
 
 // 获取书籍详细信息
@@ -60,7 +117,7 @@ export async function getBook(plugin: WereadPluginLike, cookies: string, bookID:
         method: "GET" as const,
         headers: [{ ...getHeaders(cookies) }],
     });
-    return checkResponse<WereadBookDetail>(response);
+    return parseForwardProxyJsonBody<WereadBookDetail>(response);
 }
 
 // 获取书架图书信息
@@ -70,7 +127,7 @@ export async function getBookShelf(plugin: WereadPluginLike, cookies: string, us
         method: "GET" as const,
         headers: [{ ...getHeaders(cookies) }],
     });
-    return checkResponse<WereadBookShelfResponse>(response);
+    return parseForwardProxyJsonBody<WereadBookShelfResponse>(response);
 }
 
 // 获取书籍划线
@@ -80,7 +137,7 @@ export async function getBookHighlights(plugin: WereadPluginLike, cookies: strin
         method: "GET" as const,
         headers: [{ ...getHeaders(cookies) }],
     });
-    return checkResponse<WereadHighlightsResponse>(response);
+    return parseForwardProxyJsonBody<WereadHighlightsResponse>(response);
 }
 
 // 获取书籍评论
@@ -90,7 +147,7 @@ export async function getBookComments(plugin: WereadPluginLike, cookies: string,
         method: "GET" as const,
         headers: [{ ...getHeaders(cookies) }],
     });
-    return checkResponse<WereadCommentsResponse>(response);
+    return parseForwardProxyJsonBody<WereadCommentsResponse>(response);
 }
 
 // 获取书籍热门划线
@@ -100,11 +157,11 @@ export async function getBookBestHighlights(plugin: WereadPluginLike, cookies: s
         method: "GET" as const,
         headers: [{ ...getHeaders(cookies) }],
     });
-    return checkResponse<WereadBestHighlightsResponse>(response);
+    return parseForwardProxyJsonBody<WereadBestHighlightsResponse>(response);
 }
 
 // 获取书籍章节信息 - 使用 Electron 隐藏窗口在页面上下文中执行 fetch
-export async function getBookChapterInfos(plugin: WereadPluginLike, cookies: string, bookId: string): Promise<WereadChapterInfosBookRecord | null> {
+export async function getBookChapterInfos(_plugin: WereadPluginLike, cookies: string, bookId: string): Promise<WereadChapterInfosBookRecord | null> {
     // 检查 Electron 环境
     if (typeof window.require !== "function") {
         console.error(`[weread/chapterInfos/electron] Electron 环境不可用`);

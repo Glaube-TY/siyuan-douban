@@ -1,7 +1,7 @@
 import { fetchPost, fetchSyncPost, showMessage } from "siyuan";
 import { svelteDialog } from "@/libs/dialog";
 import { sql } from "@/api";
-import { getBookComments, getBookHighlights, getBook, getBookBestHighlights, getBookChapterInfos } from "@/utils/weread/wereadInterface";
+import { getBookComments, getBookHighlights, getBookBestHighlights, getBookChapterInfos, getNotebooks, getBook } from "@/utils/weread/wereadInterface";
 import { fetchBookHtml } from "@/utils/douban/book/getWebPage";
 import { fetchDoubanBook } from "@/utils/douban/book/fetchBook";
 import { loadAVData } from "@/utils/bookHandling/index";
@@ -1168,9 +1168,7 @@ async function ensureTemporaryWereadNotebooksList(plugin: WereadPluginLike, cook
         return cachedList;
     }
 
-    // 缓存无效，需要重建
     try {
-        const { getNotebooks, getBook } = await import("./wereadInterface");
         const notebookdata = await getNotebooks(plugin, cookies);
         const basicBooks = notebookdata.books || [];
 
@@ -1205,8 +1203,9 @@ async function ensureTemporaryWereadNotebooksList(plugin: WereadPluginLike, cook
 
         await plugin.saveData("temporary_weread_notebooksList", rebuiltList);
         return rebuiltList;
-    } catch {
-        // 重建失败时返回空数组
+    } catch (error: any) {
+        // 重建失败时输出错误日志
+        console.error("[微信读书] temporary_weread_notebooksList 重建失败:", error);
         return [];
     }
 }

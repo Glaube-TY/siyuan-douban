@@ -14,12 +14,6 @@ interface VerifyResult {
     message: string;
 }
 
-/**
- * 解析微信读书登录验证响应，统一判定逻辑
- * @param result 原始 API 返回结果
- * @param i18n 国际化文本映射
- * @returns 统一的验证结果
- */
 function parseVerifyResponse(result: any, i18n: Record<string, string>): VerifyResult {
     // errCode === -2012 表示登录过期，需要重新登录
     if (result.errCode === -2012) {
@@ -452,7 +446,7 @@ export const verifyCookieByForwardProxy = async (
             }],
         });
 
-        const result = JSON.parse(response.data);
+        const result = JSON.parse(response.data.body);
 
         return parseVerifyResponse(result, plugin.i18n);
     } catch (error: any) {

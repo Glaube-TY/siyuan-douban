@@ -1,16 +1,17 @@
 <script lang="ts">
     import { onMount } from "svelte";
-    import { I18N, showMessage, fetchPost } from "siyuan";
-    import { sql } from "../api";
-    import { fetchDoubanBook, fetchBookHtml } from "../utils/douban/book";
-    import { openInteractiveSearchWindow } from "../utils/douban/book/searchBook";
-    import "./styles/main.scss";
-    import { loadAVData } from "../utils/bookHandling";
-    import TemplateEditorDialog from "./common/templateEditorDialog.svelte";
-    import BookSearchTab from "./tabs/BookSearchTab.svelte";
-    import UserSettingsTab from "./tabs/UserSettingsTab.svelte";
-    import WereadTab from "./tabs/WereadTab.svelte";
-    import AboutTab from "./tabs/AboutTab.svelte";
+import { I18N, showMessage, fetchPost } from "siyuan";
+import { sql } from "../api";
+import { fetchDoubanBook, fetchBookHtml } from "../utils/douban/book";
+import { openInteractiveSearchWindow } from "../utils/douban/book/searchBook";
+import "./styles/main.scss";
+import { loadAVData } from "../utils/bookHandling";
+import { svelteDialog } from "../libs/dialog";
+import TemplateEditorDialog from "./common/templateEditorDialog.svelte";
+import BookSearchTab from "./tabs/BookSearchTab.svelte";
+import UserSettingsTab from "./tabs/UserSettingsTab.svelte";
+import WereadTab from "./tabs/WereadTab.svelte";
+import AboutTab from "./tabs/AboutTab.svelte";
 
     export let i18n: I18N;
     export let plugin: any;
@@ -36,7 +37,6 @@
     let bookCategoryIndex = 0;
     let readingStatusIndex = 0;
 
-    let showTemplateEditor = false;
     let noteTemplate = "";
     let originalTemplate = "";
 
@@ -201,6 +201,53 @@
         }
     }
 
+    // 打开模板编辑器弹窗
+    function openTemplateEditor() {
+        originalTemplate = noteTemplate;
+
+        const dialog = svelteDialog({
+            title: plugin.i18n.customNoteTemplate,
+            width: "800px",
+            height: "500px",
+            constructor: (containerEl: HTMLElement) => {
+                return new TemplateEditorDialog({
+                    target: containerEl,
+                    props: {
+                        plugin: plugin,
+                        noteTemplate: noteTemplate,
+                    },
+                });
+            },
+            callback: () => {
+                // 弹窗关闭时（无论保存还是取消），恢复原始模板
+                noteTemplate = originalTemplate;
+            },
+        });
+
+        // 监听组件事件
+        const component = dialog.component;
+        component.$on("close", () => {
+            // 取消：恢复原始模板
+            noteTemplate = originalTemplate;
+            dialog.close();
+        });
+        component.$on("save", async (event) => {
+            const newTemplate = event.detail;
+            try {
+                const currentSettings =
+                    (await plugin.loadData("settings.json")) || {};
+                currentSettings.noteTemplate = newTemplate;
+                await plugin.saveData("settings.json", currentSettings);
+                noteTemplate = newTemplate;
+                originalTemplate = newTemplate;
+                dialog.close();
+                showMessage(i18n.showMessage9, 3000);
+            } catch (error) {
+                showMessage(`${i18n.showMessage10} ${error.message}`, 5000);
+            }
+        });
+    }
+
     // 验证数据库ID
     async function validateDatabaseID() {
         if (!bookDatabassID) {
@@ -307,10 +354,7 @@
                 {databaseStatusMessage}
                 on:validate={validateDatabaseID}
                 on:save={handleSaveSettings}
-                on:openTemplate={() => {
-                    originalTemplate = noteTemplate;
-                    showTemplateEditor = true;
-                }}
+                on:openTemplate={openTemplateEditor}
             />
             <!-- 第三个标签页 - 微信读书设置-->
         {:else if activeTab === tabs[2]}
@@ -323,25 +367,4 @@
     </div>
 </div>
 
-<TemplateEditorDialog
-    bind:showTemplateEditor
-    bind:noteTemplate
-    bind:plugin
-    on:close={() => {
-        noteTemplate = originalTemplate;
-        showTemplateEditor = false;
-    }}
-    on:save={async () => {
-        try {
-            const currentSettings =
-                (await plugin.loadData("settings.json")) || {};
-            currentSettings.noteTemplate = noteTemplate;
-            await plugin.saveData("settings.json", currentSettings);
-            originalTemplate = noteTemplate;
-            showTemplateEditor = false;
-            showMessage(i18n.showMessage9, 3000);
-        } catch (error) {
-            showMessage(`${i18n.showMessage10} ${error.message}`, 5000);
-        }
-    }}
-/>
+
