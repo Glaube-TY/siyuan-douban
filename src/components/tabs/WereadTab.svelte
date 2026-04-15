@@ -1,5 +1,6 @@
 <script lang="ts">
-    import { showMessage, I18N } from "siyuan";
+    import { showMessage, I18N, fetchSyncPost } from "siyuan";
+    import { sql } from "@/api";
     import { onMount } from "svelte";
     import { svelteDialog } from "@/libs/dialog";
     import PromiseLimitPool from "@/libs/promise-pool";
@@ -11,7 +12,6 @@
         createWereadNotesTemplateDialog,
         checkWrVid,
         verifyCookie,
-        verifyCookieByForwardProxy,
     } from "@/utils/weread/loginWeread";
     import {
         getNotebooks,
@@ -24,6 +24,79 @@
     import wereadManageISBN from "@/components/common/wereadManageISBN.svelte";
     import wereadIgnoredBooksDialog from "@/components/common/wereadIgnoredBooksDialog.svelte";
     import wereadUseBookIDBooksDialog from "@/components/common/wereadUseBookIDBooksDialog.svelte";
+
+    async function getCurrentValidBookIdentifiers(plugin: any): Promise<{ validISBNs: Set<string>, validBookIDs: Set<string>, validBookNames: Set<string> }> {
+        const settings = await plugin.loadData("settings.json") || {};
+        const blockID = settings?.bookDatabaseID || "";
+        if (!blockID) return { validISBNs: new Set<string>(), validBookIDs: new Set<string>(), validBookNames: new Set<string>() };
+
+        let avID = "";
+        try {
+            const blockResult = await sql(`SELECT * FROM blocks WHERE id = "${blockID}"`);
+            avID = blockResult?.[0]?.markdown?.match(/data-av-id="([^"]+)"/)?.[1] || "";
+        } catch {
+            avID = "";
+        }
+        if (!avID) return { validISBNs: new Set<string>(), validBookIDs: new Set<string>(), validBookNames: new Set<string>() };
+
+        try {
+            let database = await fetchSyncPost('/api/av/getAttributeView', { id: avID });
+            let avData = database.data?.av || {};
+            let keyValues: any[] = avData.keyValues || [];
+
+            const isbnKey = keyValues.find((item: any) => item.key?.name === "ISBN");
+            const bookIDKey = keyValues.find((item: any) => item.key?.name === "bookID");
+            const bookNameKey = keyValues.find((item: any) => item.key?.name === "书名");
+
+            let ISBNColumn = isbnKey?.values || [];
+            let bookIDColumn = bookIDKey?.values || [];
+            let bookNameColumn = bookNameKey?.values || [];
+
+            const bookNameBlockIDs = new Set<string>(bookNameColumn.map((item: any) => item.blockID));
+            const isbnBlockIDs = new Set<string>(ISBNColumn.map((item: any) => item.blockID));
+            const bookIDBlockIDs = new Set<string>(bookIDColumn.map((item: any) => item.blockID));
+            const blockIDsToRemove = Array.from(
+                new Set<string>([
+                    ...[...isbnBlockIDs].filter(id => !bookNameBlockIDs.has(id)),
+                    ...[...bookIDBlockIDs].filter(id => !bookNameBlockIDs.has(id)),
+                ])
+            );
+
+            if (blockIDsToRemove.length > 0) {
+                await fetchSyncPost('/api/av/removeAttributeViewBlocks', { avID, srcIDs: blockIDsToRemove });
+                database = await fetchSyncPost('/api/av/getAttributeView', { id: avID });
+                avData = database.data?.av || {};
+                keyValues = avData.keyValues || [];
+
+                const updatedISBNKey = keyValues.find((item: any) => item.key?.name === "ISBN");
+                const updatedBookIDKey = keyValues.find((item: any) => item.key?.name === "bookID");
+                const updatedBookNameKey = keyValues.find((item: any) => item.key?.name === "书名");
+                ISBNColumn = updatedISBNKey?.values || [];
+                bookIDColumn = updatedBookIDKey?.values || [];
+                bookNameColumn = updatedBookNameKey?.values || [];
+            }
+
+            const validISBNs = new Set<string>(
+                ISBNColumn
+                    .map((item: any) => item.number?.content?.toString())
+                    .filter((v): v is string => !!v)
+            );
+            const validBookIDs = new Set<string>(
+                bookIDColumn
+                    .map((item: any) => item.text?.content?.toString())
+                    .filter((v): v is string => !!v)
+            );
+            const validBookNames = new Set<string>(
+                bookNameColumn
+                    .map((item: any) => item.text?.content?.toString().trim())
+                    .filter((v): v is string => !!v)
+            );
+
+            return { validISBNs, validBookIDs, validBookNames };
+        } catch {
+            return { validISBNs: new Set<string>(), validBookIDs: new Set<string>(), validBookNames: new Set<string>() };
+        }
+    }
 
     export let i18n: I18N;
     export let plugin: any;
@@ -67,40 +140,41 @@
 
             // 判断是否从 cookie 中获取用户ID成功
             if (userVid) {
-                const verifyResult = await verifyCookie(
-                    plugin,
-                    cookies,
-                    userVid,
-                );
-                checkMessage = verifyResult.message;
+                if (savedcookies.isQRCode) {
+                    // 扫码登录：使用 Electron 隐藏窗口校验
+                    const verifyResult = await verifyCookie(
+                        plugin,
+                        cookies,
+                        userVid,
+                    );
+                    checkMessage = verifyResult.message;
 
-                // 判断是否需要重新登录
-                if (verifyResult.loginDue) {
-                    // 判断上一次是否是扫码登录
-                    if (savedcookies.isQRCode) {
+                    // 判断是否需要重新登录
+                    if (verifyResult.loginDue) {
                         checkMessage = i18n.checkMessage1;
                         try {
                             // 创建不可见的登陆窗口用于刷新登录信息
-                            const updatedCookes = await createWereadQRCodeDialog(
+                            const refreshedCookies = await createWereadQRCodeDialog(
                                 i18n,
                                 false,
                             );
 
                             const savedata = {
-                                cookies: updatedCookes,
+                                cookies: refreshedCookies,
                                 isQRCode: true,
                             };
                             await plugin.saveData("weread_cookie", savedata);
 
-                            // 更新全局cookies变量
-                            cookies = updatedCookes;
+                            // 重新从本地读取，确保后续校验使用的是持久化后的数据
+                            const reloaded = await loadPluginData(plugin, "weread_cookie", DEFAULT_WEREAD_COOKIE);
+                            cookies = reloaded.cookies;
 
-                            const result = checkWrVid(updatedCookes);
+                            const result = checkWrVid(cookies);
                             userVid = result.userVid;
 
                             // 验证登录信息
                             if (userVid) {
-                                const verifyResult = await verifyCookie(plugin, updatedCookes, userVid);
+                                const verifyResult = await verifyCookie(plugin, cookies, userVid);
                                 checkMessage = verifyResult.message;
 
                                 // 验证成功后标记需要加载书单
@@ -117,10 +191,22 @@
                             showMessage(i18n.checkMessage6);
                             return;
                         }
+                    } else if (verifyResult.success) {
+                        // 登录有效，标记需要加载书单
+                        shouldLoadNotebooks = true;
                     }
-                } else if (verifyResult.success) {
-                    // 登录有效，标记需要加载书单
-                    shouldLoadNotebooks = true;
+                } else {
+                    // 手动 Cookie 登录：使用 forwardProxy 校验
+                    const verifyResult = await verifyCookie(
+                        plugin,
+                        cookies,
+                        userVid,
+                    );
+                    checkMessage = verifyResult.message;
+
+                    if (verifyResult.success) {
+                        shouldLoadNotebooks = true;
+                    }
                 }
 
                 // 统一加载书单（最多一次）
@@ -297,12 +383,14 @@
     }
 
     async function createManageISBNDialog() {
-        const customISBNBooks = await plugin.loadData("weread_customBooksISBN");
+        const customISBNBooks = await plugin.loadData("weread_customBooksISBN") || [];
 
         if (customISBNBooks.length === 0) {
             showMessage(i18n.showMessage12);
             return;
         }
+
+        const { validISBNs, validBookNames } = await getCurrentValidBookIdentifiers(plugin);
 
         const dialog = svelteDialog({
             title: i18n.manageISBNDialogTitle,
@@ -312,6 +400,8 @@
                     props: {
                         plugin,
                         customISBNBooks: customISBNBooks,
+                        validISBNs: Array.from(validISBNs),
+                        validBookNames: Array.from(validBookNames),
                         onConfirm: () => {
                             dialog.close();
                         },
@@ -325,7 +415,7 @@
     }
 
     async function createIgnoredBooksDialog() {
-        const ignoredBooks = await plugin.loadData("weread_ignoredBooks");
+        const ignoredBooks = await plugin.loadData("weread_ignoredBooks") || [];
 
         if (ignoredBooks.length == 0) {
             showMessage(i18n.showMessage13);
@@ -353,12 +443,14 @@
     }
 
     async function createWereadUseBookIDBooksDialog() {
-        const useBookIDBooks = await plugin.loadData("weread_useBookIDBooks");
+        const useBookIDBooks = await plugin.loadData("weread_useBookIDBooks") || [];
 
         if (useBookIDBooks.length == 0) {
             showMessage(i18n.showMessage42);
             return;
         }
+
+        const { validBookIDs, validBookNames } = await getCurrentValidBookIdentifiers(plugin);
 
         const dialog = svelteDialog({
             title: i18n.useBookIDBooksDialogTitle,
@@ -368,6 +460,8 @@
                     props: {
                         plugin,
                         useBookIDBooks: useBookIDBooks,
+                        validBookIDs: Array.from(validBookIDs),
+                        validBookNames: Array.from(validBookNames),
                         onConfirm: () => {
                             dialog.close();
                         },
@@ -447,7 +541,7 @@
                     userVid = result.userVid;
                     // 验证登录信息（手动填 Cookie 使用基于显式 Cookie 字符串的校验）
                     if (userVid) {
-                        const verifyResult = await verifyCookieByForwardProxy(plugin, newCookies, userVid);
+                        const verifyResult = await verifyCookie(plugin, newCookies, userVid);
                         checkMessage = verifyResult.message;
 
                         // 验证成功后刷新页面状态（与扫码登录保持一致）

@@ -7,20 +7,60 @@
     }>;
     export let onConfirm: () => void;
     export let onCancel: () => void;
+    export let validBookIDs: string[] = [];
+    export let validBookNames: string[] = [];
 
-    // 创建本地副本用于操作
-    let localUseBookIDBooks = [...useBookIDBooks];
+    const validBookIDSet = new Set(validBookIDs);
+    const validBookNameSet = new Set(validBookNames.map(name => normalizeBookName(name)));
 
-    // 删除记录
-    const handleDelete = (bookID: string) => {
-        localUseBookIDBooks = localUseBookIDBooks.filter(
-            (book) => book.bookID !== bookID,
-        );
+    function normalizeBookName(name: string | null | undefined | unknown): string {
+        if (!name || typeof name !== 'string') return '';
+        return name.trim().replace(/\s+/g, ' ');
+    }
+
+    function isUseBookIDStale(book: { title: string; isbn: string; bookID: string }): boolean {
+        const normTitle = normalizeBookName(book.title);
+        // 强匹配：bookID 在数据库中存在 -> 有效
+        if (book.bookID && validBookIDSet.has(book.bookID)) {
+            return false;
+        }
+        // 书名弱匹配：书名在数据库中存在 -> 保守视为有效
+        if (normTitle && validBookNameSet.has(normTitle)) {
+            return false;
+        }
+        // 无法确认时保守处理，判为失效（用户可从历史项中移除或重新同步）
+        return true;
+    }
+
+    const effectiveBooks = useBookIDBooks.filter(book => !isUseBookIDStale(book));
+    const staleBooks = useBookIDBooks.filter(book => isUseBookIDStale(book));
+
+    let localEffectiveBooks = [...effectiveBooks];
+    let localStaleBooks = [...staleBooks];
+
+    const handleDeleteEffective = (bookID: string) => {
+        localEffectiveBooks = localEffectiveBooks.filter((book) => book.bookID !== bookID);
+    };
+
+    const handleDeleteStale = (bookID: string) => {
+        localStaleBooks = localStaleBooks.filter((book) => book.bookID !== bookID);
+    };
+
+    const handleClearStale = () => {
+        localStaleBooks = [];
+    };
+
+    const handleSave = () => {
+        const merged = [...localEffectiveBooks, ...localStaleBooks];
+        plugin.saveData("weread_useBookIDBooks", merged);
+        onConfirm();
     };
 </script>
 
 <div class="use-bookid-books-dialog">
-    <div class="table-container">
+    {#if localStaleBooks.length > 0}
+    <div class="stale-notice">⚠️ 以下为已失效历史项（对应本地书籍已删除，不会再阻止该书重新出现在新书列表）</div>
+    <div class="table-container stale-table">
         <table class="use-bookid-table">
             <thead>
                 <tr>
@@ -29,12 +69,12 @@
                 </tr>
             </thead>
             <tbody>
-                {#each localUseBookIDBooks as book (book.bookID)}
-                    <tr>
+                {#each localStaleBooks as book (book.bookID)}
+                    <tr class="stale-row">
                         <td>{book.title}</td>
                         <td>
-                            <button 
-                                on:click={() => handleDelete(book.bookID)}
+                            <button
+                                on:click={() => handleDeleteStale(book.bookID)}
                                 class="delete-btn"
                                 title="{plugin.i18n.delete}"
                             >
@@ -46,16 +86,44 @@
             </tbody>
         </table>
     </div>
+    <div class="stale-actions">
+        <button class="clear-stale-btn" on:click={handleClearStale}>
+            一键清理失效项（{localStaleBooks.length}）
+        </button>
+    </div>
+    {/if}
+
+    {#if localEffectiveBooks.length > 0}
+    <div class="table-container">
+        <table class="use-bookid-table">
+            <thead>
+                <tr>
+                    <th>{plugin.i18n.bookTitle1}</th>
+                    <th>{plugin.i18n.delete}</th>
+                </tr>
+            </thead>
+            <tbody>
+                {#each localEffectiveBooks as book (book.bookID)}
+                    <tr>
+                        <td>{book.title}</td>
+                        <td>
+                            <button
+                                on:click={() => handleDeleteEffective(book.bookID)}
+                                class="delete-btn"
+                                title="{plugin.i18n.delete}"
+                            >
+                                🗑️
+                            </button>
+                        </td>
+                    </tr>
+                {/each}
+            </tbody>
+        </table>
+    </div>
+    {/if}
 
     <div class="dialog-actions">
-        <button
-            on:click={() => {
-                // 保存修改后的数据
-                plugin.saveData("weread_useBookIDBooks", localUseBookIDBooks);
-                onConfirm();
-            }}>{plugin.i18n.confirm}</button
-        >
-
+        <button on:click={handleSave}>{plugin.i18n.confirm}</button>
         <button on:click={onCancel}>{plugin.i18n.cancel}</button>
     </div>
 </div>
@@ -158,6 +226,45 @@
                 &:hover {
                     background-color: var(--b3-theme-primary);
                     color: white;
+                }
+            }
+        }
+
+        .stale-notice {
+            width: 100%;
+            padding: 8px 12px;
+            background-color: var(--b3-theme-surface);
+            border: 1px solid var(--b3-border-color);
+            border-radius: 4px;
+            font-size: 12px;
+            color: var(--b3-theme-text);
+            margin-bottom: 8px;
+        }
+
+        .stale-table {
+            margin-bottom: 8px;
+        }
+
+        .stale-row {
+            opacity: 0.65;
+        }
+
+        .stale-actions {
+            width: 100%;
+            display: flex;
+            justify-content: flex-end;
+            margin-bottom: 8px;
+
+            .clear-stale-btn {
+                padding: 6px 12px;
+                font-size: 12px;
+                border-radius: 4px;
+                border: 1px solid var(--b3-border-color);
+                background-color: var(--b3-theme-background);
+                color: var(--b3-theme-error);
+                cursor: pointer;
+                &:hover {
+                    background-color: rgba(239, 68, 68, 0.1);
                 }
             }
         }

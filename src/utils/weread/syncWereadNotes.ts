@@ -13,10 +13,60 @@ import { saveIgnoredBooks, saveCustomBooksISBN, saveUseBookIDBooks } from "./wer
 import { logError } from "../core/logger";
 import type { WereadPluginLike, WereadBookDetail, SyncNotebookRecord, EnhancedSyncNotebookRecord } from "./types";
 
+const DEFAULT_WEREAD_NOTES_TEMPLATE = `{{#chapters}}
+
+{{#chapterTitle}}
+## {{chapterTitle1}}
+### {{chapterTitle2}}
+#### {{chapterTitle3}}
+##### {{chapterTitle4}}
+{{/chapterTitle}}
+
+{{#chapterComments}}
+### 章节思考
+> 💬 {{chapterComments}}
+- 🕐 {{createTime7}}
+{{/chapterComments}}
+
+{{#notes}}
+{{#highlightText}}
+- {{highlightText}}
+{{/highlightText}}
+{{#highlightCreateTime7}}
+  - 标注时间：{{highlightCreateTime7}}
+{{/highlightCreateTime7}}
+{{#comments}}
+  - 💬 {{content}}
+  {{#commentCreateTime7}}
+    - 评论时间：{{commentCreateTime7}}
+  {{/commentCreateTime7}}
+{{/comments}}
+{{#createTime7}}
+- 主时间：{{createTime7}}
+{{/createTime7}}
+{{/notes}}
+
+{{/chapters}}`;
+
+type NoteCommentItem = {
+    content: string;
+    commentCreateTime1?: string;
+    commentCreateTime2?: string;
+    commentCreateTime3?: string;
+    commentCreateTime4?: string;
+    commentCreateTime5?: string;
+    commentCreateTime6?: string;
+    commentCreateTime7?: string;
+    commentCreateTime8?: string;
+    commentCreateTime9?: string;
+    commentCreateTime10?: string;
+};
+
 type NoteContent = {
     formattedNote: string;
     highlightText?: string;      // 划线文本（层级章节模板兼容）
     highlightComment?: string;   // 划线评论/想法（层级章节模板兼容）
+    // 旧字段保持兼容（默认对应划线时间）
     createTime1?: string;
     createTime2?: string;
     createTime3?: string;
@@ -27,6 +77,30 @@ type NoteContent = {
     createTime8?: string;
     createTime9?: string;
     createTime10?: string;
+    // 新增：划线创建时间（独立字段）
+    highlightCreateTime1?: string;
+    highlightCreateTime2?: string;
+    highlightCreateTime3?: string;
+    highlightCreateTime4?: string;
+    highlightCreateTime5?: string;
+    highlightCreateTime6?: string;
+    highlightCreateTime7?: string;
+    highlightCreateTime8?: string;
+    highlightCreateTime9?: string;
+    highlightCreateTime10?: string;
+    // 新增：评论创建时间（独立字段）
+    commentCreateTime1?: string;
+    commentCreateTime2?: string;
+    commentCreateTime3?: string;
+    commentCreateTime4?: string;
+    commentCreateTime5?: string;
+    commentCreateTime6?: string;
+    commentCreateTime7?: string;
+    commentCreateTime8?: string;
+    commentCreateTime9?: string;
+    commentCreateTime10?: string;
+    _order?: number;
+    comments?: NoteCommentItem[];
 };
 
 type TimeFormat = {
@@ -50,12 +124,50 @@ const TIME_FORMATS: Record<string, TimeFormat> = {
     'createTime10': { dateSeparator: '年', timeSeparator: '时', showSeconds: true, useChineseUnit: true, padZero: false },
 };
 
+// 为新增字段复用同样的格式配置
+const HIGHLIGHT_TIME_FORMATS: Record<string, TimeFormat> = {
+    'highlightCreateTime1': TIME_FORMATS['createTime1'],
+    'highlightCreateTime2': TIME_FORMATS['createTime2'],
+    'highlightCreateTime3': TIME_FORMATS['createTime3'],
+    'highlightCreateTime4': TIME_FORMATS['createTime4'],
+    'highlightCreateTime5': TIME_FORMATS['createTime5'],
+    'highlightCreateTime6': TIME_FORMATS['createTime6'],
+    'highlightCreateTime7': TIME_FORMATS['createTime7'],
+    'highlightCreateTime8': TIME_FORMATS['createTime8'],
+    'highlightCreateTime9': TIME_FORMATS['createTime9'],
+    'highlightCreateTime10': TIME_FORMATS['createTime10'],
+};
+
+const COMMENT_TIME_FORMATS: Record<string, TimeFormat> = {
+    'commentCreateTime1': TIME_FORMATS['createTime1'],
+    'commentCreateTime2': TIME_FORMATS['createTime2'],
+    'commentCreateTime3': TIME_FORMATS['createTime3'],
+    'commentCreateTime4': TIME_FORMATS['createTime4'],
+    'commentCreateTime5': TIME_FORMATS['createTime5'],
+    'commentCreateTime6': TIME_FORMATS['createTime6'],
+    'commentCreateTime7': TIME_FORMATS['createTime7'],
+    'commentCreateTime8': TIME_FORMATS['createTime8'],
+    'commentCreateTime9': TIME_FORMATS['createTime9'],
+    'commentCreateTime10': TIME_FORMATS['createTime10'],
+};
+
 function formatTimestamp(timestamp: number, formatKey: string = 'createTime1'): string {
     if (!timestamp) {
         return '';
     }
     const date = new Date(timestamp * 1000);
-    const format = TIME_FORMATS[formatKey] || TIME_FORMATS['createTime1'];
+    // 支持新的字段名映射到对应的格式配置
+    let format = TIME_FORMATS[formatKey];
+    if (!format) {
+        if (formatKey.startsWith('highlightCreateTime')) {
+            format = HIGHLIGHT_TIME_FORMATS[formatKey];
+        } else if (formatKey.startsWith('commentCreateTime')) {
+            format = COMMENT_TIME_FORMATS[formatKey];
+        }
+    }
+    if (!format) {
+        format = TIME_FORMATS['createTime1'];
+    }
 
     const year = date.getFullYear();
     const month = format.padZero ? String(date.getMonth() + 1).padStart(2, '0') : date.getMonth() + 1;
@@ -133,7 +245,7 @@ export async function syncWereadNotes(plugin: WereadPluginLike, cookies: string,
     const oldNotebooks: SyncNotebookRecord[] = await plugin.loadData("weread_notebooks") || []; // 获取上一次的同步数据
 
     // 若选择的是更新同步并且之前没有同步过则要求进行一次完整同步
-    if (!oldNotebooks && isupdate) {
+    if (oldNotebooks.length === 0 && isupdate) {
         showMessage(plugin.i18n.showMessage26);
         return;
     }
@@ -156,10 +268,16 @@ export async function syncWereadNotes(plugin: WereadPluginLike, cookies: string,
     const bookNameKey = database.keyValues.find((item: any) => item.key.name === "书名");
     const bookNameColumn = bookNameKey?.values || [];
     // 对比bookNameColumn与ISBNColumn，若他俩存在不同的，则将不同的blockID用removeAttributeViewBlocks方法清理
-    const bookNameBlockIDs = new Set(bookNameColumn.map((item: any) => item.blockID));
-    const isbnBlockIDs = new Set(ISBNColumn.map((item: any) => item.blockID));
-    // 找出在ISBN列中但不在书名列中的blockID
-    const blockIDsToRemove = Array.from(isbnBlockIDs).filter(id => !bookNameBlockIDs.has(id) && id !== undefined);
+    const bookNameBlockIDs = new Set<string>(bookNameColumn.map((item: any) => item.blockID));
+    const isbnBlockIDs = new Set<string>(ISBNColumn.map((item: any) => item.blockID));
+    const bookIDBlockIDs = new Set<string>(bookIDColumn.map((item: any) => item.blockID));
+    // 找出在ISBN列或bookID列中但不在书名列中的blockID（即orphan block）
+    const blockIDsToRemove = Array.from(
+        new Set<string>([
+            ...[...isbnBlockIDs].filter(id => !bookNameBlockIDs.has(id)),
+            ...[...bookIDBlockIDs].filter(id => !bookNameBlockIDs.has(id)),
+        ])
+    );
     // 如果有需要清理的blockID，则调用removeAttributeViewBlocks方法
     if (blockIDsToRemove.length > 0) {
         await fetchSyncPost('/api/av/removeAttributeViewBlocks', { "avID": avID, "srcIDs": blockIDsToRemove });
@@ -170,6 +288,11 @@ export async function syncWereadNotes(plugin: WereadPluginLike, cookies: string,
         ISBNColumn = updatedISBNKey?.values || [];
         const updatedBookIDKey = updatedDatabaseData.keyValues.find((item: any) => item.key.name === "bookID");
         bookIDColumn = updatedBookIDKey?.values || [];
+        const updatedBookNameKey = updatedDatabaseData.keyValues.find((item: any) => item.key.name === "书名");
+        const updatedBookNameColumn = updatedBookNameKey?.values || [];
+        // 用清理后的书名列重新覆盖（确保后续逻辑用最终一致的数据）
+        bookNameColumn.length = 0;
+        bookNameColumn.push(...updatedBookNameColumn);
     }
 
     // 获取使用bookID同步的书籍列表
@@ -184,10 +307,39 @@ export async function syncWereadNotes(plugin: WereadPluginLike, cookies: string,
         return null;
     }).filter(Boolean));
 
+    // 构建当前数据库中有效的 bookID 集合（基于清理后的 bookIDColumn）
+    const validBookIDsInDB = new Set(
+        bookIDColumn.map((item: any) => item.text?.content?.toString()).filter(Boolean) || []
+    );
+
+    // 构建当前数据库中有效的 ISBN 集合（基于清理后的 ISBNColumn）
+    const validISBNsInDB = new Set(
+        ISBNColumn.map((item: any) => item.number?.content?.toString()).filter(Boolean) || []
+    );
+
+    // 辅助函数：判断某本书是否"本地已处理"应隐藏
+    // 原则：只有当书籍同时存在于本地配置 AND 当前数据库有效记录中，才视为"本地已处理"
+    const isBookLocallyProcessed = (item: any): boolean => {
+        const bookID = item.bookID?.toString();
+        const isbn = item.isbn?.toString();
+
+        // useBookID 路径：只有 bookID 同时在 useBookIDSet 配置中 AND 仍存在于当前数据库 validBookIDsInDB 中，才隐藏
+        if (bookID && useBookIDSet.has(bookID) && validBookIDsInDB.has(bookID)) {
+            return true;
+        }
+
+        // 自定义 ISBN 路径：只有 ISBN 同时在配置中存在 AND 仍存在于当前数据库 validISBNsInDB 中，才隐藏
+        if (isbn && validISBNsInDB.has(isbn)) {
+            return true;
+        }
+
+        return false;
+    };
+
     // 筛选出云端有但本地没有的书籍：包括使用bookID同步的书籍和不使用bookID同步的书籍
     const cloudNewBooks = cloudNotebooksList.filter((item: any) => {
-        // 如果这本书已经在使用bookID同步的列表中，则不在新书籍窗口中显示
-        if (item.bookID && useBookIDSet.has(item.bookID.toString())) {
+        // 如果这本书"本地已处理"（配置中有且数据库中也有），则不在新书籍窗口中显示
+        if (isBookLocallyProcessed(item)) {
             return false;
         }
 
@@ -507,7 +659,9 @@ export async function syncWereadNotes(plugin: WereadPluginLike, cookies: string,
             }));
 
             // 执行同步
-            await syncNotesProcess(plugin, cookies, booksToSync, bookCache);
+            const syncSuccess = await syncNotesProcess(plugin, cookies, booksToSync, bookCache);
+
+            if (!syncSuccess) return;
 
             // 更新本地存储的同步记录
             const updatedNotebooks: SyncNotebookRecord[] = awaitSyncBooksList.map((book: any) => ({
@@ -539,7 +693,9 @@ export async function syncWereadNotes(plugin: WereadPluginLike, cookies: string,
             }));
 
             // 执行同步
-            await syncNotesProcess(plugin, cookies, booksToSync, bookCache);
+            const syncSuccess = await syncNotesProcess(plugin, cookies, booksToSync, bookCache);
+
+            if (!syncSuccess) return;
 
             // 更新本地存储的同步记录
             const updatedNotebooks: SyncNotebookRecord[] = awaitSyncBooksList.map((book: any) => ({
@@ -664,18 +820,31 @@ function buildFlatChapters(
 ): FlatChapterItem[] {
     const result: FlatChapterItem[] = [];
 
-    // 辅助函数：构建单个节点的笔记
-    function buildNodeNotes(chapterUid: number, chapterTitle: string): NoteContent[] {
+    function parseRangeStart(range: string | undefined): number {
+        if (!range) return Number.MAX_SAFE_INTEGER;
+        const start = parseInt(range.split('-')[0], 10);
+        return isNaN(start) ? Number.MAX_SAFE_INTEGER : start;
+    }
+
+    function buildHighlightedNotes(chapterUid: number, chapterTitle: string, consumedCommentKeys: Set<string>): NoteContent[] {
         const highlights = highlightsByChapter.get(chapterUid) || [];
         return highlights.map(highlight => {
             const key = `${highlight.chapterUid}_${highlight.range}`;
             const linkedComments = abstractComments.get(key) || [];
             const commentText = linkedComments.map((c: any) => c.content).join('\n> 💬 ');
 
+            if (linkedComments.length > 0) {
+                consumedCommentKeys.add(key);
+            }
+
+            const latestComment = linkedComments.length > 0 ? linkedComments[linkedComments.length - 1] : null;
+            const commentTime = latestComment ? latestComment.createTime : 0;
+
             return {
-                formattedNote: formatNote(notesTemplate, { ...highlight, commentText, chapterTitle }, notebookTitle),
+                formattedNote: formatNote(notesTemplate, { ...highlight, commentText, chapterTitle, latestCommentCreateTime: commentTime }, notebookTitle),
                 highlightText: highlight.markText || '',
                 highlightComment: commentText,
+                _order: parseRangeStart(highlight.range),
                 createTime1: formatTimestamp(highlight.createTime, 'createTime1'),
                 createTime2: formatTimestamp(highlight.createTime, 'createTime2'),
                 createTime3: formatTimestamp(highlight.createTime, 'createTime3'),
@@ -686,8 +855,131 @@ function buildFlatChapters(
                 createTime8: formatTimestamp(highlight.createTime, 'createTime8'),
                 createTime9: formatTimestamp(highlight.createTime, 'createTime9'),
                 createTime10: formatTimestamp(highlight.createTime, 'createTime10'),
+                highlightCreateTime1: formatTimestamp(highlight.createTime, 'highlightCreateTime1'),
+                highlightCreateTime2: formatTimestamp(highlight.createTime, 'highlightCreateTime2'),
+                highlightCreateTime3: formatTimestamp(highlight.createTime, 'highlightCreateTime3'),
+                highlightCreateTime4: formatTimestamp(highlight.createTime, 'highlightCreateTime4'),
+                highlightCreateTime5: formatTimestamp(highlight.createTime, 'highlightCreateTime5'),
+                highlightCreateTime6: formatTimestamp(highlight.createTime, 'highlightCreateTime6'),
+                highlightCreateTime7: formatTimestamp(highlight.createTime, 'highlightCreateTime7'),
+                highlightCreateTime8: formatTimestamp(highlight.createTime, 'highlightCreateTime8'),
+                highlightCreateTime9: formatTimestamp(highlight.createTime, 'highlightCreateTime9'),
+                highlightCreateTime10: formatTimestamp(highlight.createTime, 'highlightCreateTime10'),
+                commentCreateTime1: formatTimestamp(commentTime, 'commentCreateTime1'),
+                commentCreateTime2: formatTimestamp(commentTime, 'commentCreateTime2'),
+                commentCreateTime3: formatTimestamp(commentTime, 'commentCreateTime3'),
+                commentCreateTime4: formatTimestamp(commentTime, 'commentCreateTime4'),
+                commentCreateTime5: formatTimestamp(commentTime, 'commentCreateTime5'),
+                commentCreateTime6: formatTimestamp(commentTime, 'commentCreateTime6'),
+                commentCreateTime7: formatTimestamp(commentTime, 'commentCreateTime7'),
+                commentCreateTime8: formatTimestamp(commentTime, 'commentCreateTime8'),
+                commentCreateTime9: formatTimestamp(commentTime, 'commentCreateTime9'),
+                commentCreateTime10: formatTimestamp(commentTime, 'commentCreateTime10'),
+                comments: linkedComments.map((c: any) => ({
+                    content: c.content || '',
+                    commentCreateTime1: formatTimestamp(c.createTime, 'commentCreateTime1'),
+                    commentCreateTime2: formatTimestamp(c.createTime, 'commentCreateTime2'),
+                    commentCreateTime3: formatTimestamp(c.createTime, 'commentCreateTime3'),
+                    commentCreateTime4: formatTimestamp(c.createTime, 'commentCreateTime4'),
+                    commentCreateTime5: formatTimestamp(c.createTime, 'commentCreateTime5'),
+                    commentCreateTime6: formatTimestamp(c.createTime, 'commentCreateTime6'),
+                    commentCreateTime7: formatTimestamp(c.createTime, 'commentCreateTime7'),
+                    commentCreateTime8: formatTimestamp(c.createTime, 'commentCreateTime8'),
+                    commentCreateTime9: formatTimestamp(c.createTime, 'commentCreateTime9'),
+                    commentCreateTime10: formatTimestamp(c.createTime, 'commentCreateTime10'),
+                })),
             };
         });
+    }
+
+    function buildOrphanCommentNotes(chapterUid: number, chapterTitle: string, consumedCommentKeys: Set<string>): NoteContent[] {
+        const orphanNotes: NoteContent[] = [];
+        abstractComments.forEach((comments: any[], key: string) => {
+            if (consumedCommentKeys.has(key)) return;
+            const parts = key.split('_');
+            const keyChapterUid = parseInt(parts[0], 10);
+            if (keyChapterUid !== chapterUid) return;
+            if (comments.length === 0) return;
+
+            const commentText = comments.map((c: any) => c.content).join('\n> 💬 ');
+            const latestComment = comments[comments.length - 1];
+            const commentTime = latestComment.createTime;
+            const abstractText = latestComment.abstract || comments[0].abstract || '';
+
+            const syntheticHighlight = {
+                markText: abstractText,
+                commentText,
+                chapterTitle,
+                createTime: 0,
+                latestCommentCreateTime: commentTime,
+            };
+
+            const rangePart = parts.slice(1).join('_');
+            const orderFromKey = parseRangeStart(rangePart);
+            const orderFromComment = orderFromKey === Number.MAX_SAFE_INTEGER
+                ? parseRangeStart(latestComment.range || comments[0]?.range)
+                : orderFromKey;
+
+            orphanNotes.push({
+                formattedNote: formatNote(notesTemplate, syntheticHighlight, notebookTitle, commentTime),
+                highlightText: abstractText,
+                highlightComment: commentText,
+                _order: orderFromComment,
+                createTime1: formatTimestamp(commentTime, 'createTime1'),
+                createTime2: formatTimestamp(commentTime, 'createTime2'),
+                createTime3: formatTimestamp(commentTime, 'createTime3'),
+                createTime4: formatTimestamp(commentTime, 'createTime4'),
+                createTime5: formatTimestamp(commentTime, 'createTime5'),
+                createTime6: formatTimestamp(commentTime, 'createTime6'),
+                createTime7: formatTimestamp(commentTime, 'createTime7'),
+                createTime8: formatTimestamp(commentTime, 'createTime8'),
+                createTime9: formatTimestamp(commentTime, 'createTime9'),
+                createTime10: formatTimestamp(commentTime, 'createTime10'),
+                highlightCreateTime1: '',
+                highlightCreateTime2: '',
+                highlightCreateTime3: '',
+                highlightCreateTime4: '',
+                highlightCreateTime5: '',
+                highlightCreateTime6: '',
+                highlightCreateTime7: '',
+                highlightCreateTime8: '',
+                highlightCreateTime9: '',
+                highlightCreateTime10: '',
+                commentCreateTime1: formatTimestamp(commentTime, 'commentCreateTime1'),
+                commentCreateTime2: formatTimestamp(commentTime, 'commentCreateTime2'),
+                commentCreateTime3: formatTimestamp(commentTime, 'commentCreateTime3'),
+                commentCreateTime4: formatTimestamp(commentTime, 'commentCreateTime4'),
+                commentCreateTime5: formatTimestamp(commentTime, 'commentCreateTime5'),
+                commentCreateTime6: formatTimestamp(commentTime, 'commentCreateTime6'),
+                commentCreateTime7: formatTimestamp(commentTime, 'commentCreateTime7'),
+                commentCreateTime8: formatTimestamp(commentTime, 'commentCreateTime8'),
+                commentCreateTime9: formatTimestamp(commentTime, 'commentCreateTime9'),
+                commentCreateTime10: formatTimestamp(commentTime, 'commentCreateTime10'),
+                comments: comments.map((c: any) => ({
+                    content: c.content || '',
+                    commentCreateTime1: formatTimestamp(c.createTime, 'commentCreateTime1'),
+                    commentCreateTime2: formatTimestamp(c.createTime, 'commentCreateTime2'),
+                    commentCreateTime3: formatTimestamp(c.createTime, 'commentCreateTime3'),
+                    commentCreateTime4: formatTimestamp(c.createTime, 'commentCreateTime4'),
+                    commentCreateTime5: formatTimestamp(c.createTime, 'commentCreateTime5'),
+                    commentCreateTime6: formatTimestamp(c.createTime, 'commentCreateTime6'),
+                    commentCreateTime7: formatTimestamp(c.createTime, 'commentCreateTime7'),
+                    commentCreateTime8: formatTimestamp(c.createTime, 'commentCreateTime8'),
+                    commentCreateTime9: formatTimestamp(c.createTime, 'commentCreateTime9'),
+                    commentCreateTime10: formatTimestamp(c.createTime, 'commentCreateTime10'),
+                })),
+            });
+        });
+        return orphanNotes;
+    }
+
+    function buildNodeNotes(chapterUid: number, chapterTitle: string): NoteContent[] {
+        const consumedCommentKeys = new Set<string>();
+        const highlightedNotes = buildHighlightedNotes(chapterUid, chapterTitle, consumedCommentKeys);
+        const orphanNotes = buildOrphanCommentNotes(chapterUid, chapterTitle, consumedCommentKeys);
+        const allNotes = [...highlightedNotes, ...orphanNotes];
+        allNotes.sort((a, b) => (a._order ?? Number.MAX_SAFE_INTEGER) - (b._order ?? Number.MAX_SAFE_INTEGER));
+        return allNotes;
     }
 
     // 辅助函数：构建章节评论
@@ -810,22 +1102,75 @@ function classifyComments(comments: any[]): {
  * 格式化单条笔记（用于层级章节构建）
  * 简化版：只处理基础模板替换
  */
-function formatNote(notesTemplate: string, highlight: any, notebookTitle: string): string {
+function formatNote(notesTemplate: string, highlight: any, notebookTitle: string, overrideCreateTime?: number): string {
+    const commentTime = highlight.latestCommentCreateTime || 0;
+    const mainTime = overrideCreateTime !== undefined ? overrideCreateTime : highlight.createTime;
     return notesTemplate
         .replace(/\{\{highlightText\}\}/g, highlight.markText || '')
         .replace(/\{\{highlightComment\}\}/g, highlight.commentText || '')
-        .replace(/\{\{createTime1\}\}/g, formatTimestamp(highlight.createTime, 'createTime1'))
-        .replace(/\{\{createTime2\}\}/g, formatTimestamp(highlight.createTime, 'createTime2'))
-        .replace(/\{\{createTime3\}\}/g, formatTimestamp(highlight.createTime, 'createTime3'))
-        .replace(/\{\{createTime4\}\}/g, formatTimestamp(highlight.createTime, 'createTime4'))
-        .replace(/\{\{createTime5\}\}/g, formatTimestamp(highlight.createTime, 'createTime5'))
-        .replace(/\{\{createTime6\}\}/g, formatTimestamp(highlight.createTime, 'createTime6'))
-        .replace(/\{\{createTime7\}\}/g, formatTimestamp(highlight.createTime, 'createTime7'))
-        .replace(/\{\{createTime8\}\}/g, formatTimestamp(highlight.createTime, 'createTime8'))
-        .replace(/\{\{createTime9\}\}/g, formatTimestamp(highlight.createTime, 'createTime9'))
-        .replace(/\{\{createTime10\}\}/g, formatTimestamp(highlight.createTime, 'createTime10'))
+        .replace(/\{\{createTime1\}\}/g, formatTimestamp(mainTime, 'createTime1'))
+        .replace(/\{\{createTime2\}\}/g, formatTimestamp(mainTime, 'createTime2'))
+        .replace(/\{\{createTime3\}\}/g, formatTimestamp(mainTime, 'createTime3'))
+        .replace(/\{\{createTime4\}\}/g, formatTimestamp(mainTime, 'createTime4'))
+        .replace(/\{\{createTime5\}\}/g, formatTimestamp(mainTime, 'createTime5'))
+        .replace(/\{\{createTime6\}\}/g, formatTimestamp(mainTime, 'createTime6'))
+        .replace(/\{\{createTime7\}\}/g, formatTimestamp(mainTime, 'createTime7'))
+        .replace(/\{\{createTime8\}\}/g, formatTimestamp(mainTime, 'createTime8'))
+        .replace(/\{\{createTime9\}\}/g, formatTimestamp(mainTime, 'createTime9'))
+        .replace(/\{\{createTime10\}\}/g, formatTimestamp(mainTime, 'createTime10'))
+        .replace(/\{\{highlightCreateTime1\}\}/g, formatTimestamp(highlight.createTime, 'highlightCreateTime1'))
+        .replace(/\{\{highlightCreateTime2\}\}/g, formatTimestamp(highlight.createTime, 'highlightCreateTime2'))
+        .replace(/\{\{highlightCreateTime3\}\}/g, formatTimestamp(highlight.createTime, 'highlightCreateTime3'))
+        .replace(/\{\{highlightCreateTime4\}\}/g, formatTimestamp(highlight.createTime, 'highlightCreateTime4'))
+        .replace(/\{\{highlightCreateTime5\}\}/g, formatTimestamp(highlight.createTime, 'highlightCreateTime5'))
+        .replace(/\{\{highlightCreateTime6\}\}/g, formatTimestamp(highlight.createTime, 'highlightCreateTime6'))
+        .replace(/\{\{highlightCreateTime7\}\}/g, formatTimestamp(highlight.createTime, 'highlightCreateTime7'))
+        .replace(/\{\{highlightCreateTime8\}\}/g, formatTimestamp(highlight.createTime, 'highlightCreateTime8'))
+        .replace(/\{\{highlightCreateTime9\}\}/g, formatTimestamp(highlight.createTime, 'highlightCreateTime9'))
+        .replace(/\{\{highlightCreateTime10\}\}/g, formatTimestamp(highlight.createTime, 'highlightCreateTime10'))
+        .replace(/\{\{commentCreateTime1\}\}/g, formatTimestamp(commentTime, 'commentCreateTime1'))
+        .replace(/\{\{commentCreateTime2\}\}/g, formatTimestamp(commentTime, 'commentCreateTime2'))
+        .replace(/\{\{commentCreateTime3\}\}/g, formatTimestamp(commentTime, 'commentCreateTime3'))
+        .replace(/\{\{commentCreateTime4\}\}/g, formatTimestamp(commentTime, 'commentCreateTime4'))
+        .replace(/\{\{commentCreateTime5\}\}/g, formatTimestamp(commentTime, 'commentCreateTime5'))
+        .replace(/\{\{commentCreateTime6\}\}/g, formatTimestamp(commentTime, 'commentCreateTime6'))
+        .replace(/\{\{commentCreateTime7\}\}/g, formatTimestamp(commentTime, 'commentCreateTime7'))
+        .replace(/\{\{commentCreateTime8\}\}/g, formatTimestamp(commentTime, 'commentCreateTime8'))
+        .replace(/\{\{commentCreateTime9\}\}/g, formatTimestamp(commentTime, 'commentCreateTime9'))
+        .replace(/\{\{commentCreateTime10\}\}/g, formatTimestamp(commentTime, 'commentCreateTime10'))
         .replace(/\{\{chapterTitle\}\}/g, highlight.chapterTitle || '')
         .replace(/\{\{notebookTitle\}\}/g, notebookTitle);
+}
+
+/**
+ * 处理 notes 层通用条件 section：{{#fieldName}}...{{/fieldName}}
+ * 当 note 上 fieldName 有值（非空字符串、非 null、非 undefined）时保留内容，无值时删除整段
+ * 注意：已处理过的 {{#comments}}...{{/comments}} 不会被此函数影响
+ */
+function renderNoteConditionalSections(
+    template: string,
+    note: Record<string, any>
+): string {
+    // 定义 note 上可能的一层字段（不含嵌套对象和数组）
+    const singleFields = [
+        'highlightText', 'highlightComment', 'formattedNote',
+        'createTime1', 'createTime2', 'createTime3', 'createTime4', 'createTime5',
+        'createTime6', 'createTime7', 'createTime8', 'createTime9', 'createTime10',
+        'highlightCreateTime1', 'highlightCreateTime2', 'highlightCreateTime3', 'highlightCreateTime4', 'highlightCreateTime5',
+        'highlightCreateTime6', 'highlightCreateTime7', 'highlightCreateTime8', 'highlightCreateTime9', 'highlightCreateTime10',
+        'commentCreateTime1', 'commentCreateTime2', 'commentCreateTime3', 'commentCreateTime4', 'commentCreateTime5',
+        'commentCreateTime6', 'commentCreateTime7', 'commentCreateTime8', 'commentCreateTime9', 'commentCreateTime10',
+    ];
+
+    let result = template;
+    for (const field of singleFields) {
+        const value = note[field];
+        const hasValue = value !== null && value !== undefined && value !== '';
+        // 匹配 {{#fieldName}}...{{/fieldName}} 块
+        result = result.replace(new RegExp(`\\{\\{#${field}\\}\\}([\\s\\S]*?)\\{\\{\\/${field}\\}\\}`, 'g'),
+            (_, innerContent) => hasValue ? innerContent : '');
+    }
+    return result;
 }
 
 /**
@@ -847,10 +1192,54 @@ function renderNoteTemplateWithOptionalComment(
         createTime8?: string;
         createTime9?: string;
         createTime10?: string;
+        highlightCreateTime1?: string;
+        highlightCreateTime2?: string;
+        highlightCreateTime3?: string;
+        highlightCreateTime4?: string;
+        highlightCreateTime5?: string;
+        highlightCreateTime6?: string;
+        highlightCreateTime7?: string;
+        highlightCreateTime8?: string;
+        highlightCreateTime9?: string;
+        highlightCreateTime10?: string;
+        commentCreateTime1?: string;
+        commentCreateTime2?: string;
+        commentCreateTime3?: string;
+        commentCreateTime4?: string;
+        commentCreateTime5?: string;
+        commentCreateTime6?: string;
+        commentCreateTime7?: string;
+        commentCreateTime8?: string;
+        commentCreateTime9?: string;
+        commentCreateTime10?: string;
+        comments?: NoteCommentItem[];
     }
 ): string {
     const hasComment = !!(note.highlightComment && note.highlightComment.trim());
-    const lines = notesTemplate.split('\n');
+    let template = notesTemplate
+        .replace(/\{\{#comments\}\}([\s\S]*?)\{\{\/comments\}\}/g, (_, commentsTpl) => {
+            if (!note.comments || note.comments.length === 0) return '';
+            return note.comments.map(c => {
+                return commentsTpl
+                    .replace(/\{\{content\}\}/g, c.content || '')
+                    .replace(/\{\{commentCreateTime1\}\}/g, c.commentCreateTime1 || '')
+                    .replace(/\{\{commentCreateTime2\}\}/g, c.commentCreateTime2 || '')
+                    .replace(/\{\{commentCreateTime3\}\}/g, c.commentCreateTime3 || '')
+                    .replace(/\{\{commentCreateTime4\}\}/g, c.commentCreateTime4 || '')
+                    .replace(/\{\{commentCreateTime5\}\}/g, c.commentCreateTime5 || '')
+                    .replace(/\{\{commentCreateTime6\}\}/g, c.commentCreateTime6 || '')
+                    .replace(/\{\{commentCreateTime7\}\}/g, c.commentCreateTime7 || '')
+                    .replace(/\{\{commentCreateTime8\}\}/g, c.commentCreateTime8 || '')
+                    .replace(/\{\{commentCreateTime9\}\}/g, c.commentCreateTime9 || '')
+                    .replace(/\{\{commentCreateTime10\}\}/g, c.commentCreateTime10 || '');
+            }).join('\n');
+        });
+
+    // 处理通用条件 section：{{#fieldName}}...{{/fieldName}}
+    // 当 note 上 fieldName 有值（非空）时保留内容，无值时删除整段
+    template = renderNoteConditionalSections(template, note);
+
+    const lines = template.split('\n');
 
     const renderedLines = lines
         .map(line => {
@@ -871,7 +1260,27 @@ function renderNoteTemplateWithOptionalComment(
                 .replace(/\{\{createTime7\}\}/g, note.createTime7 || '')
                 .replace(/\{\{createTime8\}\}/g, note.createTime8 || '')
                 .replace(/\{\{createTime9\}\}/g, note.createTime9 || '')
-                .replace(/\{\{createTime10\}\}/g, note.createTime10 || '');
+                .replace(/\{\{createTime10\}\}/g, note.createTime10 || '')
+                .replace(/\{\{highlightCreateTime1\}\}/g, note.highlightCreateTime1 || '')
+                .replace(/\{\{highlightCreateTime2\}\}/g, note.highlightCreateTime2 || '')
+                .replace(/\{\{highlightCreateTime3\}\}/g, note.highlightCreateTime3 || '')
+                .replace(/\{\{highlightCreateTime4\}\}/g, note.highlightCreateTime4 || '')
+                .replace(/\{\{highlightCreateTime5\}\}/g, note.highlightCreateTime5 || '')
+                .replace(/\{\{highlightCreateTime6\}\}/g, note.highlightCreateTime6 || '')
+                .replace(/\{\{highlightCreateTime7\}\}/g, note.highlightCreateTime7 || '')
+                .replace(/\{\{highlightCreateTime8\}\}/g, note.highlightCreateTime8 || '')
+                .replace(/\{\{highlightCreateTime9\}\}/g, note.highlightCreateTime9 || '')
+                .replace(/\{\{highlightCreateTime10\}\}/g, note.highlightCreateTime10 || '')
+                .replace(/\{\{commentCreateTime1\}\}/g, note.commentCreateTime1 || '')
+                .replace(/\{\{commentCreateTime2\}\}/g, note.commentCreateTime2 || '')
+                .replace(/\{\{commentCreateTime3\}\}/g, note.commentCreateTime3 || '')
+                .replace(/\{\{commentCreateTime4\}\}/g, note.commentCreateTime4 || '')
+                .replace(/\{\{commentCreateTime5\}\}/g, note.commentCreateTime5 || '')
+                .replace(/\{\{commentCreateTime6\}\}/g, note.commentCreateTime6 || '')
+                .replace(/\{\{commentCreateTime7\}\}/g, note.commentCreateTime7 || '')
+                .replace(/\{\{commentCreateTime8\}\}/g, note.commentCreateTime8 || '')
+                .replace(/\{\{commentCreateTime9\}\}/g, note.commentCreateTime9 || '')
+                .replace(/\{\{commentCreateTime10\}\}/g, note.commentCreateTime10 || '');
         })
         .filter((line): line is string => line !== null && line.trim() !== '');
 
@@ -1056,13 +1465,13 @@ function buildTemplateVariables(
     };
 }
 
-async function syncNotesProcess(plugin: WereadPluginLike, cookies: string, notebooks: SyncNotebookRecord[], bookCache?: Map<string, Promise<WereadBookDetail>>): Promise<void> {
+async function syncNotesProcess(plugin: WereadPluginLike, cookies: string, notebooks: SyncNotebookRecord[], bookCache?: Map<string, Promise<WereadBookDetail>>): Promise<boolean> {
     // 加载微信读书笔记同步模板
     const template = await plugin.loadData("weread_templates");
     // 检查模板
     if (!template) {
         showMessage(plugin.i18n.showMessage25);
-        return;
+        return false;
     }
 
     // 使用传入的缓存或创建新的局部缓存
@@ -1103,8 +1512,8 @@ async function syncNotesProcess(plugin: WereadPluginLike, cookies: string, noteb
                 const { abstractComments, chapterComments } = classifyComments(comments);
 
                 const notesTemplateMatch = template.match(/\{\{#notes\}\}([\s\S]*?)\{\{\/notes\}\}/);
-                // 兜底模板使用与 formatNote 一致的字段协议
-                const notesTemplate = notesTemplateMatch ? notesTemplateMatch[1] : `- {{highlightText}}\n> 💬 {{highlightComment}}\n- {{createTime7}}`;
+                // 优先使用模板中提取的 notes 块，否则使用新默认模板
+                const notesTemplate = notesTemplateMatch ? notesTemplateMatch[1] : DEFAULT_WEREAD_NOTES_TEMPLATE;
 
                 // 构建层级章节结构
                 const hierarchy = buildChapterHierarchy(notebook.chapterInfos);
@@ -1145,6 +1554,7 @@ async function syncNotesProcess(plugin: WereadPluginLike, cookies: string, noteb
 
     return Promise.all(updatePromises).then(() => {
         showMessage(plugin.i18n.showMessage37, 2000);
+        return true;
     });
 }
 

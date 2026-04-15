@@ -109,77 +109,64 @@ export async function createWereadQRCodeDialog(i18n: any, idbtn: boolean): Promi
                 modal: false, // 非模态窗口
             });
 
+            const isStillOnLoginPage = (url: string): boolean => {
+                try {
+                    const u = new URL(url);
+                    return u.hostname === 'weread.qq.com' && u.hash === '#login';
+                } catch {
+                    return url.includes('#login');
+                }
+            };
+
+            const readCookiesAndResolve = async (source: string) => {
+                if (finished) return;
+                try {
+                    const session = remote.session.defaultSession;
+                    const cookieArray = await session.cookies.get({ url: 'https://weread.qq.com' });
+                    const cookies = cookieArray
+                        .map(cookie => `${cookie.name}=${cookie.value}`)
+                        .join("; ");
+
+                    if (!cookies || cookies.length === 0) {
+                        await finishReject(`No cookies obtained (${source})`);
+                    } else {
+                        await finishResolve(cookies, source);
+                    }
+                } catch (error) {
+                    await finishReject(`Failed to get cookies (${source}): ${error}`);
+                }
+            };
+
+            // 监听页面导航：当 URL 离开登录页时读取 cookie
+            loginWindow.webContents.on('did-navigate', async (_event: any, url: string) => {
+                if (finished) return;
+                if (!isStillOnLoginPage(url)) {
+                    await readCookiesAndResolve('did-navigate');
+                }
+            });
+
+            loginWindow.webContents.on('did-navigate-in-page', async (_event: any, url: string) => {
+                if (finished) return;
+                if (!isStillOnLoginPage(url)) {
+                    await readCookiesAndResolve('did-navigate-in-page');
+                }
+            });
+
             await loginWindow.loadURL("https://weread.qq.com/#login");
 
-            if (!idbtn) {
-                // 静默模式：监听页面加载完成事件
-                loginWindow.webContents.once('dom-ready', async () => {
-                    try {
-                        // 等待一小段时间确保登录完成
-                        await new Promise(r => setTimeout(r, 2000));
+            // 超时保护：如果页面始终停留在登录页，则判定刷新失败
+            silentTimeout = setTimeout(async () => {
+                if (finished) return;
+                await finishReject("Login page timeout: session did not restore");
+            }, 15000);
 
-                        const session = remote.session.defaultSession;
-                        const cookieArray = await session.cookies.get({ url: 'https://weread.qq.com' });
-                        const cookies = cookieArray
-                            .map(cookie => `${cookie.name}=${cookie.value}`)
-                            .join("; ");
-                        
-                        // 只判断是否拿到 cookie，不判断内容是否变化
-                        // 由调用方用 checkWrVid + verifyCookie 做最终判定
-                        if (!cookies || cookies.length === 0) {
-                            await finishReject("Silent refresh failed: no cookies obtained");
-                        } else {
-                            await finishResolve(cookies, 'dom-ready');
-                        }
-                    } catch (error) {
-                        await finishReject("Failed to get cookies in silent mode: " + error);
-                    }
-                });
-
-                // 静默模式超时保护：如果15秒内未完成加载，则自动关闭
-                silentTimeout = setTimeout(async () => {
-                    try {
-                        const session = remote.session.defaultSession;
-                        const cookieArray = await session.cookies.get({ url: 'https://weread.qq.com' });
-                        const cookies = cookieArray
-                            .map(cookie => `${cookie.name}=${cookie.value}`)
-                            .join("; ");
-                        
-                        // 只判断是否拿到 cookie，不判断内容是否变化
-                        if (!cookies || cookies.length === 0) {
-                            await finishReject("Silent refresh timeout: no cookies obtained");
-                        } else {
-                            await finishResolve(cookies, 'timeout');
-                        }
-                    } catch (error) {
-                        await finishReject("Silent refresh timeout: " + error);
-                    }
-                }, 15000); // 15秒超时保护
-            } else {
-                // 显示扫码窗口
+            if (idbtn) {
+                // 手动扫码模式：用户关闭窗口时，如果仍在登录页则按取消处理
                 loginWindow.on('close', async () => {
-                    try {
-                        const session = remote.session.defaultSession;
-                        const cookieArray = await session.cookies.get({ url: 'https://weread.qq.com' });
-                        const cookies = cookieArray
-                            .map(cookie => `${cookie.name}=${cookie.value}`)
-                            .join("; ");
-                        
-                        // close 事件中直接 resolve，不再调用 finishResolve 关闭窗口
-                        if (finished) return;
-                        finished = true;
-                        
-                        if (silentTimeout) {
-                            clearTimeout(silentTimeout);
-                            silentTimeout = null;
-                        }
-                        
-                        resolve(cookies);
-                    } catch (error) {
-                        if (finished) return;
-                        finished = true;
-                        reject("Failed to get cookies: " + error);
-                    }
+                    if (finished) return;
+                    // 已通过导航事件成功拿到 cookie 的情况不会走到这里
+                    // 走到这里说明用户关闭窗口时仍在登录页
+                    await finishReject("User closed login window without completing login");
                 });
             }
 
@@ -190,6 +177,41 @@ export async function createWereadQRCodeDialog(i18n: any, idbtn: boolean): Promi
     });
 }
 
+const DEFAULT_WEREAD_NOTES_TEMPLATE = `{{#chapters}}
+
+{{#chapterTitle}}
+## {{chapterTitle1}}
+### {{chapterTitle2}}
+#### {{chapterTitle3}}
+##### {{chapterTitle4}}
+{{/chapterTitle}}
+
+{{#chapterComments}}
+### 章节思考
+> 💬 {{chapterComments}}
+- 🕐 {{createTime7}}
+{{/chapterComments}}
+
+{{#notes}}
+{{#highlightText}}
+- {{highlightText}}
+{{/highlightText}}
+{{#highlightCreateTime7}}
+  - 标注时间：{{highlightCreateTime7}}
+{{/highlightCreateTime7}}
+{{#comments}}
+  - 💬 {{content}}
+  {{#commentCreateTime7}}
+    - 评论时间：{{commentCreateTime7}}
+  {{/commentCreateTime7}}
+{{/comments}}
+{{#createTime7}}
+- 主时间：{{createTime7}}
+{{/createTime7}}
+{{/notes}}
+
+{{/chapters}}`;
+
 export const createWereadNotesTemplateDialog = (i18n: any, onConfirm: (newWereadTemplates: string) => void, initialTemplates = "") => {
     return () => {
         const dialog = svelteDialog({
@@ -199,7 +221,7 @@ export const createWereadNotesTemplateDialog = (i18n: any, onConfirm: (newWeread
                     target: containerEl,
                     props: {
                         i18n: i18n,
-                        newWereadTemplates: initialTemplates,
+                        newWereadTemplates: initialTemplates || DEFAULT_WEREAD_NOTES_TEMPLATE,
                         close: () => dialog.close(),
                         confirm: (newWereadTemplates: string) => {
                             onConfirm(newWereadTemplates);
@@ -279,159 +301,6 @@ export const checkWrVid = (cookieStr: string): CheckResult => {
 };
 
 export const verifyCookie = async (
-    plugin: any,
-    _cookies: string,
-    userVid: string
-): Promise<VerifyResult> => {
-    // 检查 Electron 环境
-    if (!window.navigator.userAgent.includes("Electron") || typeof window.require !== "function") {
-        return {
-            success: false,
-            loginDue: false,
-            message: plugin.i18n.checkMessage5 + "Electron environment not available"
-        };
-    }
-
-    let remote: any;
-    try {
-        remote = window.require("@electron/remote");
-    } catch (e) {
-        return {
-            success: false,
-            loginDue: false,
-            message: plugin.i18n.checkMessage5 + "Remote module not available"
-        };
-    }
-
-    const { BrowserWindow } = remote;
-    if (!BrowserWindow) {
-        return {
-            success: false,
-            loginDue: false,
-            message: plugin.i18n.checkMessage5 + "BrowserWindow not available"
-        };
-    }
-
-    return new Promise((resolve) => {
-        let win: any = null;
-        let timeoutId: any = null;
-
-        // 15秒超时保护
-        timeoutId = setTimeout(() => {
-            if (win) {
-                win.destroy();
-                win = null;
-            }
-            resolve({
-                success: false,
-                loginDue: false,
-                message: plugin.i18n.checkMessage5 + "Verification timeout"
-            });
-        }, 15000);
-
-        try {
-            // 创建隐藏窗口
-            win = new BrowserWindow({
-                width: 1,
-                height: 1,
-                show: false,
-                webPreferences: {
-                    nodeIntegration: false,
-                    contextIsolation: true,
-                    sandbox: false,
-                    webSecurity: true
-                }
-            });
-
-            // 页面加载完成后，在页面上下文执行 fetch 验证登录状态
-            win.webContents.once('dom-ready', async () => {
-                const fetchScript = `
-                    (async () => {
-                        try {
-                            const resp = await fetch("https://weread.qq.com/web/user?userVid=${userVid}", {
-                                credentials: "include"
-                            });
-                            const data = await resp.json();
-                            return { success: true, data: data };
-                        } catch (err) {
-                            return { success: false, error: err.message };
-                        }
-                    })()
-                `;
-
-                try {
-                    const fetchResult = await win.webContents.executeJavaScript(fetchScript);
-
-                    // 清理
-                    clearTimeout(timeoutId);
-                    if (win) {
-                        win.destroy();
-                        win = null;
-                    }
-
-                    if (!fetchResult || !fetchResult.success) {
-                        resolve({
-                            success: false,
-                            loginDue: false,
-                            message: plugin.i18n.checkMessage5 + (fetchResult?.error || "Fetch failed")
-                        });
-                        return;
-                    }
-
-                    const result = fetchResult.data;
-
-                    resolve(parseVerifyResponse(result, plugin.i18n));
-                } catch (error: any) {
-                    clearTimeout(timeoutId);
-                    if (win) {
-                        win.destroy();
-                        win = null;
-                    }
-
-                    resolve({
-                        success: false,
-                        loginDue: false,
-                        message: `${plugin.i18n.checkMessage5}${error?.message || error}`
-                    });
-                }
-            });
-
-            // 加载微信读书首页
-            win.loadURL('https://weread.qq.com/').catch(() => {
-                clearTimeout(timeoutId);
-                if (win) {
-                    win.destroy();
-                    win = null;
-                }
-
-                resolve({
-                    success: false,
-                    loginDue: false,
-                    message: plugin.i18n.checkMessage5 + "Failed to load page"
-                });
-            });
-
-        } catch {
-            clearTimeout(timeoutId);
-            if (win) {
-                win.destroy();
-                win = null;
-            }
-
-            resolve({
-                success: false,
-                loginDue: false,
-                message: plugin.i18n.checkMessage5 + "Failed to create window"
-            });
-        }
-    });
-};
-
-/**
- * 通过 forwardProxy 验证 Cookie（专用于手动填 Cookie 场景）
- * 直接使用传入的 cookie 字符串进行校验，不依赖 Electron session
- */
-export const verifyCookieByForwardProxy = async (
     plugin: any,
     cookies: string,
     userVid: string

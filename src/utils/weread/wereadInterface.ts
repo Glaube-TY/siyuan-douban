@@ -197,6 +197,9 @@ export async function getBookChapterInfos(_plugin: WereadPluginLike, cookies: st
         }, 15000);
 
         try {
+            // 使用一次性隔离 partition，避免 cookie 污染默认 session
+            const partition = `weread-chapter-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
             // 创建隐藏窗口
             win = new BrowserWindow({
                 width: 1,
@@ -206,7 +209,8 @@ export async function getBookChapterInfos(_plugin: WereadPluginLike, cookies: st
                     nodeIntegration: false,
                     contextIsolation: true,
                     sandbox: false,
-                    webSecurity: true
+                    webSecurity: true,
+                    partition
                 }
             });
 

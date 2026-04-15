@@ -145,25 +145,29 @@ export default class PluginDouban extends Plugin {
 
                     showMessage(this.i18n.showMessage19)
                     try {
-                        const autoCookies = await createWereadQRCodeDialog(this.i18n, false);
+                        const refreshedCookies = await createWereadQRCodeDialog(this.i18n, false);
 
                         const savedata = {
-                            cookies: autoCookies,
+                            cookies: refreshedCookies,
                             isQRCode: true,
                         };
                         await this.saveData("weread_cookie", savedata);
 
-                        const result = checkWrVid(autoCookies);
+                        // 重新从本地读取，确保后续校验使用的是持久化后的数据
+                        const reloaded = await loadPluginData(this, "weread_cookie", DEFAULT_WEREAD_COOKIE);
+                        const reloadedCookies = reloaded.cookies;
+
+                        const result = checkWrVid(reloadedCookies);
                         userVid = result.userVid;
 
                         if (userVid) {
-                            const verifyResult = await verifyCookie(this, autoCookies, userVid);
+                            const verifyResult = await verifyCookie(this, reloadedCookies, userVid);
 
                             if (verifyResult.success) {
                                 showMessage(this.i18n.showMessage20);
                                 // 在登录成功后，用新的 cookie 获取 notebooksList 并保存
                                 const bookCache = new Map<string, Promise<WereadBookDetail>>();
-                                await handleVerifiedCookieSync(this, autoCookies, bookCache);
+                                await handleVerifiedCookieSync(this, reloadedCookies, bookCache);
                             } else {
                                 showMessage(this.i18n.showMessage18);
                             }
