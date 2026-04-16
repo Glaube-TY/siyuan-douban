@@ -498,20 +498,21 @@
                             true,
                         );
 
-                        // 更新当前组件内存中的 cookies
-                        cookies = autoCookies;
-
                         const savedata = {
                             cookies: autoCookies,
                             isQRCode: true,
                         };
                         await plugin.saveData("weread_cookie", savedata);
 
-                        const result = checkWrVid(autoCookies);
+                        // 保存本地后，重新从本地读取再校验（与项目规则保持一致）
+                        const reloaded = await loadPluginData(plugin, "weread_cookie", DEFAULT_WEREAD_COOKIE);
+                        cookies = reloaded.cookies;
+
+                        const result = checkWrVid(cookies);
                         userVid = result.userVid;
 
                         if (userVid) {
-                            const verifyResult = await verifyCookie(plugin, autoCookies, userVid);
+                            const verifyResult = await verifyCookie(plugin, cookies, userVid);
                             checkMessage = verifyResult.message;
                             
                             // 验证成功后刷新页面状态
@@ -523,11 +524,14 @@
                             showMessage(i18n.checkMessage6);
                         }
                     } catch (error) {
+                        // 用户取消操作，静默结束，不更新状态
+                        if (error === "__CANCELLED__") {
+                            return;
+                        }
                         checkMessage = i18n.checkMessage6;
                         showMessage(i18n.checkMessage6);
                     }
-                }}>{i18n.scanQRCodeLogin}</button
-            >
+                }}>{i18n.scanQRCodeLogin}</button>
             <button
                 on:click={createWereadDialog(plugin, cookies, async (newCookies) => {
                     cookies = newCookies;
