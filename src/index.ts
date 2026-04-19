@@ -18,8 +18,12 @@ import {
 } from "@/utils/weread/wereadInterface";
 import PromiseLimitPool from "./libs/promise-pool";
 import type { WereadBookSummary, WereadBookDetail } from "./utils/weread/types";
+import { isWereadMpAccountSource } from "./utils/weread/mpArticleSync";
 
 const BOOK_DETAILS_CONCURRENCY = 4;
+
+// 本地扩展类型，用于访问公众号账号特有的元数据字段
+type WereadBookDetailWithMpMeta = WereadBookDetail & { type?: number; coverBoxInfo?: { mp_avatar?: string } };
 
 async function buildTemporaryNotebookList(plugin: PluginDouban, cookies: string, bookCache: Map<string, Promise<WereadBookDetail>>): Promise<WereadBookSummary[]> {
     const notebookdata = await getNotebooks(plugin, cookies);
@@ -36,14 +40,27 @@ async function buildTemporaryNotebookList(plugin: PluginDouban, cookies: string,
     for (const b of basicBooks) {
         pool.add(async () => {
             const details = await getBookCached(b.bookId);
+            const detailsWithMpMeta = details as WereadBookDetailWithMpMeta;
+
+            // 判定来源类型
+            const isMpAccount = isWereadMpAccountSource(details.bookId, detailsWithMpMeta);
+            const sourceType = isMpAccount ? "weread_mp_account" : "weread_book";
+
+            // 处理封面：公众号账号在默认占位封面场景下回退到 mp_avatar
+            let cover = details.cover || "";
+            if (isMpAccount && (!cover || cover.includes("/t8_0.jpg"))) {
+                cover = detailsWithMpMeta.coverBoxInfo?.mp_avatar || cover;
+            }
+
             return {
+                sourceType,
                 noteCount: b.noteCount,
                 reviewCount: b.reviewCount,
                 updatedTime: b.sort,
                 bookID: details.bookId,
                 title: details.title,
                 author: details.author,
-                cover: details.cover,
+                cover,
                 format: details.format,
                 price: details.price,
                 introduction: details.intro,
@@ -110,12 +127,30 @@ export default class PluginDouban extends Plugin {
         this.registerCommand();
     }
 
+    // 基于 cookie 字符串校验并返回状态
+    private async verifyCookieStatus(cookies: string): Promise<{ userVid: string; success: boolean; loginDue: boolean }> {
+        const result = checkWrVid(cookies);
+        const userVid = result.userVid;
+        if (!userVid) {
+            return { userVid: "", success: false, loginDue: false };
+        }
+        const verifyResult = await verifyCookie(this, cookies, userVid);
+        return { userVid, success: verifyResult.success, loginDue: verifyResult.loginDue };
+    }
+
+    // 二维码刷新后保存 cookie 并从本地重读
+    private async saveAndReloadCookies(refreshedCookies: string): Promise<string> {
+        const savedata = { cookies: refreshedCookies, isQRCode: true };
+        await this.saveData("weread_cookie", savedata);
+        const reloaded = await loadPluginData(this, "weread_cookie", DEFAULT_WEREAD_COOKIE);
+        return reloaded.cookies;
+    }
+
     async onLayoutReady() {
         const wereadSetting = await loadPluginData(this, "weread_settings", DEFAULT_WEREAD_SETTINGS);
         const autoSync = wereadSetting.autoSync;
         const savedCookie = await loadPluginData(this, "weread_cookie", DEFAULT_WEREAD_COOKIE);
         const cookies = savedCookie.cookies;
-        let userVid = "";
 
         if (autoSync) {
             if (!cookies || cookies.length === 0) {
@@ -123,22 +158,15 @@ export default class PluginDouban extends Plugin {
                 return;
             }
 
-            const result = checkWrVid(cookies);
-            userVid = result.userVid;
+            const initialStatus = await this.verifyCookieStatus(cookies);
 
-            if (!userVid && !savedCookie.isQRCode) {
+            if (!initialStatus.userVid && !savedCookie.isQRCode) {
                 showMessage(this.i18n.showMessage17);
-                return
+                return;
             }
 
-            if (userVid) {
-                const verifyResult = await verifyCookie(
-                    this,
-                    cookies,
-                    userVid,
-                );
-
-                if (verifyResult.loginDue) {
+            if (initialStatus.userVid) {
+                if (initialStatus.loginDue) {
                     if (!window.navigator.userAgent.includes("Electron") || typeof window.require !== "function") {
                         return;
                     }
@@ -146,38 +174,20 @@ export default class PluginDouban extends Plugin {
                     showMessage(this.i18n.showMessage19)
                     try {
                         const refreshedCookies = await createWereadQRCodeDialog(this.i18n, false);
+                        const reloadedCookies = await this.saveAndReloadCookies(refreshedCookies);
+                        const reloadedStatus = await this.verifyCookieStatus(reloadedCookies);
 
-                        const savedata = {
-                            cookies: refreshedCookies,
-                            isQRCode: true,
-                        };
-                        await this.saveData("weread_cookie", savedata);
-
-                        // 重新从本地读取，确保后续校验使用的是持久化后的数据
-                        const reloaded = await loadPluginData(this, "weread_cookie", DEFAULT_WEREAD_COOKIE);
-                        const reloadedCookies = reloaded.cookies;
-
-                        const result = checkWrVid(reloadedCookies);
-                        userVid = result.userVid;
-
-                        if (userVid) {
-                            const verifyResult = await verifyCookie(this, reloadedCookies, userVid);
-
-                            if (verifyResult.success) {
-                                showMessage(this.i18n.showMessage20);
-                                // 在登录成功后，用新的 cookie 获取 notebooksList 并保存
-                                const bookCache = new Map<string, Promise<WereadBookDetail>>();
-                                await handleVerifiedCookieSync(this, reloadedCookies, bookCache);
-                            } else {
-                                showMessage(this.i18n.showMessage18);
-                            }
+                        if (reloadedStatus.success) {
+                            showMessage(this.i18n.showMessage20);
+                            const bookCache = new Map<string, Promise<WereadBookDetail>>();
+                            await handleVerifiedCookieSync(this, reloadedCookies, bookCache);
                         } else {
                             showMessage(this.i18n.showMessage18);
                         }
                     } catch (error) {
                         showMessage(this.i18n.showMessage18);
                     }
-                } else if (verifyResult.success) {
+                } else if (initialStatus.success) {
                     showMessage(this.i18n.showMessage21);
                     const bookCache = new Map<string, Promise<WereadBookDetail>>();
                     await handleVerifiedCookieSync(this, cookies, bookCache);

@@ -103,6 +103,7 @@
     export let cookies = "";
 
     export let wereadTemplates = "";
+    export let wereadMpTemplates = "";
     export let wereadPositionMark = "";
 
     export let databaseStatus = "";
@@ -118,6 +119,31 @@
     let notebooksList = [];
     let loadingBookShelf = false;
 
+    // 保存二维码 cookie 后重新从本地读取
+    async function saveAndReloadQRCodeCookies(autoCookies: string): Promise<string> {
+        const savedata = { cookies: autoCookies, isQRCode: true };
+        await plugin.saveData("weread_cookie", savedata);
+        const reloaded = await loadPluginData(plugin, "weread_cookie", DEFAULT_WEREAD_COOKIE);
+        return reloaded.cookies;
+    }
+
+    // 基于 cookie 字符串执行校验并更新状态，返回校验结果
+    async function verifyAndUpdateStatus(cookieStr: string): Promise<{ success: boolean; userVid: string; loginDue: boolean }> {
+        const result = checkWrVid(cookieStr);
+        const vid = result.userVid;
+        userVid = vid;
+
+        if (vid) {
+            const verifyResult = await verifyCookie(plugin, cookieStr, vid);
+            checkMessage = verifyResult.message;
+            return { success: verifyResult.success, userVid: vid, loginDue: verifyResult.loginDue };
+        } else {
+            checkMessage = i18n.checkMessage6;
+            showMessage(i18n.checkMessage6);
+            return { success: false, userVid: "", loginDue: false };
+        }
+    }
+
     onMount(async () => {
         // 加载本地配置
         const savedcookies = await loadPluginData(plugin, "weread_cookie", DEFAULT_WEREAD_COOKIE);
@@ -127,6 +153,10 @@
         const savedTemplates = await plugin.loadData("weread_templates");
         if (savedTemplates) {
             wereadTemplates = savedTemplates;
+        }
+        const savedMpTemplates = await plugin.loadData("weread_mp_templates");
+        if (savedMpTemplates) {
+            wereadMpTemplates = savedMpTemplates;
         }
 
         // 检查并更新登录信息
@@ -142,12 +172,7 @@
             if (userVid) {
                 if (savedcookies.isQRCode) {
                     // 扫码登录：使用 Electron 隐藏窗口校验
-                    const verifyResult = await verifyCookie(
-                        plugin,
-                        cookies,
-                        userVid,
-                    );
-                    checkMessage = verifyResult.message;
+                    const verifyResult = await verifyAndUpdateStatus(cookies);
 
                     // 判断是否需要重新登录
                     if (verifyResult.loginDue) {
@@ -159,31 +184,12 @@
                                 false,
                             );
 
-                            const savedata = {
-                                cookies: refreshedCookies,
-                                isQRCode: true,
-                            };
-                            await plugin.saveData("weread_cookie", savedata);
+                            cookies = await saveAndReloadQRCodeCookies(refreshedCookies);
+                            const reloadedVerify = await verifyAndUpdateStatus(cookies);
 
-                            // 重新从本地读取，确保后续校验使用的是持久化后的数据
-                            const reloaded = await loadPluginData(plugin, "weread_cookie", DEFAULT_WEREAD_COOKIE);
-                            cookies = reloaded.cookies;
-
-                            const result = checkWrVid(cookies);
-                            userVid = result.userVid;
-
-                            // 验证登录信息
-                            if (userVid) {
-                                const verifyResult = await verifyCookie(plugin, cookies, userVid);
-                                checkMessage = verifyResult.message;
-
-                                // 验证成功后标记需要加载书单
-                                if (verifyResult.success) {
-                                    shouldLoadNotebooks = true;
-                                }
-                            } else {
-                                checkMessage = i18n.checkMessage6;
-                                showMessage(i18n.checkMessage6);
+                            if (reloadedVerify.success) {
+                                shouldLoadNotebooks = true;
+                            } else if (!reloadedVerify.userVid) {
                                 return;
                             }
                         } catch (error) {
@@ -197,13 +203,7 @@
                     }
                 } else {
                     // 手动 Cookie 登录：使用 forwardProxy 校验
-                    const verifyResult = await verifyCookie(
-                        plugin,
-                        cookies,
-                        userVid,
-                    );
-                    checkMessage = verifyResult.message;
-
+                    const verifyResult = await verifyAndUpdateStatus(cookies);
                     if (verifyResult.success) {
                         shouldLoadNotebooks = true;
                     }
@@ -498,30 +498,11 @@
                             true,
                         );
 
-                        const savedata = {
-                            cookies: autoCookies,
-                            isQRCode: true,
-                        };
-                        await plugin.saveData("weread_cookie", savedata);
+                        cookies = await saveAndReloadQRCodeCookies(autoCookies);
+                        const verifyResult = await verifyAndUpdateStatus(cookies);
 
-                        // 保存本地后，重新从本地读取再校验（与项目规则保持一致）
-                        const reloaded = await loadPluginData(plugin, "weread_cookie", DEFAULT_WEREAD_COOKIE);
-                        cookies = reloaded.cookies;
-
-                        const result = checkWrVid(cookies);
-                        userVid = result.userVid;
-
-                        if (userVid) {
-                            const verifyResult = await verifyCookie(plugin, cookies, userVid);
-                            checkMessage = verifyResult.message;
-                            
-                            // 验证成功后刷新页面状态
-                            if (verifyResult.success) {
-                                await getNotebooksList();
-                            }
-                        } else {
-                            checkMessage = i18n.checkMessage6;
-                            showMessage(i18n.checkMessage6);
+                        if (verifyResult.success) {
+                            await getNotebooksList();
                         }
                     } catch (error) {
                         // 用户取消操作，静默结束，不更新状态
@@ -541,19 +522,9 @@
                     };
                     await plugin.saveData("weread_cookie", savedata);
 
-                    const result = checkWrVid(newCookies);
-                    userVid = result.userVid;
-                    // 验证登录信息（手动填 Cookie 使用基于显式 Cookie 字符串的校验）
-                    if (userVid) {
-                        const verifyResult = await verifyCookie(plugin, newCookies, userVid);
-                        checkMessage = verifyResult.message;
-
-                        // 验证成功后刷新页面状态（与扫码登录保持一致）
-                        if (verifyResult.success) {
-                            await getNotebooksList();
-                        }
-                    } else {
-                        checkMessage = i18n.checkMessage6;
+                    const verifyResult = await verifyAndUpdateStatus(newCookies);
+                    if (verifyResult.success) {
+                        await getNotebooksList();
                     }
                 })}>{i18n.fillCookie}</button
             >
@@ -613,7 +584,17 @@
                         await plugin.saveData("weread_templates", newWereadTemplates);
                     },
                     wereadTemplates,
-                )}>{i18n.setNotesTemplate}</button
+                )}>{i18n.setBookNotesTemplate}</button
+            >
+            <button
+                on:click={createWereadNotesTemplateDialog(
+                    i18n,
+                    async (newWereadMpTemplates) => {
+                        wereadMpTemplates = newWereadMpTemplates;
+                        await plugin.saveData("weread_mp_templates", newWereadMpTemplates);
+                    },
+                    wereadMpTemplates,
+                )}>{i18n.setMpNotesTemplate}</button
             >
             <label title={i18n.notesSyncPositionTip}
                 >{i18n.positionMark}:
@@ -633,36 +614,35 @@
         </div>
         <div class="sync-setting">
             <button
-                disabled={!notebooksInfo}
+                disabled={!notebooksInfo || isSyncing}
                 on:click={async () => {
-                    if (!wereadTemplates) {
-                        showMessage(i18n.showMessage25);
-                        return;
-                    }
-
+                    if (isSyncing) return;
                     if (!checkMessage.includes("✅")) {
                         showMessage(i18n.showMessage15);
                         return;
                     }
                     isSyncing = true;
-                    await syncWereadNotes(plugin, cookies, false);
-                    isSyncing = false;
+                    try {
+                        await syncWereadNotes(plugin, cookies, false);
+                    } finally {
+                        isSyncing = false;
+                    }
                 }}>{i18n.syncAll}</button
             >
             <button
-                disabled={!notebooksInfo}
+                disabled={!notebooksInfo || isSyncing}
                 on:click={async () => {
-                    if (!wereadTemplates) {
-                        showMessage(i18n.showMessage25);
-                        return;
-                    }
+                    if (isSyncing) return;
                     if (!checkMessage.includes("✅")) {
                         showMessage(i18n.showMessage15);
                         return;
                     }
                     isSyncing = true;
-                    await syncWereadNotes(plugin, cookies, true);
-                    isSyncing = false;
+                    try {
+                        await syncWereadNotes(plugin, cookies, true);
+                    } finally {
+                        isSyncing = false;
+                    }
                 }}>{i18n.updateSync}</button
             >
             <label>

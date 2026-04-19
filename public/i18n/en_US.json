@@ -75,6 +75,8 @@
     "manageIgnoredBooks": "Ignored Books",
     "manageUseBookIDBooks": "bookID Books",
     "setNotesTemplate": "Set Template",
+    "setBookNotesTemplate": "Book Template",
+    "setMpNotesTemplate": "MP Template",
     "notesSyncPositionTip": "Notes are synchronized after the position marker",
     "positionMark": "Position Marker",
     "confirm": "Confirm",

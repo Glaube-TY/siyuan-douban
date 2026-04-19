@@ -69,6 +69,9 @@ export interface WereadBookDetail {
 
 // ========== 同步记录相关 ==========
 
+/** 微信读书来源类型 */
+export type WereadSourceType = "weread_book" | "weread_mp_account" | "weread_mp_article";
+
 /** 同步记录 */
 export interface SyncNotebookRecord {
     bookID: string;
@@ -77,6 +80,14 @@ export interface SyncNotebookRecord {
     author?: string;
     updatedTime: number;
     blockID?: string;
+    /** 来源类型，用于区分普通书/公众号账号/公众号文章 */
+    sourceType?: WereadSourceType;
+    /** 统一同步标识，优先用于去重 */
+    syncID?: string;
+    /** 原始书籍/账号 ID（公众号场景） */
+    rawBookID?: string;
+    /** 文章 ID（公众号文章场景） */
+    articleID?: string;
 }
 
 /** 增强后的同步记录（包含划线和评论数据） */

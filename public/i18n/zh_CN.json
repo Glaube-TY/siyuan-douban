@@ -74,6 +74,8 @@
     "manageIgnoredBooks": "忽略书籍",
     "manageUseBookIDBooks": "bookID同步书籍",
     "setNotesTemplate": "设置模板",
+    "setBookNotesTemplate": "书籍模板",
+    "setMpNotesTemplate": "公众号模板",
     "notesSyncPositionTip": "同步的读书笔记位于位置标记之后",
     "positionMark": "位置标记",
     "confirm": "确定",
