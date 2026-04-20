@@ -9,7 +9,8 @@
 </script>
 
 <div class="template-weread-dialog">
-    <textarea class="weread-template" bind:value={newWereadTemplates}
+    <div class="template-tip">{i18n.templateEditorTip}</div>
+    <textarea class="weread-template" bind:value={newWereadTemplates} placeholder={i18n.templateEditorPlaceholder}
     ></textarea>
     <div class="template-weread-btn">
         <button
@@ -32,9 +33,16 @@
         gap: 10px;
         padding: 20px;
 
+        .template-tip {
+            font-size: 12px;
+            color: var(--b3-theme-on-surface);
+            opacity: 0.7;
+            margin-bottom: 4px;
+        }
+
         .weread-template {
             width: 400px;
-            height: 400px;
+            height: 380px;
             border-radius: 8px;
             background-color: var(--b3-theme-background);
             // 应用适配的主题色

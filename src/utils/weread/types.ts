@@ -69,10 +69,26 @@ export interface WereadBookDetail {
 
 // ========== 同步记录相关 ==========
 
-/** 微信读书来源类型 */
-export type WereadSourceType = "weread_book" | "weread_mp_account" | "weread_mp_article";
+/**
+ * 微信读书来源类型
+ * - weread_book: 普通书籍
+ * - weread_mp_account: 公众号账号（单文档多文章模式）
+ */
+export type WereadSourceType = "weread_book" | "weread_mp_account";
 
-/** 同步记录 */
+/** 同步记录
+ * 
+ * 当前主口径字段（数据库层统一识别）：
+ * - bookID: 唯一识别键，书籍和公众号账号都使用
+ * - isbn/title/author/updatedTime: 同步比较字段
+ * - blockID: 本地数据库行关联
+ * - sourceType: 本地同步缓存语义，用于区分普通书/公众号来源
+ * 
+ * 历史兼容/内部辅助字段（不再作为主判断依据）：
+ * - syncID: 历史兼容，格式为 bookID 或 mp-account:${bookID}
+ * - rawBookID: 内部辅助，实际就是 bookID
+ * - articleID: 中间数据使用，不持久化
+ */
 export interface SyncNotebookRecord {
     bookID: string;
     isbn: string;
@@ -80,13 +96,24 @@ export interface SyncNotebookRecord {
     author?: string;
     updatedTime: number;
     blockID?: string;
-    /** 来源类型，用于区分普通书/公众号账号/公众号文章 */
+    /**
+     * 来源类型，本地同步缓存语义
+     * 用于区分普通书/公众号账号，不参与数据库层判断
+     */
     sourceType?: WereadSourceType;
-    /** 统一同步标识，优先用于去重 */
+    /**
+     * 历史兼容字段，不再作为主判断依据
+     * 格式：普通书用 bookID，公众号账号用 mp-account:${bookID}
+     */
     syncID?: string;
-    /** 原始书籍/账号 ID（公众号场景） */
+    /**
+     * 内部辅助字段，实际就是 bookID
+     * 公众号账号场景用于内部传递，不独立持久化
+     */
     rawBookID?: string;
-    /** 文章 ID（公众号文章场景） */
+    /**
+     * 中间数据字段，不持久化到数据库
+     */
     articleID?: string;
 }
 

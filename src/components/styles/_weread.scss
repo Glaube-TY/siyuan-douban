@@ -1,15 +1,23 @@
 .wereadSetting {
-    width: fit-content;
-    padding: 10px;
-    min-width: 500px;
+    width: 100%;
+    max-width: 900px;
+    padding: 16px;
+    margin: 0 auto;
+    box-sizing: border-box;
+
+    // 统一区块基础间距
+    $section-padding: 16px;
+    $section-gap: 12px;
 
     .cookie-weread-setting {
         display: flex;
+        flex-wrap: wrap;
         align-items: center;
         justify-content: center;
         gap: 10px;
+        row-gap: 10px;
         border-bottom: 1px solid var(--b3-border-color);
-        padding-bottom: 20px;
+        padding: $section-padding 0;
 
         .success {
             color: var(--b3-theme-success);
@@ -20,6 +28,13 @@
             color: var(--b3-theme-error);
             margin-left: 10px;
         }
+
+        .checking {
+            width: 100%;
+            text-align: center;
+            font-size: 13px;
+            margin-top: 4px;
+        }
     }
 
     .weread-notebooks-info {
@@ -28,11 +43,13 @@
         align-items: center;
         justify-content: center;
         width: 100%;
-        padding: 10px;
+        padding: $section-padding 0;
+        gap: $section-gap;
         border-bottom: 1px solid var(--b3-border-color);
 
         .summary-info {
             line-height: 1.6;
+            text-align: center;
 
             .time {
                 color: var(--b3-theme-primary);
@@ -48,22 +65,107 @@
 
     .weread-custom-books {
         display: flex;
+        flex-wrap: wrap;
         align-items: center;
         justify-content: center;
         width: 100%;
-        padding: 10px;
+        padding: $section-padding 0;
         gap: 10px;
+        row-gap: 10px;
         border-bottom: 1px solid var(--b3-border-color);
     }
 
-    .weread-notes-template,
+    .booksinfo-button {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        row-gap: 8px;
+        margin-top: 4px;
+    }
+
+    .weread-notes-template {
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        width: 100%;
+        padding: $section-padding 0;
+        gap: 16px;
+        border-bottom: 1px solid var(--b3-border-color);
+
+        .template-row {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: center;
+            gap: 24px;
+            row-gap: 12px;
+        }
+
+        .template-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .template-status {
+            font-size: 11px;
+            padding: 2px 6px;
+            border-radius: 4px;
+            background-color: var(--b3-theme-surface);
+            color: var(--b3-theme-on-surface);
+            opacity: 0.6;
+            white-space: nowrap;
+
+            &.configured {
+                background-color: var(--b3-theme-success-light);
+                color: var(--b3-theme-success);
+                opacity: 1;
+            }
+        }
+
+        .position-row {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: flex-start;
+            gap: 8px;
+            row-gap: 8px;
+            padding: 0 8px;
+        }
+
+        .position-label {
+            font-size: 13px;
+            color: var(--b3-theme-on-surface);
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+
+        .position-input {
+            flex: 1;
+            min-width: 120px;
+            padding: 4px 8px;
+            border: 1px solid var(--b3-border-color);
+            border-radius: 4px;
+            background-color: var(--b3-theme-background);
+            color: var(--b3-theme-on-background);
+        }
+
+        .position-confirm {
+            flex-shrink: 0;
+        }
+    }
+
     .sync-setting {
         display: flex;
+        flex-wrap: wrap;
         align-items: center;
         justify-content: center;
         width: 100%;
-        padding: 10px;
+        padding: $section-padding 0;
         gap: 10px;
+        row-gap: 10px;
         border-bottom: 1px solid var(--b3-border-color);
     }
 
@@ -73,8 +175,17 @@
         justify-content: center;
         flex-direction: column;
         width: 100%;
-        padding: 10px;
-        gap: 10px;
+        padding: $section-padding 0;
+        gap: $section-gap;
         border-bottom: 1px solid var(--b3-border-color);
+    }
+
+    // 辅助文字/提示统一样式
+    .loading-notice,
+    .cookie-warning {
+        font-size: 13px;
+        color: var(--b3-theme-on-surface);
+        opacity: 0.8;
+        text-align: center;
     }
 }

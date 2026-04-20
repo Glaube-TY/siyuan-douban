@@ -18,7 +18,7 @@
                 {plugin.i18n.firstDialog3}
                 <div class="tip-links">
                     <a
-                        href="https://ttl8ygt82u.feishu.cn/wiki/VZdjwDNxWi4j0jkdyxMcOg2VnFf?from=from_copylink"
+                        href="https://blog.glaube-ty.top/du-shu-bi-ji-cha-jian"
                         target="_blank"
                         class="tip-link"
                     >

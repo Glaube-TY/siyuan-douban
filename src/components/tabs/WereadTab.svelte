@@ -18,7 +18,7 @@
         getBook,
         getBookShelf,
     } from "@/utils/weread/wereadInterface";
-    import { syncWereadNotes } from "@/utils/weread/syncWereadNotes";
+    import { syncWereadNotes, buildTemporaryNotebookList } from "@/utils/weread/syncWereadNotes";
     import { loadPluginData, DEFAULT_WEREAD_COOKIE, DEFAULT_WEREAD_SETTINGS } from "@/utils/core/configDefaults";
 
     import wereadManageISBN from "@/components/common/wereadManageISBN.svelte";
@@ -118,6 +118,10 @@
     let notebooksInfo = "";
     let notebooksList = [];
     let loadingBookShelf = false;
+
+    // 微信读书书籍列表预加载状态
+    let isNotebookListLoading = false;
+    let isNotebookListReady = false;
 
     // 保存二维码 cookie 后重新从本地读取
     async function saveAndReloadQRCodeCookies(autoCookies: string): Promise<string> {
@@ -222,90 +226,57 @@
     });
 
     async function getNotebooksList() {
-        notebookdata = await getNotebooks(plugin, cookies);
+        // 开始加载：重置状态，清理旧 ready 标记
+        isNotebookListLoading = true;
+        isNotebookListReady = false;
+        await plugin.saveData("weread_notebooksList_readyAt", null);
 
-        const syncDate = new Date(notebookdata.synckey * 1000);
-        latestSyncTime = `${syncDate.toLocaleDateString()} ${syncDate.toLocaleTimeString()}`;
+        try {
+            notebookdata = await getNotebooks(plugin, cookies);
 
-        const basicBooks = notebookdata.books;
+            const syncDate = new Date(notebookdata.synckey * 1000);
+            latestSyncTime = `${syncDate.toLocaleDateString()} ${syncDate.toLocaleTimeString()}`;
 
-        // 使用并发池限制批量请求（并发数：5）
-        const notebookPool = new PromiseLimitPool<{
-            noteCount: number;
-            reviewCount: number;
-            updatedTime: number;
-            bookID: string;
-            title: string;
-            author: string;
-            cover: string;
-            format: string;
-            price: number;
-            introduction: string;
-            publishTime: string;
-            category: string;
-            isbn: string;
-            publisher: string;
-            totalWords: number;
-            star: number;
-            ratingCount: number;
-            AISummary: string;
-        }>(5);
+            // 使用共用的 helper 构建列表，确保字段结构统一
+            notebooksList = await buildTemporaryNotebookList(plugin, cookies);
 
-        basicBooks.forEach((b: any) => {
-            notebookPool.add(async () => {
-                try {
-                    const details = await getBook(plugin, cookies, b.bookId);
-                    return {
-                        noteCount: b.noteCount,
-                        reviewCount: b.reviewCount,
-                        updatedTime: b.sort,
-                        bookID: details.bookId,
-                        title: details.title,
-                        author: details.author,
-                        cover: details.cover,
-                        format: details.format,
-                        price: details.price,
-                        introduction: details.intro,
-                        publishTime: details.publishTime,
-                        category: details.category,
-                        isbn: details.isbn,
-                        publisher: details.publisher,
-                        totalWords: details.totalWords,
-                        star: details.newRating,
-                        ratingCount: details.ratingCount,
-                        AISummary: details.AISummary,
-                    };
-                } catch {
-                    return null;
-                }
-            });
-        });
+            // 保存缓存和 ready 标记（必须在设置 ready 状态之前完成）
+            await plugin.saveData("temporary_weread_notebooksList", notebooksList);
+            await plugin.saveData("weread_notebooksList_readyAt", Date.now());
 
-        notebooksList = (await notebookPool.awaitAll()).filter((item) => item !== null) as typeof notebooksList;
+            // 缓存保存成功后，才设置 ready 状态并更新界面
+            isNotebookListReady = true;
 
-        await plugin.saveData("temporary_weread_notebooksList", notebooksList);
+            const totalNotes = notebooksList.reduce(
+                (sum, book) => sum + book.noteCount,
+                0,
+            );
 
-        const totalNotes = notebooksList.reduce(
-            (sum, book) => sum + book.noteCount,
-            0,
-        );
-
-        notebooksInfo = `
-            <div class="summary-info">
-                ${i18n.syncTime.replace("{time}", `<span class="time">${latestSyncTime}</span>`)}
-            </div>
-            <div class="summary-info">
-                ${i18n.notebooksSummary
-                    .replace(
-                        "{bookCount}",
-                        `<span class="count">${notebookdata.totalBookCount}</span>`,
-                    )
-                    .replace(
-                        "{noteCount}",
-                        `<span class="count">${totalNotes}</span>`,
-                    )}
-            </div>
-        `;
+            notebooksInfo = `
+                <div class="summary-info">
+                    ${i18n.syncTime.replace("{time}", `<span class="time">${latestSyncTime}</span>`)}
+                </div>
+                <div class="summary-info">
+                    ${i18n.notebooksSummary
+                        .replace(
+                            "{bookCount}",
+                            `<span class="count">${notebookdata.totalBookCount}</span>`,
+                        )
+                        .replace(
+                            "{noteCount}",
+                            `<span class="count">${totalNotes}</span>`,
+                        )}
+                </div>
+            `;
+        } catch (error) {
+            // 加载失败：确保状态为未就绪，并清理旧缓存避免误导后续手动同步
+            isNotebookListReady = false;
+            await plugin.saveData("temporary_weread_notebooksList", null);
+            console.error("[微信读书] 获取书籍列表失败:", error);
+            throw error;
+        } finally {
+            isNotebookListLoading = false;
+        }
     }
 
     async function openBookShelf() {
@@ -535,14 +506,16 @@
                 {#if notebooksInfo}
                     {@html notebooksInfo}
                     <div class="booksinfo-button">
-                        {#if notebooksList.length > 0}
-                            <button
-                                on:click={createNotebooksDialog(
-                                    plugin,
-                                    notebooksList,
-                                )}>{i18n.hasNotesBooks}</button
-                            >
-                        {/if}
+                        <button
+                            disabled={isNotebookListLoading || !isNotebookListReady}
+                            on:click={() => {
+                                if (isNotebookListLoading || !isNotebookListReady) {
+                                    showMessage(i18n.showMessageWereadCacheNotReady);
+                                    return;
+                                }
+                                createNotebooksDialog(plugin, notebooksList);
+                            }}>{i18n.hasNotesBooks}</button
+                        >
                         <button on:click={openBookShelf}
                             >{i18n.bookShelf}</button
                         >
@@ -576,45 +549,58 @@
             >
         </div>
         <div class="weread-notes-template">
-            <button
-                on:click={createWereadNotesTemplateDialog(
-                    i18n,
-                    async (newWereadTemplates) => {
-                        wereadTemplates = newWereadTemplates;
-                        await plugin.saveData("weread_templates", newWereadTemplates);
-                    },
-                    wereadTemplates,
-                )}>{i18n.setBookNotesTemplate}</button
-            >
-            <button
-                on:click={createWereadNotesTemplateDialog(
-                    i18n,
-                    async (newWereadMpTemplates) => {
-                        wereadMpTemplates = newWereadMpTemplates;
-                        await plugin.saveData("weread_mp_templates", newWereadMpTemplates);
-                    },
-                    wereadMpTemplates,
-                )}>{i18n.setMpNotesTemplate}</button
-            >
-            <label title={i18n.notesSyncPositionTip}
-                >{i18n.positionMark}:
-                <input type="text" bind:value={wereadPositionMark} />
-            </label>
-            <button
-                on:click={async () => {
-                    await plugin.saveData(
-                        "weread_position_mark",
-                        wereadPositionMark,
-                    );
-                    showMessage(i18n.showMessage14);
-                }}
-            >
-                {i18n.confirm}
-            </button>
+            <!-- 第一层：模板相关 -->
+            <div class="template-row">
+                <div class="template-item">
+                    <button
+                        on:click={createWereadNotesTemplateDialog(
+                            i18n,
+                            async (newWereadTemplates) => {
+                                wereadTemplates = newWereadTemplates;
+                                await plugin.saveData("weread_templates", newWereadTemplates);
+                            },
+                            wereadTemplates,
+                            i18n.setBookNotesTemplateTitle,
+                        )}>{i18n.setBookNotesTemplate}</button
+                    >
+                    <span class="template-status" class:configured={wereadTemplates?.trim()}>{wereadTemplates?.trim() ? i18n.templateConfigured : i18n.templateNotConfigured}</span>
+                </div>
+                <div class="template-item">
+                    <button
+                        on:click={createWereadNotesTemplateDialog(
+                            i18n,
+                            async (newWereadMpTemplates) => {
+                                wereadMpTemplates = newWereadMpTemplates;
+                                await plugin.saveData("weread_mp_templates", newWereadMpTemplates);
+                            },
+                            wereadMpTemplates,
+                            i18n.setMpNotesTemplateTitle,
+                        )}>{i18n.setMpNotesTemplate}</button
+                    >
+                    <span class="template-status" class:configured={wereadMpTemplates?.trim()}>{wereadMpTemplates?.trim() ? i18n.templateConfigured : i18n.templateNotConfigured}</span>
+                </div>
+            </div>
+            <!-- 第二层：位置标记相关 -->
+            <div class="position-row">
+                <span class="position-label" title={i18n.notesSyncPositionTip}>{i18n.positionMark}:</span>
+                <input type="text" bind:value={wereadPositionMark} class="position-input" />
+                <button
+                    class="position-confirm"
+                    on:click={async () => {
+                        await plugin.saveData(
+                            "weread_position_mark",
+                            wereadPositionMark,
+                        );
+                        showMessage(i18n.showMessage14);
+                    }}
+                >
+                    {i18n.confirm}
+                </button>
+            </div>
         </div>
         <div class="sync-setting">
             <button
-                disabled={!notebooksInfo || isSyncing}
+                disabled={!checkMessage.includes("✅") || isNotebookListLoading || !isNotebookListReady || isSyncing}
                 on:click={async () => {
                     if (isSyncing) return;
                     if (!checkMessage.includes("✅")) {
@@ -623,14 +609,16 @@
                     }
                     isSyncing = true;
                     try {
-                        await syncWereadNotes(plugin, cookies, false);
+                        // 手动同步：复制一份本地快照，避免同步过程中 UI 状态变化带来来源不一致
+                        const notebooksSnapshot = notebooksList.map(item => ({ ...item }));
+                        await syncWereadNotes(plugin, cookies, false, undefined, "ui-cache-only", notebooksSnapshot);
                     } finally {
                         isSyncing = false;
                     }
                 }}>{i18n.syncAll}</button
             >
             <button
-                disabled={!notebooksInfo || isSyncing}
+                disabled={!checkMessage.includes("✅") || isNotebookListLoading || !isNotebookListReady || isSyncing}
                 on:click={async () => {
                     if (isSyncing) return;
                     if (!checkMessage.includes("✅")) {
@@ -639,7 +627,9 @@
                     }
                     isSyncing = true;
                     try {
-                        await syncWereadNotes(plugin, cookies, true);
+                        // 手动同步：复制一份本地快照，避免同步过程中 UI 状态变化带来来源不一致
+                        const notebooksSnapshot = notebooksList.map(item => ({ ...item }));
+                        await syncWereadNotes(plugin, cookies, true, undefined, "ui-cache-only", notebooksSnapshot);
                     } finally {
                         isSyncing = false;
                     }

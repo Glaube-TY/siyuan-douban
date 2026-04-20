@@ -5,79 +5,14 @@ import setPage from "./components/index.svelte";
 
 import { svelteDialog } from "./libs/dialog";
 import * as sdk from "@siyuan-community/siyuan-sdk";
-import { syncWereadNotes } from "./utils/weread/syncWereadNotes";
+import { syncWereadNotes, buildTemporaryNotebookList } from "./utils/weread/syncWereadNotes";
 import { loadPluginData, DEFAULT_WEREAD_SETTINGS, DEFAULT_WEREAD_COOKIE } from "./utils/core/configDefaults";
 import {
     createWereadQRCodeDialog,
     checkWrVid,
     verifyCookie,
 } from "@/utils/weread/loginWeread";
-import {
-    getNotebooks,
-    getBook,
-} from "@/utils/weread/wereadInterface";
-import PromiseLimitPool from "./libs/promise-pool";
-import type { WereadBookSummary, WereadBookDetail } from "./utils/weread/types";
-import { isWereadMpAccountSource } from "./utils/weread/mpArticleSync";
-
-const BOOK_DETAILS_CONCURRENCY = 4;
-
-// 本地扩展类型，用于访问公众号账号特有的元数据字段
-type WereadBookDetailWithMpMeta = WereadBookDetail & { type?: number; coverBoxInfo?: { mp_avatar?: string } };
-
-async function buildTemporaryNotebookList(plugin: PluginDouban, cookies: string, bookCache: Map<string, Promise<WereadBookDetail>>): Promise<WereadBookSummary[]> {
-    const notebookdata = await getNotebooks(plugin, cookies);
-    const basicBooks = notebookdata.books;
-    const pool = new PromiseLimitPool<WereadBookSummary>(BOOK_DETAILS_CONCURRENCY);
-    const getBookCached = (bookId: string) => {
-        if (bookCache.has(bookId)) {
-            return bookCache.get(bookId)!;
-        }
-        const promise = getBook(plugin, cookies, bookId);
-        bookCache.set(bookId, promise);
-        return promise;
-    };
-    for (const b of basicBooks) {
-        pool.add(async () => {
-            const details = await getBookCached(b.bookId);
-            const detailsWithMpMeta = details as WereadBookDetailWithMpMeta;
-
-            // 判定来源类型
-            const isMpAccount = isWereadMpAccountSource(details.bookId, detailsWithMpMeta);
-            const sourceType = isMpAccount ? "weread_mp_account" : "weread_book";
-
-            // 处理封面：公众号账号在默认占位封面场景下回退到 mp_avatar
-            let cover = details.cover || "";
-            if (isMpAccount && (!cover || cover.includes("/t8_0.jpg"))) {
-                cover = detailsWithMpMeta.coverBoxInfo?.mp_avatar || cover;
-            }
-
-            return {
-                sourceType,
-                noteCount: b.noteCount,
-                reviewCount: b.reviewCount,
-                updatedTime: b.sort,
-                bookID: details.bookId,
-                title: details.title,
-                author: details.author,
-                cover,
-                format: details.format,
-                price: details.price,
-                introduction: details.intro,
-                publishTime: details.publishTime,
-                category: details.category,
-                isbn: details.isbn,
-                publisher: details.publisher,
-                totalWords: details.totalWords,
-                star: details.newRating,
-                ratingCount: details.ratingCount,
-                AISummary: details.AISummary,
-            };
-        });
-    }
-    const notebooksList = await pool.awaitAll();
-    return notebooksList;
-}
+import type { WereadBookDetail } from "./utils/weread/types";
 
 async function handleVerifiedCookieSync(plugin: PluginDouban, cookies: string, bookCache: Map<string, Promise<WereadBookDetail>>) {
     const notebooksList = await buildTemporaryNotebookList(plugin, cookies, bookCache);

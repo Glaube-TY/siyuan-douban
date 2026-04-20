@@ -11,79 +11,96 @@ import PromiseLimitPool from "@/libs/promise-pool";
 import { updateEndBlocks } from "./updateWereadBlocks";
 import { saveIgnoredBooks, saveCustomBooksISBN, saveUseBookIDBooks } from "./wereadSyncStorage";
 import { logError } from "../core/logger";
+import { getImage, downloadCover } from "@/utils/core/getImg";
 import type { WereadPluginLike, WereadBookDetail, SyncNotebookRecord, EnhancedSyncNotebookRecord, WereadSourceType } from "./types";
-import type { MpArticleSyncUnit, MpArticleCommentItem } from "./mpArticleSync";
-import { buildMpArticleSyncUnits, isWereadMpAccountSource } from "./mpArticleSync";
-import { addWereadMpArticlesToDatabase } from "./addWereadMpArticles";
+import type { MpAccountTemplateVars } from "./mpArticleSync";
+import { buildMpArticleSyncUnits, isWereadMpAccountSource, buildMpAccountTemplateVariables, resolveMpAccountCover } from "./mpArticleSync";
+import { ensureMpAccountInDatabase } from "./addWereadMpAccounts";
+import { renderCommentsWithIndent, renderNoteConditionalSections, renderSimpleConditionalSections, formatWereadTimestamp } from "./wereadTemplateRender";
 
-const DEFAULT_WEREAD_NOTES_TEMPLATE = `{{#chapters}}
+// 注意：不再提供默认模板，模板未设置时由上层同步校验拦截
 
-{{#chapterTitle}}
-## {{chapterTitle1}}
-### {{chapterTitle2}}
-#### {{chapterTitle3}}
-##### {{chapterTitle4}}
-{{/chapterTitle}}
+// 扩展 WereadBookDetail 以兼容公众号账号运行时可能存在的额外字段
+type WereadBookDetailWithMpMeta = WereadBookDetail & {
+    type?: number;
+    coverBoxInfo?: { mp_avatar?: string };
+};
 
-{{#chapterComments}}
-### 章节思考
-> 💬 {{chapterComments}}
-- 🕐 {{createTime7}}
-{{/chapterComments}}
+// 从 Weread 接口构建标准化的 temporary_weread_notebooksList
+// 供 Weread 页预加载、启动自动同步预热、缓存重建三处复用
+export async function buildTemporaryNotebookList(
+    plugin: WereadPluginLike,
+    cookies: string,
+    bookCache?: Map<string, Promise<WereadBookDetail>>
+): Promise<any[]> {
+    const notebookdata = await getNotebooks(plugin, cookies);
+    const basicBooks = notebookdata.books || [];
 
-{{#notes}}
-{{#highlightText}}
-- {{highlightText}}
-{{/highlightText}}
-{{#highlightCreateTime7}}
-  - 标注时间：{{highlightCreateTime7}}
-{{/highlightCreateTime7}}
-{{#comments}}
-  - 💬 {{content}}
-  {{#commentCreateTime7}}
-    - 评论时间：{{commentCreateTime7}}
-  {{/commentCreateTime7}}
-{{/comments}}
-{{#createTime7}}
-- 主时间：{{createTime7}}
-{{/createTime7}}
-{{/notes}}
+    // 使用并发池限制批量请求（并发数：5）
+    const pool = new PromiseLimitPool<any>(5);
 
-{{/chapters}}`;
+    // 缓存读取包装函数
+    const getBookCached = (bookId: string) => {
+        if (bookCache?.has(bookId)) {
+            return bookCache.get(bookId)!;
+        }
+        const promise = getBook(plugin, cookies, bookId);
+        bookCache?.set(bookId, promise);
+        return promise;
+    };
 
-// 公众号文章默认模板（无 chapters，只用顶层字段 + notes）
-const DEFAULT_WEREAD_MP_TEMPLATE = `## {{articleTitle}}
+    for (const b of basicBooks) {
+        pool.add(async () => {
+            try {
+                const details = await getBookCached(b.bookId);
+                const detailsWithMpMeta = details as WereadBookDetailWithMpMeta;
 
-> 公众号：{{accountTitle}}
-{{#accountIntro}}
-> 简介：{{accountIntro}}
-{{/accountIntro}}
+                // 判断来源类型（只传需要的 type 字段）
+                // 注意：sourceType 属于本地同步缓存语义，用于区分普通书和公众号账号
+                // 数据库层不再要求持久化 sourceType，公众号账号行只靠 bookID 识别
+                const isMpAccount = isWereadMpAccountSource(details.bookId, { type: detailsWithMpMeta.type });
+                const sourceType: WereadSourceType = isMpAccount ? "weread_mp_account" : "weread_book";
 
-- 文章发布时间：{{articleCreateTime7}}
-- 笔记更新时间：{{updateTime7}}
+                // 公众号账号封面回退逻辑
+                let cover = details.cover || "";
+                if (isMpAccount && (!cover || cover.includes("/t8_0.jpg"))) {
+                    const mpAvatar = detailsWithMpMeta.coverBoxInfo?.mp_avatar;
+                    if (mpAvatar) {
+                        cover = mpAvatar;
+                    }
+                }
 
----
+                return {
+                    sourceType,
+                    noteCount: b.noteCount ?? 0,
+                    reviewCount: b.reviewCount ?? 0,
+                    updatedTime: b.sort ?? 0,
+                    bookID: details.bookId,
+                    title: details.title,
+                    author: details.author ?? "",
+                    cover,
+                    format: details.format ?? "",
+                    price: details.price ?? 0,
+                    introduction: details.intro ?? "",
+                    publishTime: details.publishTime ?? "",
+                    category: details.category ?? "",
+                    isbn: details.isbn ?? "",
+                    publisher: details.publisher ?? "",
+                    totalWords: details.totalWords ?? 0,
+                    star: details.newRating ?? 0,
+                    ratingCount: details.ratingCount ?? 0,
+                    AISummary: details.AISummary ?? "",
+                };
+            } catch {
+                // 单本获取失败不影响其他书
+                return null;
+            }
+        });
+    }
 
-### 笔记
-
-{{#notes}}
-{{#highlightText}}
-- {{highlightText}}
-{{/highlightText}}
-{{#highlightCreateTime7}}
-  - 标注时间：{{highlightCreateTime7}}
-{{/highlightCreateTime7}}
-{{#comments}}
-  - 💬 {{content}}
-  {{#commentCreateTime7}}
-    - 评论时间：{{commentCreateTime7}}
-  {{/commentCreateTime7}}
-{{/comments}}
-{{#createTime7}}
-- 主时间：{{createTime7}}
-{{/createTime7}}
-
-{{/notes}}`;
+    const notebooksList = (await pool.awaitAll()).filter((item) => item !== null);
+    return notebooksList;
+}
 
 type NoteCommentItem = {
     content: string;
@@ -140,95 +157,9 @@ type NoteContent = {
     comments?: NoteCommentItem[];
 };
 
-type TimeFormat = {
-    dateSeparator: string;
-    timeSeparator: string;
-    showSeconds: boolean;
-    useChineseUnit: boolean;
-    padZero: boolean;
-};
-
-const TIME_FORMATS: Record<string, TimeFormat> = {
-    'createTime1': { dateSeparator: '/', timeSeparator: ':', showSeconds: false, useChineseUnit: false, padZero: true },
-    'createTime2': { dateSeparator: '-', timeSeparator: ':', showSeconds: false, useChineseUnit: false, padZero: true },
-    'createTime3': { dateSeparator: '.', timeSeparator: ':', showSeconds: false, useChineseUnit: false, padZero: true },
-    'createTime4': { dateSeparator: '年', timeSeparator: '时', showSeconds: false, useChineseUnit: true, padZero: true },
-    'createTime5': { dateSeparator: '年', timeSeparator: '时', showSeconds: false, useChineseUnit: true, padZero: false },
-    'createTime6': { dateSeparator: '/', timeSeparator: ':', showSeconds: true, useChineseUnit: false, padZero: true },
-    'createTime7': { dateSeparator: '-', timeSeparator: ':', showSeconds: true, useChineseUnit: false, padZero: true },
-    'createTime8': { dateSeparator: '.', timeSeparator: ':', showSeconds: true, useChineseUnit: false, padZero: true },
-    'createTime9': { dateSeparator: '年', timeSeparator: '时', showSeconds: true, useChineseUnit: true, padZero: true },
-    'createTime10': { dateSeparator: '年', timeSeparator: '时', showSeconds: true, useChineseUnit: true, padZero: false },
-};
-
-// 为新增字段复用同样的格式配置
-const HIGHLIGHT_TIME_FORMATS: Record<string, TimeFormat> = {
-    'highlightCreateTime1': TIME_FORMATS['createTime1'],
-    'highlightCreateTime2': TIME_FORMATS['createTime2'],
-    'highlightCreateTime3': TIME_FORMATS['createTime3'],
-    'highlightCreateTime4': TIME_FORMATS['createTime4'],
-    'highlightCreateTime5': TIME_FORMATS['createTime5'],
-    'highlightCreateTime6': TIME_FORMATS['createTime6'],
-    'highlightCreateTime7': TIME_FORMATS['createTime7'],
-    'highlightCreateTime8': TIME_FORMATS['createTime8'],
-    'highlightCreateTime9': TIME_FORMATS['createTime9'],
-    'highlightCreateTime10': TIME_FORMATS['createTime10'],
-};
-
-const COMMENT_TIME_FORMATS: Record<string, TimeFormat> = {
-    'commentCreateTime1': TIME_FORMATS['createTime1'],
-    'commentCreateTime2': TIME_FORMATS['createTime2'],
-    'commentCreateTime3': TIME_FORMATS['createTime3'],
-    'commentCreateTime4': TIME_FORMATS['createTime4'],
-    'commentCreateTime5': TIME_FORMATS['createTime5'],
-    'commentCreateTime6': TIME_FORMATS['createTime6'],
-    'commentCreateTime7': TIME_FORMATS['createTime7'],
-    'commentCreateTime8': TIME_FORMATS['createTime8'],
-    'commentCreateTime9': TIME_FORMATS['createTime9'],
-    'commentCreateTime10': TIME_FORMATS['createTime10'],
-};
-
-function formatTimestamp(timestamp: number, formatKey: string = 'createTime1'): string {
-    if (!timestamp) {
-        return '';
-    }
-    const date = new Date(timestamp * 1000);
-    // 支持新的字段名映射到对应的格式配置
-    let format = TIME_FORMATS[formatKey];
-    if (!format) {
-        if (formatKey.startsWith('highlightCreateTime')) {
-            format = HIGHLIGHT_TIME_FORMATS[formatKey];
-        } else if (formatKey.startsWith('commentCreateTime')) {
-            format = COMMENT_TIME_FORMATS[formatKey];
-        }
-    }
-    if (!format) {
-        format = TIME_FORMATS['createTime1'];
-    }
-
-    const year = date.getFullYear();
-    const month = format.padZero ? String(date.getMonth() + 1).padStart(2, '0') : date.getMonth() + 1;
-    const day = format.padZero ? String(date.getDate()).padStart(2, '0') : date.getDate();
-    const hour = format.padZero ? String(date.getHours()).padStart(2, '0') : date.getHours();
-    const minute = format.padZero ? String(date.getMinutes()).padStart(2, '0') : date.getMinutes();
-    const second = format.padZero ? String(date.getSeconds()).padStart(2, '0') : date.getSeconds();
-
-    let result: string;
-    if (format.useChineseUnit) {
-        result = `${year}${format.dateSeparator}${month}月${day}日 ${hour}${format.timeSeparator}${minute}分`;
-        if (format.showSeconds) {
-            result += `${second}秒`;
-        }
-    } else {
-        const datePart = `${year}${format.dateSeparator}${month}${format.dateSeparator}${day}`;
-        let timePart = `${hour}${format.timeSeparator}${minute}`;
-        if (format.showSeconds) {
-            timePart += `${format.timeSeparator}${second}`;
-        }
-        result = `${datePart} ${timePart}`;
-    }
-    return result;
-}
+// 时间格式化函数已从 wereadTemplateRender.ts 导入 formatWereadTimestamp
+// 为兼容现有调用，保留 formatTimestamp 作为别名
+const formatTimestamp = formatWereadTimestamp;
 
 // ========== 固定四级路径章节结构（新方案） ==========
 
@@ -266,7 +197,12 @@ type TemplateVariables = {
     bestHighlights: string[];
 };
 
-export async function syncWereadNotes(plugin: WereadPluginLike, cookies: string, isupdate: boolean, bookCache?: Map<string, Promise<WereadBookDetail>>) {
+// 笔记本列表来源模式
+// - "ui-cache-only": 仅从本地缓存读取，不远程重建（WeRead 界面手动同步专用）
+// - "allow-rebuild": 缓存无效时允许远程重建（自动同步等后台场景）
+type NotebookSourceMode = "ui-cache-only" | "allow-rebuild";
+
+export async function syncWereadNotes(plugin: WereadPluginLike, cookies: string, isupdate: boolean, bookCache?: Map<string, Promise<WereadBookDetail>>, notebookSourceMode: NotebookSourceMode = "allow-rebuild", preloadedNotebooks?: SyncNotebookRecord[]) {
     // 使用传入的缓存或创建新的局部缓存
     const effectiveBookCache = bookCache ?? new Map<string, Promise<WereadBookDetail>>();
     // 缓存读取包装函数
@@ -287,7 +223,22 @@ export async function syncWereadNotes(plugin: WereadPluginLike, cookies: string,
         return;
     }
 
-    let cloudNotebooksList: SyncNotebookRecord[] = await getPersonalNotebooks(plugin); // 获取预加载的云端书籍笔记列表
+    // 优先使用传入的预加载缓存快照（手动 UI 同步场景），否则从本地缓存或远程获取
+    let cloudNotebooksList: SyncNotebookRecord[];
+    const hasPreloadedSnapshot = preloadedNotebooks !== undefined;
+    if (hasPreloadedSnapshot) {
+        // 手动 UI 同步：标准化前端传入的快照，确保与 getPersonalNotebooks() 输出语义一致
+        cloudNotebooksList = await normalizeNotebookList(plugin, preloadedNotebooks);
+    } else {
+        // 自动同步或 fallback：从本地缓存或远程获取
+        cloudNotebooksList = await getPersonalNotebooks(plugin, notebookSourceMode);
+    }
+
+    // ui-cache-only 模式下，如果没有传入预加载快照且本地缓存为空，直接中止同步并提示用户
+    if (notebookSourceMode === "ui-cache-only" && !hasPreloadedSnapshot && cloudNotebooksList.length === 0) {
+        showMessage(plugin.i18n.showMessageWereadCacheNotReady);
+        return;
+    }
 
     // 获取插件配置并提取数据库ID
     const avID = (await sql(`SELECT * FROM blocks WHERE id = "${(await plugin.loadData("settings.json"))?.bookDatabaseID || ""}"`))[0]?.markdown?.match(/data-av-id="([^"]+)"/)?.[1] || ""; // 加载配置、查询数据库、提取avID
@@ -357,28 +308,10 @@ export async function syncWereadNotes(plugin: WereadPluginLike, cookies: string,
         ISBNColumn.map((item: any) => item.number?.content?.toString()).filter(Boolean) || []
     );
 
-    // 构建当前数据库中有效的公众号账号 rawBookID 集合
-    // 条件：sourceType 为 weread_mp_article 且 rawBookID 存在且该 blockID 仍存在于书名列
-    const sourceTypeKey = currentDatabaseData.keyValues.find((item: any) => item.key.name === "sourceType");
-    const sourceTypeColumn = sourceTypeKey?.values || [];
-    const rawBookIDKey = currentDatabaseData.keyValues.find((item: any) => item.key.name === "rawBookID");
-    const rawBookIDColumn = rawBookIDKey?.values || [];
-
-    // 复用前面已有的 bookNameBlockIDs，不再重复声明
-    const validMpRawBookIDsInDB = new Set<string>();
-    for (const item of sourceTypeColumn) {
-        const blockID = item.blockID;
-        const sourceType = item.text?.content?.toString();
-        if (sourceType === "weread_mp_article" && bookNameBlockIDs.has(blockID)) {
-            const rawBookIDItem = rawBookIDColumn.find((r: any) => r.blockID === blockID);
-            const rawBookID = rawBookIDItem?.text?.content?.toString();
-            if (rawBookID) {
-                validMpRawBookIDsInDB.add(rawBookID);
-            }
-        }
-    }
-
     // 从本地同步记录中构建已保存的公众号账号 ID 集合
+    // 注意：这只是本地来源记录（sourceType 属于本地缓存语义），不代表"已处理"状态
+    // "已处理"判断还需结合 isMpAccountInDatabase() 检查数据库账号行是否仍存在
+    // 数据库层公众号账号行只靠 bookID 识别，不再依赖 sourceType/syncID/rawBookID
     const savedMpAccountIDs = new Set(
         oldNotebooks
             .filter((n: any) => n.sourceType === "weread_mp_account")
@@ -394,16 +327,37 @@ export async function syncWereadNotes(plugin: WereadPluginLike, cookies: string,
             .filter(Boolean)
     );
 
-    // 辅助函数：判断某本书/公众号是否"本地已处理"应隐藏
+    // 辅助函数：检查数据库中公众号账号行是否仍有效存在
+    // 只基于当前数据库 bookID 列判断，不再依赖 sourceType/syncID/rawBookID
+    // 公众号来源身份由来源数据/本地缓存中的 sourceType 判定
+    // 注意：参数名 rawBookID 即 bookID，是数据库层唯一识别键
+    const isMpAccountInDatabase = (rawBookID: string): boolean => {
+        const keyValues = currentDatabaseData.keyValues || [];
+        const bookIDKey = keyValues.find((kv: any) => kv.key?.name === "bookID");
+
+        // 只检查 bookID 列中是否存在该公众号的 bookID（rawBookID 即 bookID）
+        if (bookIDKey?.values) {
+            return bookIDKey.values.some(
+                (v: any) => v.text?.content === rawBookID
+            );
+        }
+
+        return false;
+    };
+
+    // 辅助函数：判断某本书/公众号是否"本地已处理"应在新来源确认中隐藏
     // 原则：只有当来源同时存在于本地配置 AND 当前数据库有效记录中，才视为"本地已处理"
+    // 公众号：本地来源记录存在 + 数据库账号行仍存在 + 未被忽略
+    // 普通书：本地配置存在 + 数据库记录仍存在
     const isBookLocallyProcessed = (item: any): boolean => {
         const bookID = item.bookID?.toString();
         const isbn = item.isbn?.toString();
         const isMpAccount = item.sourceType === "weread_mp_account" || isWereadMpAccountSource(bookID, undefined);
 
-        // 公众号账号来源：检查是否在本地记录中且未被忽略（不再强依赖数据库文章行）
+        // 公众号账号来源：必须同时满足：本地记录存在、数据库账号行仍存在、未被忽略
+        // 若数据库账号行被用户删除，则应重新视为"新来源"，重新进入确认弹窗
         if (isMpAccount) {
-            return savedMpAccountIDs.has(bookID) && !ignoredMpAccountIDs.has(bookID);
+            return savedMpAccountIDs.has(bookID) && isMpAccountInDatabase(bookID) && !ignoredMpAccountIDs.has(bookID);
         }
 
         // 普通书 - useBookID 路径：只有 bookID 同时在 useBookIDSet 配置中 AND 仍存在于当前数据库 validBookIDsInDB 中，才隐藏
@@ -630,7 +584,11 @@ export async function syncWereadNotes(plugin: WereadPluginLike, cookies: string,
     }
 
     async function syncBooks(selectedBooksForSync?: any[], useBookIDs?): Promise<"success" | "no_work" | "failed"> {
-        cloudNotebooksList = await getPersonalNotebooks(plugin); // 获取最新的云端笔记本列表，此时包含了最新的自定义ISBN数据和忽略书籍数据
+        // 如果外部未传入预加载快照（自动同步场景），才需要重新获取
+        // 注意：手动 UI 同步可能传入空数组，这也视为有效快照，不应重新获取
+        if (preloadedNotebooks === undefined) {
+            cloudNotebooksList = await getPersonalNotebooks(plugin, notebookSourceMode); // 获取最新的云端笔记本列表，此时包含了最新的自定义ISBN数据和忽略书籍数据
+        }
         const useBookIDBooks = await plugin.loadData("weread_useBookIDBooks") || []; // 获取使用bookID同步的书籍列表
         const ignoredBooks = await plugin.loadData("weread_ignoredBooks") || []; // 获取已忽略的书籍列表
 
@@ -733,13 +691,14 @@ export async function syncWereadNotes(plugin: WereadPluginLike, cookies: string,
                 .filter(Boolean)
         );
 
-        // 从旧记录中提取已保存的公众号账号来源记录
-        // 只要本地已保存且未被忽略，就作为默认同步来源（不再强依赖数据库文章行）
-        const savedMpAccountRecords = (oldNotebooks || []).filter((n: any) => {
-            if (n.sourceType !== "weread_mp_account") return false;
-            const bookID = n.bookID?.toString();
-            return bookID && !ignoredMpAccountIDs.has(bookID);
-        });
+        // 获取已保存的公众号账号来源（用于默认同步）
+        // 使用 helper 确保从当前云端列表获取最新记录，而不是旧记录
+        const savedMpAccountRecords = getSavedMpAccountRecords(
+            oldNotebooks,
+            cloudNotebooksList,
+            ignoredMpAccountIDs as Set<string>,
+            isMpAccountInDatabase
+        );
 
         // 辅助函数：按 getWereadRecordKey 去重合并记录
         function dedupeWereadRecordsByKey(records: SyncNotebookRecord[]): SyncNotebookRecord[] {
@@ -777,12 +736,18 @@ export async function syncWereadNotes(plugin: WereadPluginLike, cookies: string,
             }
 
             // 筛选出需要同步的书籍（更新时间有变化或新增的书籍）
-            // 普通书和公众号账号统一按 updatedTime 变化判断
+            // 普通书和公众号账号统一按本地缓存的 bookID + updatedTime 判断
+            // 数据库层只靠 bookID 识别，sourceType 属于本地缓存语义
             let booksNeedSync = allBooksToSync.filter((book: any) => {
                 const key = getWereadRecordKey(book);
                 const oldBook = key ? oldNotebooksMap.get(key) : undefined;
                 // 如果旧记录不存在，或者更新时间不同，则需要同步
-                return !oldBook || oldBook.updatedTime !== book.updatedTime;
+                const needSync = !oldBook || oldBook.updatedTime !== book.updatedTime;
+                // 公众号账号来源加调试日志，方便排查更新同步问题
+                if (book.sourceType === "weread_mp_account") {
+                    console.info(`[微信读书] 公众号更新同步检查 | bookID: ${book.bookID}, 当前updatedTime: ${book.updatedTime}, 旧updatedTime: ${oldBook?.updatedTime ?? '无'}, 是否进入同步: ${needSync}`);
+                }
+                return needSync;
             });
 
             // 如果有选中的普通书籍，确保它们都被包含在同步列表中（不管oldNotebooks中是否有记录）
@@ -855,18 +820,16 @@ export async function syncWereadNotes(plugin: WereadPluginLike, cookies: string,
                 return "failed";
             }
 
-            // 更新本地存储的同步记录（使用 syncID || bookID 去重）
+            // 更新本地存储的同步记录（使用 bookID 去重）
             const updatedNotebooksMap = new Map<string, SyncNotebookRecord>();
             for (const book of allBooksToSync) {
                 const key = getWereadRecordKey(book);
                 if (key) updatedNotebooksMap.set(key, book);
             }
-            // 公众号账号来源记录不附 blockID（避免误绑定文章 blockID）
+            // 统一处理 blockID：书籍用 ISBN/bookID 查 blockMap，公众号账号也用 bookID 查 blockMap
             const updatedNotebooks: SyncNotebookRecord[] = Array.from(updatedNotebooksMap.values()).map((book: any) => ({
                 ...book,
-                blockID: book.sourceType === "weread_mp_account"
-                    ? null  // 公众号账号来源记录保持 null
-                    : (blockMap.get(book.isbn?.toString()) || blockMap.get(book.bookID?.toString()) || null)
+                blockID: blockMap.get(book.isbn?.toString()) || blockMap.get(book.bookID?.toString()) || null
             }));
 
             await plugin.saveData("weread_notebooks", updatedNotebooks); // 保存更新后的同步记录
@@ -888,18 +851,16 @@ export async function syncWereadNotes(plugin: WereadPluginLike, cookies: string,
                 return "failed";
             }
 
-            // 更新本地存储的同步记录（使用 syncID || bookID 去重）
+            // 更新本地存储的同步记录（使用 bookID 去重）
             const updatedNotebooksMap = new Map<string, SyncNotebookRecord>();
             for (const book of allBooksToSync) {
                 const key = getWereadRecordKey(book);
                 if (key) updatedNotebooksMap.set(key, book);
             }
-            // 公众号账号来源记录不附 blockID（避免误绑定文章 blockID）
+            // 统一处理 blockID：书籍用 ISBN/bookID 查 blockMap，公众号账号也用 bookID 查 blockMap
             const updatedNotebooks: SyncNotebookRecord[] = Array.from(updatedNotebooksMap.values()).map((book: any) => ({
                 ...book,
-                blockID: book.sourceType === "weread_mp_account"
-                    ? null  // 公众号账号来源记录保持 null
-                    : (blockMap.get(book.isbn?.toString()) || blockMap.get(book.bookID?.toString()) || null)
+                blockID: blockMap.get(book.isbn?.toString()) || blockMap.get(book.bookID?.toString()) || null
             }));
 
             await plugin.saveData("weread_notebooks", updatedNotebooks); // 保存更新后的同步记录
@@ -911,45 +872,36 @@ export async function syncWereadNotes(plugin: WereadPluginLike, cookies: string,
     /**
      * 保存已成功在数据库中落地的公众号来源记录
      * 用于同步失败时补救保存已建立的公众号账号来源
+     * 基于账号级数据库行判断：数据库层只靠 bookID 识别
+     * sourceType 属于本地同步缓存语义，用于区分普通书和公众号账号
      */
     async function saveEstablishedMpAccountSources(
         allBooksToSync: SyncNotebookRecord[],
         oldNotebooks: any[]
     ): Promise<void> {
         try {
-            // 重新读取当前数据库状态，获取有效公众号 rawBookID 集合
+            // 重新读取当前数据库状态，构建 bookID -> blockID 映射
             const avData = await fetchSyncPost('/api/av/getAttributeView', { id: avID });
             const keyValues = avData.data?.av?.keyValues || [];
 
-            const sourceTypeKey = keyValues.find((item: any) => item.key?.name === "sourceType");
-            const rawBookIDKey = keyValues.find((item: any) => item.key?.name === "rawBookID");
-            const bookNameKey = keyValues.find((item: any) => item.key?.name === "书名");
+            const bookIDKey = keyValues.find((item: any) => item.key?.name === "bookID");
+            const bookIDColumn = bookIDKey?.values || [];
 
-            const sourceTypeColumn = sourceTypeKey?.values || [];
-            const rawBookIDColumn = rawBookIDKey?.values || [];
-            const bookNameColumn = bookNameKey?.values || [];
-
-            // 构建有效的 bookName blockID 集合
-            const validBookNameBlockIDs = new Set(bookNameColumn.map((item: any) => item.blockID));
-
-            // 收集当前数据库中有效的公众号 rawBookID
-            const validMpRawBookIDsInCurrentDB = new Set<string>();
-            for (const item of sourceTypeColumn) {
+            // 构建当前数据库中 bookID -> blockID 的映射
+            const bookIDToBlockMap = new Map<string, string>();
+            for (const item of bookIDColumn) {
                 const blockID = item.blockID;
-                const sourceType = item.text?.content?.toString();
-                if (sourceType === "weread_mp_article" && validBookNameBlockIDs.has(blockID)) {
-                    const rawBookIDItem = rawBookIDColumn.find((r: any) => r.blockID === blockID);
-                    const rawBookID = rawBookIDItem?.text?.content?.toString();
-                    if (rawBookID) {
-                        validMpRawBookIDsInCurrentDB.add(rawBookID);
-                    }
+                const bookID = item.text?.content?.toString();
+                if (bookID && blockID) {
+                    bookIDToBlockMap.set(bookID, blockID);
                 }
             }
 
             // 从本轮同步列表中筛选出已成功落地的公众号账号
+            // 判断标准：当前数据库中存在该 bookID
             const establishedMpAccounts = allBooksToSync.filter(book =>
                 book.sourceType === "weread_mp_account" &&
-                validMpRawBookIDsInCurrentDB.has(book.bookID?.toString())
+                bookIDToBlockMap.has(book.bookID?.toString())
             );
 
             if (establishedMpAccounts.length === 0) {
@@ -965,13 +917,14 @@ export async function syncWereadNotes(plugin: WereadPluginLike, cookies: string,
                 if (key) mergedNotebooksMap.set(key, book);
             }
 
-            // 再加入新建立的公众号来源记录（blockID 保持 null）
+            // 再加入新建立的公众号来源记录（尽量保存当前数据库已存在的 blockID）
             for (const book of establishedMpAccounts) {
                 const key = getWereadRecordKey(book);
                 if (key) {
+                    const blockID = bookIDToBlockMap.get(book.bookID?.toString());
                     mergedNotebooksMap.set(key, {
                         ...book,
-                        blockID: null  // 公众号账号来源记录保持 null
+                        blockID: blockID || null  // 尽量保存当前数据库已存在的 blockID
                     });
                 }
             }
@@ -987,46 +940,63 @@ export async function syncWereadNotes(plugin: WereadPluginLike, cookies: string,
 
 const NOTEBOOK_ENHANCE_CONCURRENCY = 3;
 
-// ========== 公众号文章同步辅助 ==========
+// ========== 公众号账号级同步辅助 ==========
 
 /**
  * 获取同步记录的唯一键
- * 优先 syncID，其次 bookID
+ * 统一以 bookID 作为唯一键（书籍和公众号账号都使用 bookID）
  */
 function getWereadRecordKey(record: SyncNotebookRecord): string {
-    return record.syncID || record.bookID || "";
+    return record.bookID || "";
 }
 
 /**
- * 从 AV keyValues 构建 syncID -> blockID 映射
+ * 获取已保存的公众号账号来源（用于默认同步）
+ * 从 oldNotebooks 中判断哪些公众号账号属于已保存来源，
+ * 再从当前云端列表中筛选出这些 bookID 对应的最新记录。
+ * 这样更新同步时比较的是最新的 updatedTime，而不是旧记录中的旧值。
+ * @param oldNotebooks 旧同步记录（用于判断哪些 bookID 属于已保存来源）
+ * @param cloudNotebooksList 当前云端列表（用于获取最新记录）
+ * @param ignoredMpAccountIDs 已忽略的公众号账号 ID 集合
+ * @param isMpAccountInDatabase 判断公众号账号是否在数据库中的函数
+ * @returns 当前最新的、且属于默认同步来源的公众号账号记录列表
  */
-function buildSyncIDBlockMap(keyValues: any[]): Map<string, string> {
-    const map = new Map<string, string>();
-    const syncIDKey = keyValues.find((kv: any) => kv.key?.name === "syncID");
-    if (!syncIDKey || !syncIDKey.values) return map;
+function getSavedMpAccountRecords(
+    oldNotebooks: SyncNotebookRecord[],
+    cloudNotebooksList: SyncNotebookRecord[],
+    ignoredMpAccountIDs: Set<string>,
+    isMpAccountInDatabase: (bookID: string) => boolean
+): SyncNotebookRecord[] {
+    // 从 oldNotebooks 中取出哪些公众号账号属于已保存来源的 bookID 集合
+    const savedMpAccountBookIDs = new Set(
+        (oldNotebooks || [])
+            .filter((n: any) => n.sourceType === "weread_mp_account")
+            .map((n: any) => n.bookID?.toString())
+            .filter((bookID: string) => bookID && isMpAccountInDatabase(bookID) && !ignoredMpAccountIDs.has(bookID))
+    );
 
-    for (const val of syncIDKey.values) {
-        const syncID = val.text?.content;
-        const blockID = val.blockID;
-        if (syncID && blockID) {
-            map.set(syncID, blockID);
-        }
-    }
-    return map;
+    // 从当前云端列表中获取这些公众号账号的最新记录
+    return cloudNotebooksList.filter((item: any) => {
+        const bookID = item.bookID?.toString();
+        return bookID && savedMpAccountBookIDs.has(bookID);
+    });
 }
 
 /**
- * 同步公众号账号下的文章
+ * 同步公众号账号（账号级单文档模式）
+ * 一个公众号对应一个数据库行 + 一个主文档，文档内包含多篇文章 section
  */
 async function syncMpAccountArticles(
     plugin: WereadPluginLike,
     cookies: string,
     avID: string,
     accountRecord: SyncNotebookRecord,
-    wereadPositionMark: string
+    wereadPositionMark: string,
+    mpTemplate: string
 ): Promise<{ success: boolean; title: string; error?: any }> {
     const rawBookID = accountRecord.bookID;
-    const accountTitle = accountRecord.title;
+    // 用于提示/日志的标题，在获取 bookInfo 后解析
+    let resolvedAccountTitle = accountRecord.title;
 
     try {
         // A. 获取账号级原始数据
@@ -1036,69 +1006,72 @@ async function syncMpAccountArticles(
             getBook(plugin, cookies, rawBookID)
         ]);
 
-        // B. 构建公众号文章同步单元
+        // 解析最终账号名（优先使用接口返回的最新名称）
+        resolvedAccountTitle = bookInfo.title || accountRecord.title;
+
+        // B. 公众号账号封面本地化（复用普通书封面下载链路）
+        // 降级策略：下载失败时，数据库 mAsset 为空数组，模板 accountCover 为空字符串
+        // 全链路只认本地资源，绝不把远程 URL 写入数据库 mAsset
+        let localAccountCover = "";
+        const remoteCoverUrl = resolveMpAccountCover(bookInfo);
+        if (remoteCoverUrl) {
+            try {
+                const coverBase64Data = await getImage(remoteCoverUrl);
+                if (coverBase64Data) {
+                    // 使用 rawBookID 作为文件名的一部分，确保稳定且唯一
+                    localAccountCover = await downloadCover(coverBase64Data as string, `mp-account-${rawBookID}`);
+                }
+            } catch (coverErr) {
+                // 封面下载失败：降级为空字符串，数据库 mAsset 将为空数组
+                // 不打断主流程，只记录 warning
+                console.warn(`[syncMpAccountArticles] 公众号账号封面下载失败，已降级为空: ${remoteCoverUrl}`, coverErr);
+            }
+        }
+
+        // C. 先确保公众号账号级数据库行存在（不依赖是否有文章单元）
+        // 更新同步时优先复用本地缓存中的 blockID，实现书籍式的"复用现有文档 -> 位置标记后整篇刷新"路径
+        const accountInfo = {
+            rawBookID,
+            accountTitle: resolvedAccountTitle,
+            accountIntro: bookInfo.intro || "",
+            accountCover: localAccountCover,
+            blockID: accountRecord.blockID  // 传入本地缓存的 blockID（如果有），优先复用
+        };
+        const dbResult = await ensureMpAccountInDatabase(plugin, avID, accountInfo);
+
+        if (!dbResult.blockID) {
+            throw new Error(`公众号《${resolvedAccountTitle}》无法获取账号级 blockID`);
+        }
+
+        // C. 构建公众号文章同步单元
         const units = buildMpArticleSyncUnits(rawBookID, bookInfo, bookmarkPayload, reviewPayload);
 
-        if (units.length === 0) {
-            return { success: true, title: accountTitle };
-        }
+        // D. 构建账号级模板变量并渲染（使用主链路传入的已校验模板）
+        // 账号级更新时间回退：优先接口返回时间，其次记录时间
+        // 注：bookInfo 实际为 MpBookInfo（含 updateTime），但类型声明为 WereadBookDetail
+        const fallbackUpdateTime = (bookInfo as any).updateTime || accountRecord.updatedTime || 0;
+        const templateVars = buildMpAccountTemplateVariables(
+            rawBookID,
+            {
+                accountTitle: accountInfo.accountTitle,
+                accountIntro: accountInfo.accountIntro,
+                accountCover: accountInfo.accountCover
+            },
+            units,
+            fallbackUpdateTime
+        );
+        const noteContent = renderWereadMpAccountTemplate(mpTemplate, templateVars);
 
-        // C. 数据库落地
-        await addWereadMpArticlesToDatabase(plugin, avID, units);
+        // E. 更新公众号主文档（整篇刷新）
+        await updateEndBlocks(plugin, dbResult.blockID, wereadPositionMark, noteContent);
 
-        // D. 回查所有公众号文章的 blockID
-        const avData = await fetchSyncPost('/api/av/getAttributeView', { id: avID });
-        const keyValues = avData.data?.av?.keyValues || [];
-        const syncIDBlockMap = buildSyncIDBlockMap(keyValues);
-
-        // 为每个 unit 补 blockID
-        const unitsWithBlockID = units.map(unit => ({
-            ...unit,
-            blockID: syncIDBlockMap.get(unit.syncID) || null
-        }));
-
-        // 分离有 blockID 和缺 blockID 的文章
-        const writableUnits = unitsWithBlockID.filter(unit => unit.blockID);
-        const missingBlockIDUnits = unitsWithBlockID.filter(unit => !unit.blockID);
-
-        // 缺 blockID 的文章直接记为失败
-        const missingBlockIDResults = missingBlockIDUnits.map(unit => {
-            logError("weread/syncWereadNotes", `公众号文章《${unit.articleTitle}》未找到 blockID，可能数据库写入失败`, { syncID: unit.syncID });
-            return { success: false, title: unit.articleTitle, error: new Error("Missing blockID") };
-        });
-
-        // E. 渲染并写入公众号文章文档
-        const mpTemplate = await plugin.loadData("weread_mp_templates") || "";
-        const updatePromises = writableUnits.map(async unit => {
-            try {
-                const variables = buildMpTemplateVariables(unit as MpArticleSyncUnit);
-                const noteContent = renderWereadMpTemplate(mpTemplate, variables);
-                await updateEndBlocks(plugin, unit.blockID!, wereadPositionMark, noteContent);
-                return { success: true, title: unit.articleTitle };
-            } catch (error) {
-                logError("weread/syncWereadNotes", `公众号文章《${unit.articleTitle}》写入失败`, error);
-                return { success: false, title: unit.articleTitle, error };
-            }
-        });
-
-        const updateResults = await Promise.all(updatePromises);
-
-        // 合并所有结果：写入结果 + 缺 blockID 的失败结果
-        const allResults = [...updateResults, ...missingBlockIDResults];
-        const hasFailure = allResults.some(r => !r.success);
-
-        if (hasFailure) {
-            showMessage(`❌ 公众号《${accountTitle}》同步失败`, 2000);
-            return { success: false, title: accountTitle };
-        }
-
-        showMessage(`✅ 公众号《${accountTitle}》同步成功`, 2000);
-        return { success: true, title: accountTitle };
+        showMessage(`✅ 公众号《${resolvedAccountTitle}》同步成功`, 2000);
+        return { success: true, title: resolvedAccountTitle };
 
     } catch (error) {
-        logError("weread/syncWereadNotes", `公众号账号《${accountTitle}》同步失败`, error);
-        showMessage(`❌ 公众号《${accountTitle}》同步失败`, 2000);
-        return { success: false, title: accountTitle, error };
+        logError("weread/syncWereadNotes", `公众号账号《${resolvedAccountTitle}》同步失败`, error);
+        showMessage(`❌ 公众号《${resolvedAccountTitle}》同步失败`, 2000);
+        return { success: false, title: resolvedAccountTitle, error };
     }
 }
 
@@ -1443,213 +1416,60 @@ function buildFlatChapters(
     return result;
 }
 
-// ========== 公众号文章模板渲染 ==========
-
-/** 公众号文章模板变量 */
-interface MpTemplateVariables {
-    sourceType: string;
-    syncID: string;
-    rawBookID: string;
-    articleID: string;
-    articleTitle: string;
-    accountTitle: string;
-    accountIntro: string;
-    accountCover: string;
-    articleCover: string;
-    articleCreateTime1?: string;
-    articleCreateTime2?: string;
-    articleCreateTime3?: string;
-    articleCreateTime4?: string;
-    articleCreateTime5?: string;
-    articleCreateTime6?: string;
-    articleCreateTime7?: string;
-    articleCreateTime8?: string;
-    articleCreateTime9?: string;
-    articleCreateTime10?: string;
-    updateTime1?: string;
-    updateTime2?: string;
-    updateTime3?: string;
-    updateTime4?: string;
-    updateTime5?: string;
-    updateTime6?: string;
-    updateTime7?: string;
-    updateTime8?: string;
-    updateTime9?: string;
-    updateTime10?: string;
-    notes: NoteContent[];
-}
+// ========== 公众号账号级模板渲染 ==========
 
 /**
- * 将 MpArticleCommentItem 转换为 NoteCommentItem（带格式化时间）
- */
-function convertMpCommentToNoteComment(comment: MpArticleCommentItem): NoteCommentItem {
-    return {
-        content: comment.content,
-        commentCreateTime1: formatTimestamp(comment.createTime, 'createTime1'),
-        commentCreateTime2: formatTimestamp(comment.createTime, 'createTime2'),
-        commentCreateTime3: formatTimestamp(comment.createTime, 'createTime3'),
-        commentCreateTime4: formatTimestamp(comment.createTime, 'createTime4'),
-        commentCreateTime5: formatTimestamp(comment.createTime, 'createTime5'),
-        commentCreateTime6: formatTimestamp(comment.createTime, 'createTime6'),
-        commentCreateTime7: formatTimestamp(comment.createTime, 'createTime7'),
-        commentCreateTime8: formatTimestamp(comment.createTime, 'createTime8'),
-        commentCreateTime9: formatTimestamp(comment.createTime, 'createTime9'),
-        commentCreateTime10: formatTimestamp(comment.createTime, 'createTime10'),
-    };
-}
-
-/**
- * 构建公众号文章模板变量
- * @param unit 公众号文章同步单元
- */
-export function buildMpTemplateVariables(unit: MpArticleSyncUnit): MpTemplateVariables {
-    // 转换 notes 为 NoteContent[]
-    const notes: NoteContent[] = unit.notes.map(note => {
-        const comments = note.comments.map(convertMpCommentToNoteComment);
-
-        return {
-            formattedNote: '', // 后续渲染时填充
-            highlightText: note.highlightText,
-            highlightComment: note.highlightComment,
-            createTime1: formatTimestamp(note.createTime, 'createTime1'),
-            createTime2: formatTimestamp(note.createTime, 'createTime2'),
-            createTime3: formatTimestamp(note.createTime, 'createTime3'),
-            createTime4: formatTimestamp(note.createTime, 'createTime4'),
-            createTime5: formatTimestamp(note.createTime, 'createTime5'),
-            createTime6: formatTimestamp(note.createTime, 'createTime6'),
-            createTime7: formatTimestamp(note.createTime, 'createTime7'),
-            createTime8: formatTimestamp(note.createTime, 'createTime8'),
-            createTime9: formatTimestamp(note.createTime, 'createTime9'),
-            createTime10: formatTimestamp(note.createTime, 'createTime10'),
-            highlightCreateTime1: formatTimestamp(note.highlightCreateTime, 'createTime1'),
-            highlightCreateTime2: formatTimestamp(note.highlightCreateTime, 'createTime2'),
-            highlightCreateTime3: formatTimestamp(note.highlightCreateTime, 'createTime3'),
-            highlightCreateTime4: formatTimestamp(note.highlightCreateTime, 'createTime4'),
-            highlightCreateTime5: formatTimestamp(note.highlightCreateTime, 'createTime5'),
-            highlightCreateTime6: formatTimestamp(note.highlightCreateTime, 'createTime6'),
-            highlightCreateTime7: formatTimestamp(note.highlightCreateTime, 'createTime7'),
-            highlightCreateTime8: formatTimestamp(note.highlightCreateTime, 'createTime8'),
-            highlightCreateTime9: formatTimestamp(note.highlightCreateTime, 'createTime9'),
-            highlightCreateTime10: formatTimestamp(note.highlightCreateTime, 'createTime10'),
-            commentCreateTime1: formatTimestamp(note.latestCommentCreateTime, 'createTime1'),
-            commentCreateTime2: formatTimestamp(note.latestCommentCreateTime, 'createTime2'),
-            commentCreateTime3: formatTimestamp(note.latestCommentCreateTime, 'createTime3'),
-            commentCreateTime4: formatTimestamp(note.latestCommentCreateTime, 'createTime4'),
-            commentCreateTime5: formatTimestamp(note.latestCommentCreateTime, 'createTime5'),
-            commentCreateTime6: formatTimestamp(note.latestCommentCreateTime, 'createTime6'),
-            commentCreateTime7: formatTimestamp(note.latestCommentCreateTime, 'createTime7'),
-            commentCreateTime8: formatTimestamp(note.latestCommentCreateTime, 'createTime8'),
-            commentCreateTime9: formatTimestamp(note.latestCommentCreateTime, 'createTime9'),
-            commentCreateTime10: formatTimestamp(note.latestCommentCreateTime, 'createTime10'),
-            comments,
-            _order: note.rangeStart,
-        };
-    });
-
-    return {
-        sourceType: unit.sourceType,
-        syncID: unit.syncID,
-        rawBookID: unit.rawBookID,
-        articleID: unit.articleID,
-        articleTitle: unit.articleTitle,
-        accountTitle: unit.accountTitle,
-        accountIntro: unit.accountIntro,
-        accountCover: unit.accountCover,
-        articleCover: unit.articleCover,
-        articleCreateTime1: formatTimestamp(unit.articleCreateTime, 'createTime1'),
-        articleCreateTime2: formatTimestamp(unit.articleCreateTime, 'createTime2'),
-        articleCreateTime3: formatTimestamp(unit.articleCreateTime, 'createTime3'),
-        articleCreateTime4: formatTimestamp(unit.articleCreateTime, 'createTime4'),
-        articleCreateTime5: formatTimestamp(unit.articleCreateTime, 'createTime5'),
-        articleCreateTime6: formatTimestamp(unit.articleCreateTime, 'createTime6'),
-        articleCreateTime7: formatTimestamp(unit.articleCreateTime, 'createTime7'),
-        articleCreateTime8: formatTimestamp(unit.articleCreateTime, 'createTime8'),
-        articleCreateTime9: formatTimestamp(unit.articleCreateTime, 'createTime9'),
-        articleCreateTime10: formatTimestamp(unit.articleCreateTime, 'createTime10'),
-        updateTime1: formatTimestamp(unit.updatedTime, 'createTime1'),
-        updateTime2: formatTimestamp(unit.updatedTime, 'createTime2'),
-        updateTime3: formatTimestamp(unit.updatedTime, 'createTime3'),
-        updateTime4: formatTimestamp(unit.updatedTime, 'createTime4'),
-        updateTime5: formatTimestamp(unit.updatedTime, 'createTime5'),
-        updateTime6: formatTimestamp(unit.updatedTime, 'createTime6'),
-        updateTime7: formatTimestamp(unit.updatedTime, 'createTime7'),
-        updateTime8: formatTimestamp(unit.updatedTime, 'createTime8'),
-        updateTime9: formatTimestamp(unit.updatedTime, 'createTime9'),
-        updateTime10: formatTimestamp(unit.updatedTime, 'createTime10'),
-        notes,
-    };
-}
-
-/**
- * 渲染公众号文章模板
+ * 渲染公众号账号级模板（账号级单文档模式）
  * @param template 模板字符串
- * @param variables 模板变量
+ * @param variables 账号级模板变量
+ * 
+ * 注意：当前版本不再支持 {{#articles}}，用户必须显式选择：
+ * - {{#articlesAsc}}...{{/articlesAsc}}：按文章更新时间升序，旧更新在前
+ * - {{#articlesDesc}}...{{/articlesDesc}}：按文章更新时间降序，新更新在前
  */
-/**
- * 处理顶层简单条件 section（非数组，单层字段）
- * 例如 {{#accountIntro}}...{{/accountIntro}}
- */
-function renderSimpleConditionalSections(
-    template: string,
-    values: Record<string, any>,
-    fields: string[]
-): string {
-    let result = template;
-    for (const field of fields) {
-        const regex = new RegExp(`\\{\\{#${field}\\}\\}([\\s\\S]*?)\\{\\{\\/${field}\\}\\}`, 'g');
-        result = result.replace(regex, (_, innerContent) => {
-            const val = values[field];
-            // 有值（非 null/undefined/空字符串）则保留内部内容，否则删除整个 section
-            return val != null && val !== '' ? innerContent : '';
-        });
-    }
-    return result;
-}
+export function renderWereadMpAccountTemplate(template: string, variables: MpAccountTemplateVars): string {
+    const tpl = template?.trim() || "";
 
-export function renderWereadMpTemplate(template: string, variables: MpTemplateVariables): string {
-    // 使用默认模板兜底
-    const tpl = template?.trim() ? template : DEFAULT_WEREAD_MP_TEMPLATE;
+    let result = tpl;
 
-    // 处理 {{#notes}}...{{/notes}}
-    let result = tpl.replace(/\{\{#notes\}\}([\s\S]*?)\{\{\/notes\}\}/g, (_, notesTpl) => {
-        if (!variables.notes || variables.notes.length === 0) return '';
-        return variables.notes.map(note => renderNoteTemplateWithOptionalComment(notesTpl, note)).join('\n');
+    // 处理 {{#articlesAsc}}...{{/articlesAsc}} 循环（升序：旧更新在前）
+    result = result.replace(/\{\{#articlesAsc\}\}([\s\S]*?)\{\{\/articlesAsc\}\}/g, (_, articleTpl) => {
+        if (!variables.articles || variables.articles.length === 0) return '';
+        // 复制数组并按内部排序字段 __sortUpdateTime 升序排序
+        const sortedArticles = [...variables.articles].sort((a, b) =>
+            (a.__sortUpdateTime || 0) - (b.__sortUpdateTime || 0)
+        );
+        return sortedArticles.map(article => renderMpAccountArticleTemplate(articleTpl, article)).join('\n');
     });
 
-    // 处理通用条件 section
-    result = renderNoteConditionalSections(result, variables as any);
+    // 处理 {{#articlesDesc}}...{{/articlesDesc}} 循环（降序：新更新在前）
+    result = result.replace(/\{\{#articlesDesc\}\}([\s\S]*?)\{\{\/articlesDesc\}\}/g, (_, articleTpl) => {
+        if (!variables.articles || variables.articles.length === 0) return '';
+        // 复制数组并按内部排序字段 __sortUpdateTime 降序排序
+        const sortedArticles = [...variables.articles].sort((a, b) =>
+            (b.__sortUpdateTime || 0) - (a.__sortUpdateTime || 0)
+        );
+        return sortedArticles.map(article => renderMpAccountArticleTemplate(articleTpl, article)).join('\n');
+    });
 
-    // 处理顶层简单条件 section（在变量替换之前）
+    // 处理顶层简单条件 section
     const topLevelConditionalFields = [
-        'accountIntro', 'articleTitle', 'accountTitle', 'accountCover', 'articleCover',
-        'articleCreateTime1', 'articleCreateTime2', 'articleCreateTime3', 'articleCreateTime4', 'articleCreateTime5',
-        'articleCreateTime6', 'articleCreateTime7', 'articleCreateTime8', 'articleCreateTime9', 'articleCreateTime10',
+        'accountTitle',
+        'accountIntro',
+        'accountCover',
         'updateTime1', 'updateTime2', 'updateTime3', 'updateTime4', 'updateTime5',
-        'updateTime6', 'updateTime7', 'updateTime8', 'updateTime9', 'updateTime10'
+        'updateTime6', 'updateTime7', 'updateTime8', 'updateTime9', 'updateTime10',
+        'latestArticleTitle',
+        'latestArticleTime1', 'latestArticleTime2', 'latestArticleTime3', 'latestArticleTime4', 'latestArticleTime5',
+        'latestArticleTime6', 'latestArticleTime7', 'latestArticleTime8', 'latestArticleTime9', 'latestArticleTime10'
     ];
     result = renderSimpleConditionalSections(result, variables as any, topLevelConditionalFields);
 
-    // 顶层变量替换
+    // 替换顶层变量
     result = result
-        .replace(/\{\{sourceType\}\}/g, variables.sourceType)
-        .replace(/\{\{syncID\}\}/g, variables.syncID)
-        .replace(/\{\{rawBookID\}\}/g, variables.rawBookID)
-        .replace(/\{\{articleID\}\}/g, variables.articleID)
-        .replace(/\{\{articleTitle\}\}/g, variables.articleTitle)
         .replace(/\{\{accountTitle\}\}/g, variables.accountTitle)
         .replace(/\{\{accountIntro\}\}/g, variables.accountIntro)
         .replace(/\{\{accountCover\}\}/g, variables.accountCover)
-        .replace(/\{\{articleCover\}\}/g, variables.articleCover)
-        .replace(/\{\{articleCreateTime1\}\}/g, variables.articleCreateTime1 || '')
-        .replace(/\{\{articleCreateTime2\}\}/g, variables.articleCreateTime2 || '')
-        .replace(/\{\{articleCreateTime3\}\}/g, variables.articleCreateTime3 || '')
-        .replace(/\{\{articleCreateTime4\}\}/g, variables.articleCreateTime4 || '')
-        .replace(/\{\{articleCreateTime5\}\}/g, variables.articleCreateTime5 || '')
-        .replace(/\{\{articleCreateTime6\}\}/g, variables.articleCreateTime6 || '')
-        .replace(/\{\{articleCreateTime7\}\}/g, variables.articleCreateTime7 || '')
-        .replace(/\{\{articleCreateTime8\}\}/g, variables.articleCreateTime8 || '')
-        .replace(/\{\{articleCreateTime9\}\}/g, variables.articleCreateTime9 || '')
-        .replace(/\{\{articleCreateTime10\}\}/g, variables.articleCreateTime10 || '')
         .replace(/\{\{updateTime1\}\}/g, variables.updateTime1 || '')
         .replace(/\{\{updateTime2\}\}/g, variables.updateTime2 || '')
         .replace(/\{\{updateTime3\}\}/g, variables.updateTime3 || '')
@@ -1659,14 +1479,132 @@ export function renderWereadMpTemplate(template: string, variables: MpTemplateVa
         .replace(/\{\{updateTime7\}\}/g, variables.updateTime7 || '')
         .replace(/\{\{updateTime8\}\}/g, variables.updateTime8 || '')
         .replace(/\{\{updateTime9\}\}/g, variables.updateTime9 || '')
-        .replace(/\{\{updateTime10\}\}/g, variables.updateTime10 || '');
+        .replace(/\{\{updateTime10\}\}/g, variables.updateTime10 || '')
+        .replace(/\{\{articleCount\}\}/g, String(variables.articleCount))
+        .replace(/\{\{latestArticleTitle\}\}/g, variables.latestArticleTitle)
+        .replace(/\{\{latestArticleTime1\}\}/g, variables.latestArticleTime1 || '')
+        .replace(/\{\{latestArticleTime2\}\}/g, variables.latestArticleTime2 || '')
+        .replace(/\{\{latestArticleTime3\}\}/g, variables.latestArticleTime3 || '')
+        .replace(/\{\{latestArticleTime4\}\}/g, variables.latestArticleTime4 || '')
+        .replace(/\{\{latestArticleTime5\}\}/g, variables.latestArticleTime5 || '')
+        .replace(/\{\{latestArticleTime6\}\}/g, variables.latestArticleTime6 || '')
+        .replace(/\{\{latestArticleTime7\}\}/g, variables.latestArticleTime7 || '')
+        .replace(/\{\{latestArticleTime8\}\}/g, variables.latestArticleTime8 || '')
+        .replace(/\{\{latestArticleTime9\}\}/g, variables.latestArticleTime9 || '')
+        .replace(/\{\{latestArticleTime10\}\}/g, variables.latestArticleTime10 || '');
 
-    // 清理普通书专属 section（安全删除，不残留 mustache 标记）
+    // 清理普通书专属 section
     result = result
         .replace(/\{\{#chapters\}\}[\s\S]*?\{\{\/chapters\}\}/g, '')
         .replace(/\{\{#globalComments\}\}[\s\S]*?\{\{\/globalComments\}\}/g, '')
         .replace(/\{\{#bookInfo\}\}[\s\S]*?\{\{\/bookInfo\}\}/g, '')
         .replace(/\{\{#bestHighlights\}\}[\s\S]*?\{\{\/bestHighlights\}\}/g, '');
+
+    return result;
+}
+
+/**
+ * 渲染账号级文档内的文章片段模板（在 articles 循环内）
+ * @param template 文章片段模板
+ * @param article 文章级模板变量（中间数据）
+ */
+function renderMpAccountArticleTemplate(template: string, article: MpAccountTemplateVars['articles'][0]): string {
+    let result = template;
+
+    // 处理 {{#notes}}...{{/notes}} 循环
+    result = result.replace(/\{\{#notes\}\}([\s\S]*?)\{\{\/notes\}\}/g, (_, noteTpl) => {
+        if (!article.notes || article.notes.length === 0) return '';
+        return article.notes.map(note => renderMpAccountNoteTemplate(noteTpl, note)).join('\n');
+    });
+
+    // 处理文章层简单条件 section
+    const articleConditionalFields = [
+        'articleTitle',
+        'articleCreateTime1', 'articleCreateTime2', 'articleCreateTime3', 'articleCreateTime4', 'articleCreateTime5',
+        'articleCreateTime6', 'articleCreateTime7', 'articleCreateTime8', 'articleCreateTime9', 'articleCreateTime10',
+        'updateTime1', 'updateTime2', 'updateTime3', 'updateTime4', 'updateTime5',
+        'updateTime6', 'updateTime7', 'updateTime8', 'updateTime9', 'updateTime10'
+    ];
+    result = renderSimpleConditionalSections(result, article as any, articleConditionalFields);
+
+    // 替换文章级变量
+    result = result
+        .replace(/\{\{articleTitle\}\}/g, article.articleTitle)
+        .replace(/\{\{articleCreateTime1\}\}/g, article.articleCreateTime1 || '')
+        .replace(/\{\{articleCreateTime2\}\}/g, article.articleCreateTime2 || '')
+        .replace(/\{\{articleCreateTime3\}\}/g, article.articleCreateTime3 || '')
+        .replace(/\{\{articleCreateTime4\}\}/g, article.articleCreateTime4 || '')
+        .replace(/\{\{articleCreateTime5\}\}/g, article.articleCreateTime5 || '')
+        .replace(/\{\{articleCreateTime6\}\}/g, article.articleCreateTime6 || '')
+        .replace(/\{\{articleCreateTime7\}\}/g, article.articleCreateTime7 || '')
+        .replace(/\{\{articleCreateTime8\}\}/g, article.articleCreateTime8 || '')
+        .replace(/\{\{articleCreateTime9\}\}/g, article.articleCreateTime9 || '')
+        .replace(/\{\{articleCreateTime10\}\}/g, article.articleCreateTime10 || '')
+        .replace(/\{\{updateTime1\}\}/g, article.updateTime1 || '')
+        .replace(/\{\{updateTime2\}\}/g, article.updateTime2 || '')
+        .replace(/\{\{updateTime3\}\}/g, article.updateTime3 || '')
+        .replace(/\{\{updateTime4\}\}/g, article.updateTime4 || '')
+        .replace(/\{\{updateTime5\}\}/g, article.updateTime5 || '')
+        .replace(/\{\{updateTime6\}\}/g, article.updateTime6 || '')
+        .replace(/\{\{updateTime7\}\}/g, article.updateTime7 || '')
+        .replace(/\{\{updateTime8\}\}/g, article.updateTime8 || '')
+        .replace(/\{\{updateTime9\}\}/g, article.updateTime9 || '')
+        .replace(/\{\{updateTime10\}\}/g, article.updateTime10 || '')
+        .replace(/\{\{noteCount\}\}/g, String(article.noteCount));
+
+    return result;
+}
+
+/**
+ * 渲染单条 note 模板（在 notes 循环内）
+ * @param template note 级模板片段
+ * @param note note 模板变量
+ */
+function renderMpAccountNoteTemplate(template: string, note: MpAccountTemplateVars['articles'][0]['notes'][0]): string {
+    let result = template;
+
+    // 处理 {{#comments}}...{{/comments}} 循环（复用多行缩进逻辑）
+    result = result.replace(/\{\{#comments\}\}([\s\S]*?)\{\{\/comments\}\}/g, (_, commentTpl) => {
+        return renderCommentsWithIndent(commentTpl, note.comments || []);
+    });
+
+    // 复用通用 note 条件 section 处理（处理 highlightText、highlightComment、各种时间字段等）
+    result = renderNoteConditionalSections(result, note as any);
+
+    // 替换 note 级变量
+    result = result
+        .replace(/\{\{highlightText\}\}/g, note.highlightText)
+        .replace(/\{\{highlightComment\}\}/g, note.highlightComment)
+        .replace(/\{\{createTime1\}\}/g, note.createTime1 || '')
+        .replace(/\{\{createTime2\}\}/g, note.createTime2 || '')
+        .replace(/\{\{createTime3\}\}/g, note.createTime3 || '')
+        .replace(/\{\{createTime4\}\}/g, note.createTime4 || '')
+        .replace(/\{\{createTime5\}\}/g, note.createTime5 || '')
+        .replace(/\{\{createTime6\}\}/g, note.createTime6 || '')
+        .replace(/\{\{createTime7\}\}/g, note.createTime7 || '')
+        .replace(/\{\{createTime8\}\}/g, note.createTime8 || '')
+        .replace(/\{\{createTime9\}\}/g, note.createTime9 || '')
+        .replace(/\{\{createTime10\}\}/g, note.createTime10 || '')
+        .replace(/\{\{highlightCreateTime1\}\}/g, note.highlightCreateTime1 || '')
+        .replace(/\{\{highlightCreateTime2\}\}/g, note.highlightCreateTime2 || '')
+        .replace(/\{\{highlightCreateTime3\}\}/g, note.highlightCreateTime3 || '')
+        .replace(/\{\{highlightCreateTime4\}\}/g, note.highlightCreateTime4 || '')
+        .replace(/\{\{highlightCreateTime5\}\}/g, note.highlightCreateTime5 || '')
+        .replace(/\{\{highlightCreateTime6\}\}/g, note.highlightCreateTime6 || '')
+        .replace(/\{\{highlightCreateTime7\}\}/g, note.highlightCreateTime7 || '')
+        .replace(/\{\{highlightCreateTime8\}\}/g, note.highlightCreateTime8 || '')
+        .replace(/\{\{highlightCreateTime9\}\}/g, note.highlightCreateTime9 || '')
+        .replace(/\{\{highlightCreateTime10\}\}/g, note.highlightCreateTime10 || '')
+        .replace(/\{\{commentCreateTime1\}\}/g, note.commentCreateTime1 || '')
+        .replace(/\{\{commentCreateTime2\}\}/g, note.commentCreateTime2 || '')
+        .replace(/\{\{commentCreateTime3\}\}/g, note.commentCreateTime3 || '')
+        .replace(/\{\{commentCreateTime4\}\}/g, note.commentCreateTime4 || '')
+        .replace(/\{\{commentCreateTime5\}\}/g, note.commentCreateTime5 || '')
+        .replace(/\{\{commentCreateTime6\}\}/g, note.commentCreateTime6 || '')
+        .replace(/\{\{commentCreateTime7\}\}/g, note.commentCreateTime7 || '')
+        .replace(/\{\{commentCreateTime8\}\}/g, note.commentCreateTime8 || '')
+        .replace(/\{\{commentCreateTime9\}\}/g, note.commentCreateTime9 || '')
+        .replace(/\{\{commentCreateTime10\}\}/g, note.commentCreateTime10 || '');
 
     return result;
 }
@@ -1766,37 +1704,6 @@ function formatNote(notesTemplate: string, highlight: any, notebookTitle: string
 }
 
 /**
- * 处理 notes 层通用条件 section：{{#fieldName}}...{{/fieldName}}
- * 当 note 上 fieldName 有值（非空字符串、非 null、非 undefined）时保留内容，无值时删除整段
- * 注意：已处理过的 {{#comments}}...{{/comments}} 不会被此函数影响
- */
-function renderNoteConditionalSections(
-    template: string,
-    note: Record<string, any>
-): string {
-    // 定义 note 上可能的一层字段（不含嵌套对象和数组）
-    const singleFields = [
-        'highlightText', 'highlightComment', 'formattedNote',
-        'createTime1', 'createTime2', 'createTime3', 'createTime4', 'createTime5',
-        'createTime6', 'createTime7', 'createTime8', 'createTime9', 'createTime10',
-        'highlightCreateTime1', 'highlightCreateTime2', 'highlightCreateTime3', 'highlightCreateTime4', 'highlightCreateTime5',
-        'highlightCreateTime6', 'highlightCreateTime7', 'highlightCreateTime8', 'highlightCreateTime9', 'highlightCreateTime10',
-        'commentCreateTime1', 'commentCreateTime2', 'commentCreateTime3', 'commentCreateTime4', 'commentCreateTime5',
-        'commentCreateTime6', 'commentCreateTime7', 'commentCreateTime8', 'commentCreateTime9', 'commentCreateTime10',
-    ];
-
-    let result = template;
-    for (const field of singleFields) {
-        const value = note[field];
-        const hasValue = value !== null && value !== undefined && value !== '';
-        // 匹配 {{#fieldName}}...{{/fieldName}} 块
-        result = result.replace(new RegExp(`\\{\\{#${field}\\}\\}([\\s\\S]*?)\\{\\{\\/${field}\\}\\}`, 'g'),
-            (_, innerContent) => hasValue ? innerContent : '');
-    }
-    return result;
-}
-
-/**
  * 渲染笔记模板，在没有评论时删除包含 {{highlightComment}} 的整行
  * 与旧 chapters 路径的行为保持一致
  */
@@ -1841,32 +1748,7 @@ function renderNoteTemplateWithOptionalComment(
     const hasComment = !!(note.highlightComment && note.highlightComment.trim());
     let template = notesTemplate
         .replace(/\{\{#comments\}\}([\s\S]*?)\{\{\/comments\}\}/g, (_, commentsTpl) => {
-            if (!note.comments || note.comments.length === 0) return '';
-            // 计算 {{content}} 所在行的占位符前缀，用于多行内容对齐
-            // 例如模板行 "  - 💬 {{content}}"，取 "  - 💬 " 并转为等宽空格 "      "
-            const contentLineMatch = commentsTpl.match(/^(.*)\{\{content\}\}/m);
-            const continuationIndent = contentLineMatch
-                ? contentLineMatch[1].replace(/[^\s]/g, ' ')
-                : '';
-            return note.comments.map(c => {
-                const content = c.content || '';
-                // 多行内容：第一行原样，后续行补等宽空格前缀，保持子内容层级
-                const indentedContent = content.includes('\n')
-                    ? content.split('\n').map((line, idx) => idx === 0 ? line : continuationIndent + line).join('\n')
-                    : content;
-                return commentsTpl
-                    .replace(/\{\{content\}\}/g, indentedContent)
-                    .replace(/\{\{commentCreateTime1\}\}/g, c.commentCreateTime1 || '')
-                    .replace(/\{\{commentCreateTime2\}\}/g, c.commentCreateTime2 || '')
-                    .replace(/\{\{commentCreateTime3\}\}/g, c.commentCreateTime3 || '')
-                    .replace(/\{\{commentCreateTime4\}\}/g, c.commentCreateTime4 || '')
-                    .replace(/\{\{commentCreateTime5\}\}/g, c.commentCreateTime5 || '')
-                    .replace(/\{\{commentCreateTime6\}\}/g, c.commentCreateTime6 || '')
-                    .replace(/\{\{commentCreateTime7\}\}/g, c.commentCreateTime7 || '')
-                    .replace(/\{\{commentCreateTime8\}\}/g, c.commentCreateTime8 || '')
-                    .replace(/\{\{commentCreateTime9\}\}/g, c.commentCreateTime9 || '')
-                    .replace(/\{\{commentCreateTime10\}\}/g, c.commentCreateTime10 || '');
-            }).join('\n');
+            return renderCommentsWithIndent(commentsTpl, note.comments || []);
         });
 
     // 处理通用条件 section：{{#fieldName}}...{{/fieldName}}
@@ -2112,9 +1994,32 @@ async function syncNotesProcess(plugin: WereadPluginLike, cookies: string, noteb
         }
     }
 
-    // 加载微信读书笔记同步模板（普通书需要，模板为空时由默认模板兜底）
-    const template = await plugin.loadData("weread_templates");
-    const effectiveTemplate = template?.trim() ? template : DEFAULT_WEREAD_NOTES_TEMPLATE;
+    // 加载两类模板（不再提供默认模板兜底）
+    const bookTemplate = (await plugin.loadData("weread_templates") || "").trim();
+    const mpTemplate = (await plugin.loadData("weread_mp_templates") || "").trim();
+
+    // 模板缺失校验：按本轮实际来源类型分别判断
+    const hasNormalBooks = normalBooks.length > 0;
+    const hasMpAccounts = mpAccountRecords.length > 0;
+
+    // 优先处理两个模板都缺失的情况（一次性提示）
+    if (hasNormalBooks && hasMpAccounts && !bookTemplate && !mpTemplate) {
+        showMessage(plugin.i18n.showMessageBothTemplatesMissing);
+        return false;
+    }
+
+    if (hasNormalBooks && !bookTemplate) {
+        showMessage(plugin.i18n.showMessageBookTemplateMissing);
+        return false;
+    }
+
+    if (hasMpAccounts && !mpTemplate) {
+        showMessage(plugin.i18n.showMessageMpTemplateMissing);
+        return false;
+    }
+
+    // 校验通过，使用已加载的真实模板
+    const effectiveTemplate = bookTemplate;
 
     // 获取数据库配置
     const setting = await plugin.loadData("settings.json");
@@ -2139,7 +2044,7 @@ async function syncNotesProcess(plugin: WereadPluginLike, cookies: string, noteb
         } else {
             const mpResults: { success: boolean; title: string }[] = [];
             for (const accountRecord of mpAccountRecords) {
-                const result = await syncMpAccountArticles(plugin, cookies, avID, accountRecord, wereadPositionMark);
+                const result = await syncMpAccountArticles(plugin, cookies, avID, accountRecord, wereadPositionMark, mpTemplate);
                 mpResults.push(result);
                 if (!result.success) {
                     mpSyncSuccess = false;
@@ -2214,8 +2119,8 @@ async function syncNotesProcess(plugin: WereadPluginLike, cookies: string, noteb
             const { abstractComments, chapterComments } = classifyComments(comments);
 
             const notesTemplateMatch = effectiveTemplate.match(/\{\{#notes\}\}([\s\S]*?)\{\{\/notes\}\}/);
-            // 优先使用模板中提取的 notes 块，否则使用新默认模板
-            const notesTemplate = notesTemplateMatch ? notesTemplateMatch[1] : DEFAULT_WEREAD_NOTES_TEMPLATE;
+            // 使用模板中提取的 notes 块，无则空字符串（不再兜底默认模板）
+            const notesTemplate = notesTemplateMatch ? notesTemplateMatch[1] : "";
 
             // 构建层级章节结构
             const hierarchy = buildChapterHierarchy(notebook.chapterInfos);
@@ -2257,18 +2162,52 @@ async function syncNotesProcess(plugin: WereadPluginLike, cookies: string, noteb
     return !hasUpdateFailure && !hasEnhanceFailure && mpSyncSuccess;
 }
 
-// 扩展 WereadBookDetail 以兼容公众号账号运行时可能存在的额外字段
-type WereadBookDetailWithMpMeta = WereadBookDetail & {
-    type?: number;
-    coverBoxInfo?: { mp_avatar?: string };
-};
-
 // 校验并重建临时笔记本列表
-async function ensureTemporaryWereadNotebooksList(plugin: WereadPluginLike, cookies: string): Promise<any[]> {
+async function ensureTemporaryWereadNotebooksList(plugin: WereadPluginLike, cookies: string, sourceMode: NotebookSourceMode = "allow-rebuild"): Promise<any[]> {
     const cachedList: any[] = await plugin.loadData("temporary_weread_notebooksList") || [];
 
-    // 校验缓存是否有效（必须包含 sourceType，否则视为旧缓存需重建）
-    const isValidCache = Array.isArray(cachedList) && cachedList.length > 0 && cachedList.every((book: any) => {
+    // ui-cache-only 模式：额外检查预加载完成标记，确保缓存已准备好
+    if (sourceMode === "ui-cache-only") {
+        const readyAt = await plugin.loadData("weread_notebooksList_readyAt");
+        const hasValidReadyMark = typeof readyAt === "number" && readyAt > 0;
+
+        // ui-cache-only 模式缓存有效性判断：
+        // - 必须是数组（空数组也是合法状态，表示预加载完成但结果为空）
+        // - 必须有有效的 ready 标记
+        // - 若数组非空，则每项结构必须合法
+        // 空数组 + 有效 ready 标记 = "缓存已完成，只是结果为空"，不应误判为"缓存未准备好"
+        const isArray = Array.isArray(cachedList);
+        const hasValidItems = isArray && cachedList.every((book: any) => {
+            return (
+                book.bookID &&
+                typeof book.bookID === "string" &&
+                book.bookID.trim() !== "" &&
+                book.title &&
+                typeof book.title === "string" &&
+                book.updatedTime !== undefined &&
+                book.sourceType &&
+                typeof book.sourceType === "string"
+            );
+        });
+
+        // 缓存有效条件：是数组 + ready 标记有效 + 若有元素则结构合法
+        const isCacheReady = isArray && hasValidReadyMark && hasValidItems;
+
+        if (isCacheReady) {
+            return cachedList;
+        }
+
+        // ui-cache-only 模式：缓存未准备好时直接返回空数组，不远程重建
+        console.warn("[微信读书] 本地缓存未准备好（无有效缓存或无完成标记），ui-cache-only 模式下跳过远程重建");
+        return [];
+    }
+
+    // allow-rebuild 模式：缓存有效性判断与 ui-cache-only 保持一致
+    // - 必须是数组（空数组也是合法状态，表示缓存已完成但结果为空）
+    // - 若数组非空，则每项结构必须合法
+    // 空数组不再天然视为缓存无效，但 allow-rebuild 模式下会触发远程重建以获取最新数据
+    const isArray = Array.isArray(cachedList);
+    const hasValidItems = isArray && cachedList.every((book: any) => {
         return (
             book.bookID &&
             typeof book.bookID === "string" &&
@@ -2281,50 +2220,22 @@ async function ensureTemporaryWereadNotebooksList(plugin: WereadPluginLike, cook
         );
     });
 
-    if (isValidCache) {
-        return cachedList;
+    // 缓存有效条件：是数组 + 若有元素则结构合法
+    const isCacheReady = isArray && hasValidItems;
+
+    if (isCacheReady) {
+        // 空数组场景：缓存已完成但结果为空，允许重建以获取最新数据
+        // 非空数组场景：缓存有效，直接返回
+        if (cachedList.length === 0) {
+            console.info("[微信读书] 缓存为空但结构合法，触发远程重建以获取最新数据");
+        } else {
+            return cachedList;
+        }
     }
 
     try {
-        const notebookdata = await getNotebooks(plugin, cookies);
-        const basicBooks = notebookdata.books || [];
-
-        const rebuiltList: any[] = [];
-        for (const b of basicBooks) {
-            try {
-                const details = await getBook(plugin, cookies, b.bookId);
-                const detailsWithMpMeta = details as WereadBookDetailWithMpMeta;
-
-                // 判断来源类型（只传需要的 type 字段）
-                const isMpAccount = isWereadMpAccountSource(details.bookId, { type: detailsWithMpMeta.type });
-                const sourceType: WereadSourceType = isMpAccount ? "weread_mp_account" : "weread_book";
-
-                // 公众号账号封面回退逻辑
-                let cover = details.cover || "";
-                if (isMpAccount && (!cover || cover.includes("/t8_0.jpg"))) {
-                    const mpAvatar = detailsWithMpMeta.coverBoxInfo?.mp_avatar;
-                    if (mpAvatar) {
-                        cover = mpAvatar;
-                    }
-                }
-
-                rebuiltList.push({
-                    sourceType,
-                    noteCount: b.noteCount ?? 0,
-                    reviewCount: b.reviewCount ?? 0,
-                    updatedTime: b.sort ?? 0,
-                    bookID: details.bookId,
-                    title: details.title,
-                    author: details.author ?? "",
-                    cover,
-                    introduction: details.intro ?? "",
-                    isbn: details.isbn ?? "",
-                });
-            } catch {
-                // 单本获取失败不影响其他书
-            }
-        }
-
+        // 使用共用的 helper 构建列表，确保字段结构统一
+        const rebuiltList = await buildTemporaryNotebookList(plugin, cookies);
         await plugin.saveData("temporary_weread_notebooksList", rebuiltList);
         return rebuiltList;
     } catch (error: any) {
@@ -2334,50 +2245,35 @@ async function ensureTemporaryWereadNotebooksList(plugin: WereadPluginLike, cook
     }
 }
 
-// 获取预加载的云端书籍笔记列表，排除已忽略的书籍和融合了自定义ISBN的书籍
-async function getPersonalNotebooks(plugin: WereadPluginLike): Promise<SyncNotebookRecord[]> {
-    // 获取 cookies 用于可能的缓存重建
-    const savedcookies = await plugin.loadData("weread_cookie") || {};
-    const cookies = savedcookies.cookies || "";
+// 标准化原始笔记本列表：过滤忽略书籍、融合自定义ISBN、统一字段结构
+// 供手动 UI 同步传入预加载快照时使用，确保与 getPersonalNotebooks() 输出语义一致
+async function normalizeNotebookList(plugin: WereadPluginLike, rawNotebooks: any[]): Promise<SyncNotebookRecord[]> {
+    const ignoredBooks: SyncNotebookRecord[] = await plugin.loadData('weread_ignoredBooks') || [];
+    const ignoredBookIDs = new Set(ignoredBooks.map((b) => b.bookID?.toString() || ""));
+    const ignoredIsbns = new Set(ignoredBooks.map((b: any) => b.isbn?.toString() || ""));
 
-    // 使用校验后的列表
-    const notebooksList: SyncNotebookRecord[] = await ensureTemporaryWereadNotebooksList(plugin, cookies);
-    const ignoredBooks: SyncNotebookRecord[] = await plugin.loadData('weread_ignoredBooks') || []; // 获取已忽略的书籍列表
-    const ignoredBookIDs = new Set(ignoredBooks.map((b) => b.bookID?.toString() || "")); // 获取已忽略的书籍ID列表
-    const ignoredIsbns = new Set(ignoredBooks.map((b: any) => b.isbn?.toString() || "")); // 获取已忽略的ISBN列表
-
-    // 筛选过滤掉忽略书籍书籍
-    const filteredNotebooks = notebooksList.filter((book: any) => {
+    // 筛选过滤掉忽略书籍
+    const filteredNotebooks = rawNotebooks.filter((book: any) => {
         const bookID = book.bookID?.toString();
         const isbn = book.isbn?.toString();
-
-        // 优先使用bookID检查，因为bookID是唯一标识符
-        if (bookID && ignoredBookIDs.has(bookID)) {
-            return false;
-        }
-
-        // 如果没有bookID，再使用isbn检查
-        if (isbn && ignoredIsbns.has(isbn)) {
-            return false;
-        }
-
+        if (bookID && ignoredBookIDs.has(bookID)) return false;
+        if (isbn && ignoredIsbns.has(isbn)) return false;
         return true;
     });
 
-    const customISBNMap = new Map<string, string>(); // 自定义ISBN映射表，用于存储融合了自定义ISBN的书籍
-    const customBooks = await plugin.loadData("weread_customBooksISBN") || []; // 获取自定义书籍ISBN列表
     // 构建自定义ISBN映射表
+    const customISBNMap = new Map<string, string>();
+    const customBooks = await plugin.loadData("weread_customBooksISBN") || [];
     customBooks.forEach((item: any) => {
         if (item.bookID && item.customISBN) {
             customISBNMap.set(item.bookID.toString(), item.customISBN);
         }
     });
 
-    // 构建基础书籍笔记列表，保留弹窗分表所需字段
-    const basicNotebooks: SyncNotebookRecord[] = filteredNotebooks.map((book: any) => {
+    // 标准化输出
+    return filteredNotebooks.map((book: any) => {
         const isMpAccount = book.sourceType === "weread_mp_account";
         const hasISBN = book.isbn && book.isbn.trim() !== "";
-        // 公众号账号来源允许 isbn 为空，普通书继续用 customISBN 回退
         const resolvedISBN = isMpAccount
             ? (book.isbn || "")
             : (hasISBN ? book.isbn : customISBNMap.get(book.bookID?.toString()) || "");
@@ -2395,7 +2291,18 @@ async function getPersonalNotebooks(plugin: WereadPluginLike): Promise<SyncNoteb
             reviewCount: book.reviewCount ?? 0,
         };
     });
+}
 
-    return basicNotebooks;
+// 获取预加载的云端书籍笔记列表，排除已忽略的书籍和融合了自定义ISBN的书籍
+async function getPersonalNotebooks(plugin: WereadPluginLike, sourceMode: NotebookSourceMode = "allow-rebuild"): Promise<SyncNotebookRecord[]> {
+    // 获取 cookies 用于可能的缓存重建
+    const savedcookies = await plugin.loadData("weread_cookie") || {};
+    const cookies = savedcookies.cookies || "";
+
+    // 使用校验后的列表
+    const rawNotebooks: any[] = await ensureTemporaryWereadNotebooksList(plugin, cookies, sourceMode);
+
+    // 使用标准化 helper 处理
+    return normalizeNotebookList(plugin, rawNotebooks);
 }
 

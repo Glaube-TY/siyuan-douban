@@ -11,12 +11,8 @@ export async function updateEndBlocks(plugin: any, blockID: string, wereadPositi
             id: blockID,
         });
 
-        // 检查是否有子块
-        if (!childBlocks || !childBlocks.data || childBlocks.data.length === 0) {
-            throw new Error(`书籍 blockID ${blockID} 不存在子块`);
-        }
-
-        const data = childBlocks.data || [];
+        // 检查是否有子块（空文档场景也兼容，视为首次写入）
+        const data = childBlocks?.data || [];
         const targetContent = wereadPositionMark;
 
         let targetBlock = data.find((block: { content: string; }) => block.content === targetContent);
@@ -30,6 +26,7 @@ export async function updateEndBlocks(plugin: any, blockID: string, wereadPositi
             idsList = data.slice(targetIndex + 1).map(block => block.id);
         } else {
             // 如果没有找到标记块，则在文档末尾添加标记块
+            // 空文档场景：data 为空，previousID 直接用 blockID（文档自身）
             const lastBlock = data.length > 0 ? data[data.length - 1] : null;
             const markBlockID = await plugin.client.insertBlock({
                 data: targetContent,

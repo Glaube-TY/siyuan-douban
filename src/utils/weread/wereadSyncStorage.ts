@@ -1,11 +1,28 @@
 /**
  * 获取微信读书存储记录的唯一键
- * 优先使用 syncID，其次 bookID，都没有返回空字符串
+ * 统一只使用 bookID 作为主键，和数据库层/同步层口径一致
+ * 
+ * 过渡方案：
+ * - 读取旧数据时：若记录没有 bookID，仍兼容使用 syncID（历史旧数据）
+ * - 新写入/去重合并/回写：一律只基于 bookID，不再保留 syncID
  */
 function getWereadStorageKey(record: any): string {
-    if (record?.syncID) return record.syncID.toString();
+    // 新逻辑主键：统一只认 bookID
     if (record?.bookID) return record.bookID.toString();
+    // 读取兼容兜底：历史旧记录可能只有 syncID 没有 bookID
+    if (record?.syncID) return record.syncID.toString();
     return "";
+}
+
+/**
+ * 规范化存储记录，确保只保留 bookID 作为主键
+ * 用于保存前清理历史遗留的 syncID，避免口径差异
+ */
+function normalizeStorageRecord(record: any): any {
+    if (!record) return record;
+    // 只保留必要字段，移除 syncID 避免后续混淆
+    const { syncID, ...rest } = record;
+    return rest;
 }
 
 export async function saveIgnoredBooks(plugin: any, newIgnoredBooks: any[]) {
@@ -19,7 +36,8 @@ export async function saveIgnoredBooks(plugin: any, newIgnoredBooks: any[]) {
         }
     });
 
-    const finalIgnoredBooks = Array.from(uniqueMap.values());
+    // 回写时统一清理 syncID，只保留 bookID 作为主键
+    const finalIgnoredBooks = Array.from(uniqueMap.values()).map(normalizeStorageRecord);
 
     await plugin.saveData('weread_ignoredBooks', finalIgnoredBooks);
 }
@@ -49,7 +67,8 @@ export async function saveCustomBooksISBN(plugin: any, selectedBooks: any[], clo
                 customMap.set(key, item);
             }
         });
-        const finalCustomBooks = Array.from(customMap.values());
+        // 回写时统一清理 syncID，只保留 bookID 作为主键
+        const finalCustomBooks = Array.from(customMap.values()).map(normalizeStorageRecord);
 
         await plugin.saveData("weread_customBooksISBN", finalCustomBooks);
     }
@@ -68,7 +87,8 @@ export async function saveUseBookIDBooks(plugin: any, useBookIDBooks: any[]) {
         }
     });
 
-    const finalUseBookIDBooks = Array.from(useBookIDMap.values());
+    // 回写时统一清理 syncID，只保留 bookID 作为主键
+    const finalUseBookIDBooks = Array.from(useBookIDMap.values()).map(normalizeStorageRecord);
 
     await plugin.saveData("weread_useBookIDBooks", finalUseBookIDBooks);
 }

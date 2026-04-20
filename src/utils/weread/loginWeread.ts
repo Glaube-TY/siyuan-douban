@@ -282,51 +282,16 @@ export async function createWereadQRCodeDialog(i18n: any, idbtn: boolean): Promi
     });
 }
 
-const DEFAULT_WEREAD_NOTES_TEMPLATE = `{{#chapters}}
-
-{{#chapterTitle}}
-## {{chapterTitle1}}
-### {{chapterTitle2}}
-#### {{chapterTitle3}}
-##### {{chapterTitle4}}
-{{/chapterTitle}}
-
-{{#chapterComments}}
-### 章节思考
-> 💬 {{chapterComments}}
-- 🕐 {{createTime7}}
-{{/chapterComments}}
-
-{{#notes}}
-{{#highlightText}}
-- {{highlightText}}
-{{/highlightText}}
-{{#highlightCreateTime7}}
-  - 标注时间：{{highlightCreateTime7}}
-{{/highlightCreateTime7}}
-{{#comments}}
-  - 💬 {{content}}
-  {{#commentCreateTime7}}
-    - 评论时间：{{commentCreateTime7}}
-  {{/commentCreateTime7}}
-{{/comments}}
-{{#createTime7}}
-- 主时间：{{createTime7}}
-{{/createTime7}}
-{{/notes}}
-
-{{/chapters}}`;
-
-export const createWereadNotesTemplateDialog = (i18n: any, onConfirm: (newWereadTemplates: string) => void, initialTemplates = "") => {
+export const createWereadNotesTemplateDialog = (i18n: any, onConfirm: (newWereadTemplates: string) => void, initialTemplates = "", title: string) => {
     return () => {
         const dialog = svelteDialog({
-            title: i18n.setNotesTemplateTitle,
+            title: title,
             constructor: (containerEl: HTMLElement) => {
                 return new wereadNotesTemplate({
                     target: containerEl,
                     props: {
                         i18n: i18n,
-                        newWereadTemplates: initialTemplates || DEFAULT_WEREAD_NOTES_TEMPLATE,
+                        newWereadTemplates: initialTemplates,
                         close: () => dialog.close(),
                         confirm: (newWereadTemplates: string) => {
                             onConfirm(newWereadTemplates);

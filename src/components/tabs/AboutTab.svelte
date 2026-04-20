@@ -5,7 +5,6 @@
 
     export const LINKS = {
         github: "https://github.com/Glaube-TY/siyuan-douban",
-        feishu: "https://ttl8ygt82u.feishu.cn/wiki/VZdjwDNxWi4j0jkdyxMcOg2VnFf",
         notion: "https://cooperative-ferry-4dc.notion.site/SY-1e3c50d8b56c809bae91e6e059c87e82",
         author: "https://github.com/Glaube-TY",
         ld246: "https://ld246.com/member/GlaubeTY",
@@ -35,7 +34,6 @@
             <div>
                 <p class="label">{i18n.pluginTutorial}：</p>
                 <p><a href={LINKS.myblog} class="link">{i18n.pluginTutorialLink}</a></p>
-                <p><a href={LINKS.feishu} class="link">{i18n.pluginTutorialLink1}</a></p>
             </div>
         </div>
 
@@ -59,7 +57,7 @@
             <span class="icon">💖</span>
             <div>
                 <p class="label">{i18n.pluginSupport}：</p>
-                <a href={LINKS.feishu} class="link">{i18n.pluginSupport1}</a>
+                <span class="link-disabled">{i18n.pluginSupport1}</span>
             </div>
             <span class="icon">&nbsp;&nbsp;&nbsp;</span>
             <span class="icon">⁉</span>

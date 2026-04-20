@@ -1,11 +1,13 @@
 /**
- * 微信读书公众号文章同步助手
- * 负责公众号账号笔记 -> 公众号文章分组的纯数据能力
+ * 微信读书公众号账号级同步助手
+ * 负责公众号账号笔记 -> 文章中间数据聚合（供账号级文档模板渲染使用）
  */
+
+import { formatWereadTimestamp } from "./wereadTemplateRender";
 
 // ========== 最小本地类型定义 ==========
 
-/** 公众号文章引用信息（标准化后） */
+/** 公众号账号内文章引用信息（标准化后） */
 export interface MpArticleRefInfo {
     reviewId: string;
     title: string;
@@ -40,6 +42,8 @@ interface RawReviewItem {
         content: string;
         createTime: number;
         refMpInfo?: RawRefMpInfo;
+        abstract?: string;
+        contextAbstract?: string;
     };
 }
 
@@ -50,6 +54,8 @@ interface ReviewBodyLike {
     content?: string;
     createTime?: number;
     refMpInfo?: RawRefMpInfo;
+    abstract?: string;
+    contextAbstract?: string;
 }
 
 /** 公众号评论 payload 最小兼容类型 */
@@ -74,6 +80,8 @@ export interface MpReviewRecord {
     content: string;
     createTime: number;
     refMpInfo?: MpArticleRefInfo;
+    abstract?: string;
+    contextAbstract?: string;
 }
 
 /** 公众号账号信息（最小输入形态，兼容 WereadBookDetail） */
@@ -88,17 +96,21 @@ export interface MpBookInfo {
     coverBoxInfo?: { mp_avatar?: string };
 }
 
-/** 公众号文章分组 */
+/**
+ * 公众号账号内文章分组（中间渲染单元）
+ * 仅用于账号级文档内 articles section 渲染，不直接落库
+ * 注意：rawBookID/articleID/syncID 属于插件内部同步/聚合语义，不再对模板开放
+ * 数据库层公众号账号行只靠 bookID 识别
+ */
 export interface MpArticleGroup {
-    sourceType: "weread_mp_article";
-    rawBookID: string;
-    articleID: string;
-    syncID: string;
+    rawBookID: string;  // 内部字段：用于聚合分组，不再对模板开放
+    articleID: string;  // 内部字段：用于聚合分组，不再对模板开放
+    syncID: string;  // 内部字段：用于调试追踪，不再对模板开放
     accountTitle: string;
     accountIntro: string;
     accountCover: string;
     articleTitle: string;
-    articleCover: string;
+    articleCover: string;  // 已停用：按当前规则统一置空，只保留账号级封面
     articleCreateTime: number;
     updatedTime: number;
     bookmarks: MpBookmarkRecord[];
@@ -177,7 +189,9 @@ function normalizeMpReviewRecord(item: RawReviewItem | ReviewBodyLike): MpReview
         range: body.range || "",
         content: body.content || "",
         createTime: normalizeWereadTimestamp(body.createTime),
-        refMpInfo: rawRefInfo ? normalizeRefMpInfo(rawRefInfo) : undefined
+        refMpInfo: rawRefInfo ? normalizeRefMpInfo(rawRefInfo) : undefined,
+        abstract: body.abstract || "",
+        contextAbstract: body.contextAbstract || ""
     };
 }
 
@@ -263,11 +277,12 @@ export function extractMpReviews(reviewPayload: MpReviewPayloadLike): MpReviewRe
 }
 
 /**
- * 构建公众号文章分组
- * @param rawBookID 原始书籍/账号 ID
+ * 构建公众号账号内文章分组（中间数据聚合）
+ * @param rawBookID 原始书籍/账号 ID（即 bookID，数据库层唯一识别键）
  * @param bookInfo 公众号账号信息
  * @param bookmarkPayload 划线数据负载
  * @param reviewPayload 评论数据负载
+ * 注意：返回数据中的 rawBookID/articleID/syncID 属于内部同步/聚合语义，不再对模板开放
  */
 export function buildMpArticleGroups(
     rawBookID: string,
@@ -333,7 +348,9 @@ export function buildMpArticleGroups(
 
         // 文章级字段
         const articleTitle = refInfo?.title || `公众号文章_${articleID}`;
-        const articleCover = refInfo?.picUrl || accountCover;
+        // 文章级封面：已停用，按当前规则统一置空字符串
+        // 只保留账号级封面，文章级封面不再同步到数据库
+        const articleCover = "";
 
         // 文章创建时间：优先 refMpInfo.createTime，其次组内最早记录时间，最后 updatedTime
         let articleCreateTime = normalizeWereadTimestamp(refInfo?.createTime);
@@ -345,15 +362,14 @@ export function buildMpArticleGroups(
         }
 
         groups.push({
-            sourceType: "weread_mp_article",
-            rawBookID,
-            articleID,
-            syncID: `mp:${rawBookID}:${articleID}`,
+            rawBookID,  // 内部字段：用于聚合分组，不再对模板开放
+            articleID,  // 内部字段：用于聚合分组，不再对模板开放
+            syncID: `mp:${rawBookID}:${articleID}`,  // 内部字段：用于调试追踪，不再对模板开放
             accountTitle,
             accountIntro,
             accountCover,
             articleTitle,
-            articleCover,
+            articleCover,  // 已停用：统一置空
             articleCreateTime,
             updatedTime,
             bookmarks: articleBookmarks,
@@ -367,15 +383,15 @@ export function buildMpArticleGroups(
     return groups;
 }
 
-// ========== 公众号文章内 Note 生成 ==========
+// ========== 公众号账号内文章片段（Note/Comment）生成 ==========
 
-/** 公众号文章评论项 */
+/** 文章片段评论项（中间数据） */
 export interface MpArticleCommentItem {
     content: string;
     createTime: number;
 }
 
-/** 公众号文章 Note 项 */
+/** 文章片段 Note 项（中间数据） */
 export interface MpArticleNoteItem {
     noteType: "highlight" | "comment_only";
     range: string;
@@ -402,8 +418,8 @@ function parseWereadRangeStart(range: string): number {
 }
 
 /**
- * 构建公众号文章内的 note 列表
- * @param group 公众号文章分组
+ * 构建账号级文档内文章片段的 note 列表（中间数据）
+ * @param group 文章分组（中间数据）
  */
 export function buildMpArticleNotes(group: MpArticleGroup): MpArticleNoteItem[] {
     const notes: MpArticleNoteItem[] = [];
@@ -478,11 +494,16 @@ export function buildMpArticleNotes(group: MpArticleGroup): MpArticleNoteItem[] 
             });
         } else {
             // 无 bookmark，生成 comment-only note
+            // 从评论中回填被评论文本（abstract/contextAbstract）
+            const fallbackHighlightText = sortedReviews
+                .map(r => r.abstract || r.contextAbstract || "")
+                .find(t => t.trim()) || "";
+
             notes.push({
                 noteType: "comment_only",
                 range,
                 rangeStart: parseWereadRangeStart(range),
-                highlightText: "",
+                highlightText: fallbackHighlightText,
                 highlightCreateTime: 0,
                 createTime: earliestCommentTime,
                 highlightComment,
@@ -503,34 +524,33 @@ export function buildMpArticleNotes(group: MpArticleGroup): MpArticleNoteItem[] 
     return notes;
 }
 
-// ========== 公众号文章同步单元 ==========
+// ========== 公众号账号级文章渲染单元 ==========
 
-/** 公众号文章同步单元（可直接用于后续同步流程） */
+/**
+ * 账号级文档内文章渲染单元（中间数据，用于模板渲染）
+ * 注意：这是账号级文档内的 articles section 数据，不直接作为数据库来源记录
+ * 注意：syncID/rawBookID/articleID 属于内部同步/聚合语义，不再对模板开放
+ * articleCover 已停用，不再对模板开放
+ * 数据库层公众号账号行只靠 bookID 识别
+ */
 export interface MpArticleSyncUnit {
-    sourceType: "weread_mp_article";
-    syncID: string;
-    rawBookID: string;
-    articleID: string;
-    title: string;
-    author: string;
-    publisher: string;
-    cover: string;
-    accountTitle: string;
-    accountIntro: string;
-    accountCover: string;
+    syncID: string;  // 内部字段：用于调试追踪，不再对模板开放
+    rawBookID: string;  // 内部字段：用于聚合分组，不再对模板开放
+    articleID: string;  // 内部字段：用于聚合分组，不再对模板开放
     articleTitle: string;
-    articleCover: string;
+    articleCover: string;  // 已停用：不再对模板开放，统一置空
     articleCreateTime: number;
     updatedTime: number;
     notes: MpArticleNoteItem[];
 }
 
 /**
- * 构建公众号文章同步单元列表
- * @param rawBookID 原始书籍/账号 ID
+ * 构建账号级文档内文章渲染单元列表（中间数据聚合）
+ * @param rawBookID 原始书籍/账号 ID（即 bookID，数据库层唯一识别键）
  * @param bookInfo 公众号账号信息
  * @param bookmarkPayload 划线数据负载
  * @param reviewPayload 评论数据负载
+ * 注意：返回数据中的 syncID/rawBookID/articleID 属于内部同步/聚合语义，不再对模板开放
  */
 export function buildMpArticleSyncUnits(
     rawBookID: string,
@@ -546,22 +566,271 @@ export function buildMpArticleSyncUnits(
         const notes = buildMpArticleNotes(group);
 
         return {
-            sourceType: "weread_mp_article",
-            syncID: group.syncID,
-            rawBookID: group.rawBookID,
-            articleID: group.articleID,
-            title: group.articleTitle,
-            author: group.accountTitle,
-            publisher: "微信公众号",
-            cover: group.articleCover || group.accountCover,
-            accountTitle: group.accountTitle,
-            accountIntro: group.accountIntro,
-            accountCover: group.accountCover,
+            syncID: group.syncID,  // 内部字段：不再对模板开放
+            rawBookID: group.rawBookID,  // 内部字段：不再对模板开放
+            articleID: group.articleID,  // 内部字段：不再对模板开放
             articleTitle: group.articleTitle,
-            articleCover: group.articleCover,
+            // 文章级封面：已停用，统一置空，只保留账号级封面
+            articleCover: "",
             articleCreateTime: group.articleCreateTime,
             updatedTime: group.updatedTime,
             notes
         };
     });
+}
+
+// ========== 公众号账号级模板变量构建 ==========
+
+/** 账号级文档内文章片段模板变量 */
+export interface MpAccountArticleTemplateVars {
+    /** 内部排序字段：文章更新时间原始数值，仅供渲染层排序使用，不对用户开放 */
+    __sortUpdateTime: number;
+    articleTitle: string;
+    articleCreateTime1: string;
+    articleCreateTime2: string;
+    articleCreateTime3: string;
+    articleCreateTime4: string;
+    articleCreateTime5: string;
+    articleCreateTime6: string;
+    articleCreateTime7: string;
+    articleCreateTime8: string;
+    articleCreateTime9: string;
+    articleCreateTime10: string;
+    updateTime1: string;
+    updateTime2: string;
+    updateTime3: string;
+    updateTime4: string;
+    updateTime5: string;
+    updateTime6: string;
+    updateTime7: string;
+    updateTime8: string;
+    updateTime9: string;
+    updateTime10: string;
+    noteCount: number;
+    notes: MpArticleNoteTemplateVars[];
+}
+
+/** Note 模板变量 */
+export interface MpArticleNoteTemplateVars {
+    highlightText: string;
+    highlightComment: string;
+    createTime1: string;
+    createTime2: string;
+    createTime3: string;
+    createTime4: string;
+    createTime5: string;
+    createTime6: string;
+    createTime7: string;
+    createTime8: string;
+    createTime9: string;
+    createTime10: string;
+    highlightCreateTime1: string;
+    highlightCreateTime2: string;
+    highlightCreateTime3: string;
+    highlightCreateTime4: string;
+    highlightCreateTime5: string;
+    highlightCreateTime6: string;
+    highlightCreateTime7: string;
+    highlightCreateTime8: string;
+    highlightCreateTime9: string;
+    highlightCreateTime10: string;
+    commentCreateTime1: string;
+    commentCreateTime2: string;
+    commentCreateTime3: string;
+    commentCreateTime4: string;
+    commentCreateTime5: string;
+    commentCreateTime6: string;
+    commentCreateTime7: string;
+    commentCreateTime8: string;
+    commentCreateTime9: string;
+    commentCreateTime10: string;
+    comments: { content: string; commentCreateTime1: string; commentCreateTime2: string; commentCreateTime3: string; commentCreateTime4: string; commentCreateTime5: string; commentCreateTime6: string; commentCreateTime7: string; commentCreateTime8: string; commentCreateTime9: string; commentCreateTime10: string; }[];
+}
+
+/** 账号级模板变量 */
+export interface MpAccountTemplateVars {
+    accountTitle: string;
+    accountIntro: string;
+    accountCover: string;
+    updateTime1: string;
+    updateTime2: string;
+    updateTime3: string;
+    updateTime4: string;
+    updateTime5: string;
+    updateTime6: string;
+    updateTime7: string;
+    updateTime8: string;
+    updateTime9: string;
+    updateTime10: string;
+    articleCount: number;
+    latestArticleTitle: string;
+    latestArticleTime1: string;
+    latestArticleTime2: string;
+    latestArticleTime3: string;
+    latestArticleTime4: string;
+    latestArticleTime5: string;
+    latestArticleTime6: string;
+    latestArticleTime7: string;
+    latestArticleTime8: string;
+    latestArticleTime9: string;
+    latestArticleTime10: string;
+    articles: MpAccountArticleTemplateVars[];
+}
+
+/**
+ * 构建账号级模板变量
+ * @param rawBookID 原始书籍/账号 ID（即 bookID，数据库层唯一识别键）
+ * @param accountInfo 公众号账号信息
+ * @param articleUnits 文章同步单元数组
+ * @param fallbackUpdateTime 账号级更新时间回退值（当文章单元为空时使用）
+ */
+export function buildMpAccountTemplateVariables(
+    rawBookID: string,
+    accountInfo: { accountTitle: string; accountIntro: string; accountCover: string },
+    articleUnits: MpArticleSyncUnit[],
+    fallbackUpdateTime?: number
+): MpAccountTemplateVars {
+
+    // ========== 三层时间语义说明 ==========
+    // 1. 顶层 updateTime1~10（accountUpdateTime）：账号级更新时间
+    //    - 优先取所有文章中的最大 updatedTime
+    //    - 若文章为空，回退到 fallbackUpdateTime（账号来源记录时间）
+    //    - 用于模板顶层 {{updateTimeX}}，反映账号整体更新状态
+    // 2. 顶层 latestArticleTime1~10：最新发布文章时间
+    //    - 按 articleCreateTime 取最新发布文章，显示其发布时间
+    //    - 若文章为空，值为 0（模板显示空）
+    //    - 用于模板顶层 {{latestArticleTimeX}}，与 updateTimeX 区分
+    // 3. article 层 updateTime1~10：单篇文章时间
+    //    - 每篇文章各自的 updatedTime
+    //    - 用于 articles 循环内 {{updateTimeX}}
+    // ======================================
+
+    // 计算账号级 updateTime：优先文章最大时间，其次 fallback，最后 0
+    const allUpdateTimes = articleUnits.map(u => u.updatedTime).filter(t => t > 0);
+    const accountUpdateTime = allUpdateTimes.length > 0
+        ? Math.max(...allUpdateTimes)
+        : (fallbackUpdateTime || 0);
+
+    // 找出最新发布文章（按 articleCreateTime，而非 updatedTime）
+    // 注意：latestArticleTimeX = 最新发布文章时间，updateTimeX = 账号整体更新时间
+    const sortedByCreateTime = [...articleUnits].sort((a, b) => b.articleCreateTime - a.articleCreateTime);
+    const latestArticle = sortedByCreateTime[0];
+
+    // 构建文章模板变量
+    const articles: MpAccountArticleTemplateVars[] = articleUnits.map(unit => {
+        const notes: MpArticleNoteTemplateVars[] = unit.notes.map(note => {
+            const createTime = note.createTime || 0;
+            const highlightCreateTime = note.highlightCreateTime || 0;
+            const latestCommentTime = note.latestCommentCreateTime || 0;
+
+            return {
+                highlightText: note.highlightText || "",
+                highlightComment: note.highlightComment || "",
+                createTime1: formatWereadTimestamp(createTime, 'createTime1'),
+                createTime2: formatWereadTimestamp(createTime, 'createTime2'),
+                createTime3: formatWereadTimestamp(createTime, 'createTime3'),
+                createTime4: formatWereadTimestamp(createTime, 'createTime4'),
+                createTime5: formatWereadTimestamp(createTime, 'createTime5'),
+                createTime6: formatWereadTimestamp(createTime, 'createTime6'),
+                createTime7: formatWereadTimestamp(createTime, 'createTime7'),
+                createTime8: formatWereadTimestamp(createTime, 'createTime8'),
+                createTime9: formatWereadTimestamp(createTime, 'createTime9'),
+                createTime10: formatWereadTimestamp(createTime, 'createTime10'),
+                highlightCreateTime1: formatWereadTimestamp(highlightCreateTime, 'highlightCreateTime1'),
+                highlightCreateTime2: formatWereadTimestamp(highlightCreateTime, 'highlightCreateTime2'),
+                highlightCreateTime3: formatWereadTimestamp(highlightCreateTime, 'highlightCreateTime3'),
+                highlightCreateTime4: formatWereadTimestamp(highlightCreateTime, 'highlightCreateTime4'),
+                highlightCreateTime5: formatWereadTimestamp(highlightCreateTime, 'highlightCreateTime5'),
+                highlightCreateTime6: formatWereadTimestamp(highlightCreateTime, 'highlightCreateTime6'),
+                highlightCreateTime7: formatWereadTimestamp(highlightCreateTime, 'highlightCreateTime7'),
+                highlightCreateTime8: formatWereadTimestamp(highlightCreateTime, 'highlightCreateTime8'),
+                highlightCreateTime9: formatWereadTimestamp(highlightCreateTime, 'highlightCreateTime9'),
+                highlightCreateTime10: formatWereadTimestamp(highlightCreateTime, 'highlightCreateTime10'),
+                commentCreateTime1: formatWereadTimestamp(latestCommentTime, 'commentCreateTime1'),
+                commentCreateTime2: formatWereadTimestamp(latestCommentTime, 'commentCreateTime2'),
+                commentCreateTime3: formatWereadTimestamp(latestCommentTime, 'commentCreateTime3'),
+                commentCreateTime4: formatWereadTimestamp(latestCommentTime, 'commentCreateTime4'),
+                commentCreateTime5: formatWereadTimestamp(latestCommentTime, 'commentCreateTime5'),
+                commentCreateTime6: formatWereadTimestamp(latestCommentTime, 'commentCreateTime6'),
+                commentCreateTime7: formatWereadTimestamp(latestCommentTime, 'commentCreateTime7'),
+                commentCreateTime8: formatWereadTimestamp(latestCommentTime, 'commentCreateTime8'),
+                commentCreateTime9: formatWereadTimestamp(latestCommentTime, 'commentCreateTime9'),
+                commentCreateTime10: formatWereadTimestamp(latestCommentTime, 'commentCreateTime10'),
+                comments: note.comments.map(c => ({
+                    content: c.content,
+                    commentCreateTime1: formatWereadTimestamp(c.createTime, 'commentCreateTime1'),
+                    commentCreateTime2: formatWereadTimestamp(c.createTime, 'commentCreateTime2'),
+                    commentCreateTime3: formatWereadTimestamp(c.createTime, 'commentCreateTime3'),
+                    commentCreateTime4: formatWereadTimestamp(c.createTime, 'commentCreateTime4'),
+                    commentCreateTime5: formatWereadTimestamp(c.createTime, 'commentCreateTime5'),
+                    commentCreateTime6: formatWereadTimestamp(c.createTime, 'commentCreateTime6'),
+                    commentCreateTime7: formatWereadTimestamp(c.createTime, 'commentCreateTime7'),
+                    commentCreateTime8: formatWereadTimestamp(c.createTime, 'commentCreateTime8'),
+                    commentCreateTime9: formatWereadTimestamp(c.createTime, 'commentCreateTime9'),
+                    commentCreateTime10: formatWereadTimestamp(c.createTime, 'commentCreateTime10'),
+                }))
+            };
+        });
+
+        return {
+            // 内部排序字段：文章更新时间原始数值，仅供渲染层排序使用
+            __sortUpdateTime: unit.updatedTime || 0,
+            articleTitle: unit.articleTitle,
+            articleCreateTime1: formatWereadTimestamp(unit.articleCreateTime, 'createTime1'),
+            articleCreateTime2: formatWereadTimestamp(unit.articleCreateTime, 'createTime2'),
+            articleCreateTime3: formatWereadTimestamp(unit.articleCreateTime, 'createTime3'),
+            articleCreateTime4: formatWereadTimestamp(unit.articleCreateTime, 'createTime4'),
+            articleCreateTime5: formatWereadTimestamp(unit.articleCreateTime, 'createTime5'),
+            articleCreateTime6: formatWereadTimestamp(unit.articleCreateTime, 'createTime6'),
+            articleCreateTime7: formatWereadTimestamp(unit.articleCreateTime, 'createTime7'),
+            articleCreateTime8: formatWereadTimestamp(unit.articleCreateTime, 'createTime8'),
+            articleCreateTime9: formatWereadTimestamp(unit.articleCreateTime, 'createTime9'),
+            articleCreateTime10: formatWereadTimestamp(unit.articleCreateTime, 'createTime10'),
+            // 单篇文章级 updateTime（第3层语义）
+            updateTime1: formatWereadTimestamp(unit.updatedTime, 'createTime1'),
+            updateTime2: formatWereadTimestamp(unit.updatedTime, 'createTime2'),
+            updateTime3: formatWereadTimestamp(unit.updatedTime, 'createTime3'),
+            updateTime4: formatWereadTimestamp(unit.updatedTime, 'createTime4'),
+            updateTime5: formatWereadTimestamp(unit.updatedTime, 'createTime5'),
+            updateTime6: formatWereadTimestamp(unit.updatedTime, 'createTime6'),
+            updateTime7: formatWereadTimestamp(unit.updatedTime, 'createTime7'),
+            updateTime8: formatWereadTimestamp(unit.updatedTime, 'createTime8'),
+            updateTime9: formatWereadTimestamp(unit.updatedTime, 'createTime9'),
+            updateTime10: formatWereadTimestamp(unit.updatedTime, 'createTime10'),
+            noteCount: unit.notes.length,
+            notes
+        };
+    });
+
+    return {
+        accountTitle: accountInfo.accountTitle,
+        accountIntro: accountInfo.accountIntro,
+        accountCover: accountInfo.accountCover,
+        // 顶层账号级 updateTime（第1层语义）
+        updateTime1: formatWereadTimestamp(accountUpdateTime, 'createTime1'),
+        updateTime2: formatWereadTimestamp(accountUpdateTime, 'createTime2'),
+        updateTime3: formatWereadTimestamp(accountUpdateTime, 'createTime3'),
+        updateTime4: formatWereadTimestamp(accountUpdateTime, 'createTime4'),
+        updateTime5: formatWereadTimestamp(accountUpdateTime, 'createTime5'),
+        updateTime6: formatWereadTimestamp(accountUpdateTime, 'createTime6'),
+        updateTime7: formatWereadTimestamp(accountUpdateTime, 'createTime7'),
+        updateTime8: formatWereadTimestamp(accountUpdateTime, 'createTime8'),
+        updateTime9: formatWereadTimestamp(accountUpdateTime, 'createTime9'),
+        updateTime10: formatWereadTimestamp(accountUpdateTime, 'createTime10'),
+        articleCount: articleUnits.length,
+        // 最新发布文章标题（按 articleCreateTime）
+        latestArticleTitle: latestArticle?.articleTitle || "",
+        // 最新发布文章时间（按 articleCreateTime，与 updateTimeX 区分）
+        latestArticleTime1: formatWereadTimestamp(latestArticle?.articleCreateTime || 0, 'createTime1'),
+        latestArticleTime2: formatWereadTimestamp(latestArticle?.articleCreateTime || 0, 'createTime2'),
+        latestArticleTime3: formatWereadTimestamp(latestArticle?.articleCreateTime || 0, 'createTime3'),
+        latestArticleTime4: formatWereadTimestamp(latestArticle?.articleCreateTime || 0, 'createTime4'),
+        latestArticleTime5: formatWereadTimestamp(latestArticle?.articleCreateTime || 0, 'createTime5'),
+        latestArticleTime6: formatWereadTimestamp(latestArticle?.articleCreateTime || 0, 'createTime6'),
+        latestArticleTime7: formatWereadTimestamp(latestArticle?.articleCreateTime || 0, 'createTime7'),
+        latestArticleTime8: formatWereadTimestamp(latestArticle?.articleCreateTime || 0, 'createTime8'),
+        latestArticleTime9: formatWereadTimestamp(latestArticle?.articleCreateTime || 0, 'createTime9'),
+        latestArticleTime10: formatWereadTimestamp(latestArticle?.articleCreateTime || 0, 'createTime10'),
+        articles
+    };
 }
