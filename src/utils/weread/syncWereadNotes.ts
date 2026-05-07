@@ -1,6 +1,6 @@
-import { fetchPost, fetchSyncPost, showMessage } from "siyuan";
+import { showMessage } from "siyuan";
 import { svelteDialog } from "@/libs/dialog";
-import { sql } from "@/api";
+import { sql, getAttributeView, removeAttributeViewBlocks, reloadAttributeView } from "@/api";
 import { getBookComments, getBookHighlights, getBookBestHighlights, getBookChapterInfos, getNotebooks, getBook } from "@/utils/weread/wereadInterface";
 import { fetchBookHtml } from "@/utils/douban/book/getWebPage";
 import { fetchDoubanBook } from "@/utils/douban/book/fetchBook";
@@ -244,8 +244,8 @@ export async function syncWereadNotes(plugin: WereadPluginLike, cookies: string,
     const avID = (await sql(`SELECT * FROM blocks WHERE id = "${(await plugin.loadData("settings.json"))?.bookDatabaseID || ""}"`))[0]?.markdown?.match(/data-av-id="([^"]+)"/)?.[1] || ""; // 加载配置、查询数据库、提取avID
 
     // 获取原始数据库完整信息
-    let getdatabase = await fetchSyncPost('/api/av/getAttributeView', { "id": avID }); // 获取数据库详细内容
-    const database = getdatabase.data.av || {}; // 数据库内容
+    let getdatabase = await getAttributeView(avID); // 获取数据库详细内容
+    const database = getdatabase.av || {}; // 数据库内容
     const ISBNKey = database.keyValues.find((item: any) => item.key.name === "ISBN"); // 获取ISBN列属性
     let ISBNColumn = ISBNKey?.values || []; // 获取ISBN列所有行内容
     const bookIDKey = database.keyValues.find((item: any) => item.key.name === "bookID"); // 获取bookID列属性
@@ -271,10 +271,10 @@ export async function syncWereadNotes(plugin: WereadPluginLike, cookies: string,
 
     // 如果有需要清理的blockID，则调用removeAttributeViewBlocks方法
     if (blockIDsToRemove.length > 0) {
-        await fetchSyncPost('/api/av/removeAttributeViewBlocks', { "avID": avID, "srcIDs": blockIDsToRemove });
+        await removeAttributeViewBlocks(avID, blockIDsToRemove);
         // 如果有清理操作，则重新获取数据库的最新数据
-        const updatedDatabase = await fetchSyncPost('/api/av/getAttributeView', { "id": avID });
-        currentDatabaseData = updatedDatabase.data.av || {};
+        const updatedDatabase = await getAttributeView(avID);
+        currentDatabaseData = updatedDatabase.av || {};
         const updatedISBNKey = currentDatabaseData.keyValues.find((item: any) => item.key.name === "ISBN");
         ISBNColumn = updatedISBNKey?.values || [];
         const updatedBookIDKey = currentDatabaseData.keyValues.find((item: any) => item.key.name === "bookID");
@@ -470,7 +470,7 @@ export async function syncWereadNotes(plugin: WereadPluginLike, cookies: string,
 
                                             showMessage(`${plugin.i18n.showMessage28}《${book.title}》`); // "✅ 成功导入"
 
-                                            fetchPost("/api/ui/reloadAttributeView", { id: avID }); // 刷新数据库视图
+                                            reloadAttributeView(avID); // 刷新数据库视图
 
                                             importBooksNumber++; // 成功导入书籍数量增加
                                         } catch (error) {
@@ -487,9 +487,9 @@ export async function syncWereadNotes(plugin: WereadPluginLike, cookies: string,
 
                                 // 若有新增书籍或使用bookID同步的书籍，则更新ISBNColumn和bookIDColumn
                                 if (selectedNormalBooks.length > 0 || useBookIDs.length > 0) {
-                                    getdatabase = await fetchSyncPost('/api/av/getAttributeView', { "id": avID }); // 获取数据库最新数据
-                                    const isbnKey = getdatabase.data.av.keyValues.find((item: any) => item.key.name === "ISBN");
-                                    const bookIDKey = getdatabase.data.av.keyValues.find((item: any) => item.key.name === "bookID");
+                                    getdatabase = await getAttributeView(avID); // 获取数据库最新数据
+                                    const isbnKey = getdatabase.av.keyValues.find((item: any) => item.key.name === "ISBN");
+                                    const bookIDKey = getdatabase.av.keyValues.find((item: any) => item.key.name === "bookID");
                                     ISBNColumn = isbnKey?.values || []; // 更新ISBNColumn
                                     bookIDColumn = bookIDKey?.values || []; // 更新bookIDColumn
                                 }
@@ -741,12 +741,7 @@ export async function syncWereadNotes(plugin: WereadPluginLike, cookies: string,
             let booksNeedSync = allBooksToSync.filter((book: any) => {
                 const key = getWereadRecordKey(book);
                 const oldBook = key ? oldNotebooksMap.get(key) : undefined;
-                // 如果旧记录不存在，或者更新时间不同，则需要同步
                 const needSync = !oldBook || oldBook.updatedTime !== book.updatedTime;
-                // 公众号账号来源加调试日志，方便排查更新同步问题
-                if (book.sourceType === "weread_mp_account") {
-                    console.info(`[微信读书] 公众号更新同步检查 | bookID: ${book.bookID}, 当前updatedTime: ${book.updatedTime}, 旧updatedTime: ${oldBook?.updatedTime ?? '无'}, 是否进入同步: ${needSync}`);
-                }
                 return needSync;
             });
 
@@ -881,8 +876,8 @@ export async function syncWereadNotes(plugin: WereadPluginLike, cookies: string,
     ): Promise<void> {
         try {
             // 重新读取当前数据库状态，构建 bookID -> blockID 映射
-            const avData = await fetchSyncPost('/api/av/getAttributeView', { id: avID });
-            const keyValues = avData.data?.av?.keyValues || [];
+            const avData = await getAttributeView(avID);
+            const keyValues = avData?.av?.keyValues || [];
 
             const bookIDKey = keyValues.find((item: any) => item.key?.name === "bookID");
             const bookIDColumn = bookIDKey?.values || [];
@@ -2227,7 +2222,7 @@ async function ensureTemporaryWereadNotebooksList(plugin: WereadPluginLike, cook
         // 空数组场景：缓存已完成但结果为空，允许重建以获取最新数据
         // 非空数组场景：缓存有效，直接返回
         if (cachedList.length === 0) {
-            console.info("[微信读书] 缓存为空但结构合法，触发远程重建以获取最新数据");
+            // 触发远程重建以获取最新数据
         } else {
             return cachedList;
         }

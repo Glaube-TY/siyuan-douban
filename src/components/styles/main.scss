@@ -3,101 +3,167 @@
 @use "./about";
 @use "./weread";
 
-.tab-container {
-    width: auto;
-    padding: 20px;
-    align-items: center;
+.plugin-settings-layout {
+    width: 100%;
+    height: 100%;
+    max-height: 100%;
+    min-height: 0;
+    display: flex;
+    background: var(--b3-theme-background);
+    border: 1px solid var(--b3-border-color);
+    border-radius: var(--b3-border-radius);
+    overflow: hidden;
+}
+
+.plugin-settings-sidebar {
+    width: 160px;
+    flex-shrink: 0;
+    background: var(--b3-theme-surface);
+    border-right: 1px solid var(--b3-border-color);
+    padding: 16px 8px;
     display: flex;
     flex-direction: column;
-    background: var(--b3-theme-background);
-    border-radius: 8px;
+    overflow-y: auto;
+}
 
-    .tab-nav {
-        list-style-type: none;
+.plugin-settings-sidebar-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--b3-theme-on-surface);
+    padding: 8px 12px 12px;
+    margin-bottom: 8px;
+    border-bottom: 1px solid var(--b3-border-color);
+}
+
+.plugin-settings-nav {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+
+    button {
         display: flex;
-
-        button,
-        li {
-            cursor: pointer;
-            border: none;
-            padding: 8px 20px;
-            border-radius: 4px;
-            transition: all 0.2s;
-            background: var(--b3-theme-surface);
-            // 应用适配的主题色
-            color: var(--text-color);
-
-            &.active {
-                background: var(--b3-theme-primary);
-                color: whitesmoke;
-                font-weight: bold;
-            }
-
-            &:hover {
-                background: var(--b3-theme-primary);
-                box-shadow: inset 0 -1px 0 var(--b3-theme-primary);
-                transform: translateY(-1px);
-            }
-        }
-    }
-
-    .tab-content {
-        background-color: var(--b3-theme-surface);
-        box-shadow: 0 3px 6px rgba(0, 0, 0, 0.15);
-        width: 100%;
         align-items: center;
-        display: flex;
-        flex-direction: column;
-        // 应用适配的主题色
-        color: var(--text-color);
+        gap: 8px;
+        width: 100%;
+        text-align: left;
+        padding: 8px 12px;
+        border: none;
+        border-radius: 6px;
+        background: transparent;
+        color: var(--b3-theme-on-background);
+        font-size: 13px;
+        cursor: pointer;
+        transition: background 0.15s ease, color 0.15s ease;
 
-        input {
-            background-color: var(--b3-theme-background);
-            border: 1px solid var(--b3-border-color);
-            box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.15);
-            border-radius: 4px;
-            padding: 8px 12px;
-            transition: all 0.3s ease;
-            // 应用适配的主题色
-            color: var(--text-color);
+        &.active {
+            background: var(--b3-theme-primary);
+            color: var(--b3-theme-on-primary, #fff);
+            font-weight: 500;
 
-            &:focus {
-                border-color: var(--b3-theme-primary);
-                box-shadow: 0 0 0 1px var(--b3-theme-primary);
-                outline: none;
-            }
-
-            &:hover {
-                border-color: var(--b3-theme-primary);
-            }
-
-            &[disabled] {
-                opacity: 0.7;
-                cursor: not-allowed;
+            .plugin-settings-nav-icon {
+                color: var(--b3-theme-on-primary, #fff);
+                fill: var(--b3-theme-on-primary, #fff);
             }
         }
 
-        button {
-            background-color: var(--b3-theme-background);
-            box-shadow: 0 3px 6px rgba(0, 0, 0, 0.15);
-            padding: 8px 16px;
-            border: 1px solid var(--b3-border-color);
-            border-radius: 8px;
-            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-            // 应用适配的主题色
-            color: var(--text-color);
-
-            &:hover {
-                transform: translateY(-1px);
-                box-shadow: 0 5px 12px var(--b3-theme-hover);
-            }
-
-            &:active {
-                transform: translateY(1px);
-                box-shadow: 0 2px 4px rgba(var(--b3-theme-primary), 0.2);
-            }
+        &:hover:not(.active) {
+            background: var(--b3-list-hover);
         }
     }
+}
+
+.plugin-settings-nav-icon {
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+    color: currentColor;
+    fill: currentColor;
+}
+
+.plugin-settings-nav-icon--image {
+    object-fit: contain;
+    border-radius: 3px;
+}
+
+.settings-switch-label {
+    display: inline-flex;
+    align-items: center;
+    cursor: pointer;
+}
+
+.settings-switch-label-inline {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+}
+
+.settings-switch {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+    pointer-events: none;
+}
+
+.settings-switch-track {
+    display: inline-block;
+    width: 36px;
+    height: 20px;
+    border-radius: 10px;
+    background: var(--b3-theme-surface);
+    border: 1px solid var(--b3-border-color);
+    position: relative;
+    transition: background 0.2s ease, border-color 0.2s ease;
+    flex-shrink: 0;
+    vertical-align: middle;
+}
+
+.settings-switch-thumb {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--b3-theme-on-surface);
+    transition: transform 0.2s ease, background 0.2s ease;
+}
+
+.settings-switch:checked + .settings-switch-track {
+    background: var(--b3-theme-primary);
+    border-color: var(--b3-theme-primary);
+}
+
+.settings-switch:checked + .settings-switch-track .settings-switch-thumb {
+    transform: translateX(16px);
+    background: var(--b3-theme-background);
+}
+
+.settings-switch:focus-visible + .settings-switch-track {
+    box-shadow: 0 0 0 2px var(--b3-theme-primary-light);
+}
+
+.settings-switch-label-text {
+    font-size: 13px;
+    color: var(--b3-theme-on-background);
+    white-space: nowrap;
+}
+
+.plugin-settings-main {
+    flex: 1;
+    min-width: 0;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    background: var(--b3-theme-background);
+    overscroll-behavior: contain;
+}
+
+.plugin-settings-content {
+    min-height: 100%;
+    padding: 0;
+    color: var(--b3-theme-on-background);
 }
 
 .b3-dialog-container {
@@ -130,6 +196,5 @@
     pointer-events: auto;
     z-index: 1;
     animation: dialog-enter 0.2s ease;
-    // 应用适配的主题色
     color: var(--text-color);
 }

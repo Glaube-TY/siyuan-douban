@@ -1,4 +1,4 @@
-import { fetchSyncPost } from "siyuan";
+import { putFile } from "@/api";
 import { formatTime } from './formatOp';
 import { logError } from './logger';
 
@@ -129,15 +129,7 @@ export async function downloadCover(base64Data: string, title: string,) {
     }
     const imageFile = new File([uint8Array], fileName, { type: mimeType });
 
-    // 使用思源 API 上传文件
-    const formData = new FormData();
-    formData.append("path", filePath);
-    formData.append("file", imageFile);
-    const response = await fetchSyncPost('/api/file/putFile', formData);
-
-    if (response.code !== 0) {
-        throw new Error(response.msg || "封面保存失败");
-    }
+    await putFile(filePath, false, imageFile);
 
     return `assets/covers/${fileName}`;
 }

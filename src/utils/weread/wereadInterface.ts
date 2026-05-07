@@ -1,4 +1,5 @@
 import { showMessage } from "siyuan";
+import { forwardProxy } from "@/api";
 import type {
     WereadPluginLike,
     WereadBookDetail,
@@ -9,15 +10,11 @@ import type {
     WereadChapterInfosBookRecord
 } from "./types";
 
-/** ForwardProxy 原始响应结构（思源代理层包装） */
+/** ForwardProxy 原始响应结构（api.ts forwardProxy 返回 data 本体） */
 interface ForwardProxyRawResponse {
-    code: number;
-    msg: string;
-    data: {
-        status: number;
-        body: string;
-        contentType?: string;
-    };
+    status: number;
+    body: string;
+    contentType?: string;
 }
 
 function getHeaders(cookies: string) {
@@ -33,18 +30,13 @@ function getHeaders(cookies: string) {
 function parseForwardProxyJsonBody<T>(response: unknown): T {
     const proxyResponse = response as ForwardProxyRawResponse;
 
-    // 检查思源代理层状态码
-    if (proxyResponse.code !== 0) {
-        throw new Error(`ForwardProxy failed: code=${proxyResponse.code}, msg=${proxyResponse.msg || 'unknown'}`);
-    }
-
     // 检查 HTTP 响应状态
-    if (!proxyResponse.data || proxyResponse.data.status !== 200) {
+    if (!proxyResponse || proxyResponse.status !== 200) {
         showMessage("⚠️ 微信读书 Cookie 失效，请前往插件设置中更新", 5000);
-        throw new Error(`HTTP request failed with status: ${proxyResponse.data?.status}`);
+        throw new Error(`HTTP request failed with status: ${proxyResponse?.status}`);
     }
 
-    const body = proxyResponse.data.body;
+    const body = proxyResponse.body;
 
     // 检查 body 是否为空
     if (!body || body === '') {
@@ -52,7 +44,7 @@ function parseForwardProxyJsonBody<T>(response: unknown): T {
     }
 
     // 检查 contentType 是否为 JSON（如果存在）
-    const contentType = proxyResponse.data.contentType || '';
+    const contentType = proxyResponse.contentType || '';
     const isJsonContent = contentType.includes('application/json') || contentType.includes('text/plain');
 
     if (!isJsonContent && contentType !== '') {
@@ -101,62 +93,68 @@ interface NotebooksResponse {
 }
 
 // 获取所有有笔记的书籍
-export async function getNotebooks(plugin: WereadPluginLike, cookies: string): Promise<NotebooksResponse> {
-    const response = await plugin.client.forwardProxy({
-        url: "https://weread.qq.com/api/user/notebook",
-        method: "GET" as const,
-        headers: [{ ...getHeaders(cookies) }],
-    });
+export async function getNotebooks(_plugin: WereadPluginLike, cookies: string): Promise<NotebooksResponse> {
+    const response = await forwardProxy(
+        "https://weread.qq.com/api/user/notebook",
+        "GET",
+        {},
+        [{ ...getHeaders(cookies) }],
+    );
     return parseForwardProxyJsonBody<NotebooksResponse>(response);
 }
 
 // 获取书籍详细信息
-export async function getBook(plugin: WereadPluginLike, cookies: string, bookID: string): Promise<WereadBookDetail> {
-    const response = await plugin.client.forwardProxy({
-        url: `https://weread.qq.com/web/book/info?bookId=${bookID}`,
-        method: "GET" as const,
-        headers: [{ ...getHeaders(cookies) }],
-    });
+export async function getBook(_plugin: WereadPluginLike, cookies: string, bookID: string): Promise<WereadBookDetail> {
+    const response = await forwardProxy(
+        `https://weread.qq.com/web/book/info?bookId=${bookID}`,
+        "GET",
+        {},
+        [{ ...getHeaders(cookies) }],
+    );
     return parseForwardProxyJsonBody<WereadBookDetail>(response);
 }
 
 // 获取书架图书信息
-export async function getBookShelf(plugin: WereadPluginLike, cookies: string, userVid: string): Promise<WereadBookShelfResponse> {
-    const response = await plugin.client.forwardProxy({
-        url: `https://weread.qq.com/web/shelf/sync?userVid=${userVid}&synckey=0&lectureSynckey=0`,
-        method: "GET" as const,
-        headers: [{ ...getHeaders(cookies) }],
-    });
+export async function getBookShelf(_plugin: WereadPluginLike, cookies: string, userVid: string): Promise<WereadBookShelfResponse> {
+    const response = await forwardProxy(
+        `https://weread.qq.com/web/shelf/sync?userVid=${userVid}&synckey=0&lectureSynckey=0`,
+        "GET",
+        {},
+        [{ ...getHeaders(cookies) }],
+    );
     return parseForwardProxyJsonBody<WereadBookShelfResponse>(response);
 }
 
 // 获取书籍划线
-export async function getBookHighlights(plugin: WereadPluginLike, cookies: string, bookId: string): Promise<WereadHighlightsResponse> {
-    const response = await plugin.client.forwardProxy({
-        url: `https://weread.qq.com/web/book/bookmarklist?bookId=${bookId}`,
-        method: "GET" as const,
-        headers: [{ ...getHeaders(cookies) }],
-    });
+export async function getBookHighlights(_plugin: WereadPluginLike, cookies: string, bookId: string): Promise<WereadHighlightsResponse> {
+    const response = await forwardProxy(
+        `https://weread.qq.com/web/book/bookmarklist?bookId=${bookId}`,
+        "GET",
+        {},
+        [{ ...getHeaders(cookies) }],
+    );
     return parseForwardProxyJsonBody<WereadHighlightsResponse>(response);
 }
 
 // 获取书籍评论
-export async function getBookComments(plugin: WereadPluginLike, cookies: string, bookId: string): Promise<WereadCommentsResponse> {
-    const response = await plugin.client.forwardProxy({
-        url: `https://weread.qq.com/web/review/list?bookId=${bookId}&listType=11&mine=1&synckey=0&listMode=0`,
-        method: "GET" as const,
-        headers: [{ ...getHeaders(cookies) }],
-    });
+export async function getBookComments(_plugin: WereadPluginLike, cookies: string, bookId: string): Promise<WereadCommentsResponse> {
+    const response = await forwardProxy(
+        `https://weread.qq.com/web/review/list?bookId=${bookId}&listType=11&mine=1&synckey=0&listMode=0`,
+        "GET",
+        {},
+        [{ ...getHeaders(cookies) }],
+    );
     return parseForwardProxyJsonBody<WereadCommentsResponse>(response);
 }
 
 // 获取书籍热门划线
-export async function getBookBestHighlights(plugin: WereadPluginLike, cookies: string, bookId: string): Promise<WereadBestHighlightsResponse> {
-    const response = await plugin.client.forwardProxy({
-        url: `https://weread.qq.com/web/book/bestbookmarks?bookId=${bookId}`,
-        method: "GET" as const,
-        headers: [{ ...getHeaders(cookies) }],
-    });
+export async function getBookBestHighlights(_plugin: WereadPluginLike, cookies: string, bookId: string): Promise<WereadBestHighlightsResponse> {
+    const response = await forwardProxy(
+        `https://weread.qq.com/web/book/bestbookmarks?bookId=${bookId}`,
+        "GET",
+        {},
+        [{ ...getHeaders(cookies) }],
+    );
     return parseForwardProxyJsonBody<WereadBestHighlightsResponse>(response);
 }
 

@@ -3,6 +3,7 @@ import { showMessage } from "siyuan";
 import wereadCookie from "@/components/common/wereadCookieDialog.svelte";
 import allNotebooks from "@/components/common/allNotebooks.svelte";
 import wereadNotesTemplate from "@/components/common/wereadNotesTemplate.svelte";
+import { forwardProxy } from "@/api";
 
 interface CheckResult {
     userVid: string;
@@ -43,7 +44,6 @@ export async function createWereadQRCodeDialog(i18n: any, idbtn: boolean): Promi
         let loginWindow: any = null;
         let finished = false;
         let silentTimeout: ReturnType<typeof setTimeout> | null = null;
-        let isCancelled = false;
 
         // 统一的完成处理函数，防止重复 resolve/reject 和重复关闭窗口
         const finishResolve = async (cookies: string, source: string) => {
@@ -83,7 +83,6 @@ export async function createWereadQRCodeDialog(i18n: any, idbtn: boolean): Promi
         const finishCancel = async () => {
             if (finished) return;
             finished = true;
-            isCancelled = true;
 
             if (silentTimeout) {
                 clearTimeout(silentTimeout);
@@ -376,16 +375,17 @@ export const verifyCookie = async (
     userVid: string
 ): Promise<VerifyResult> => {
     try {
-        const response = await plugin.client.forwardProxy({
-            url: `https://weread.qq.com/web/user?userVid=${userVid}`,
-            method: "GET" as const,
-            headers: [{
+        const response = await forwardProxy(
+            `https://weread.qq.com/web/user?userVid=${userVid}`,
+            "GET",
+            {},
+            [{
                 Cookie: cookies,
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
             }],
-        });
+        );
 
-        const result = JSON.parse(response.data.body);
+        const result = JSON.parse(response.body);
 
         return parseVerifyResponse(result, plugin.i18n);
     } catch (error: any) {

@@ -27,6 +27,7 @@ interface IResGetChildBlock {
     id: BlockId;
     type: BlockType;
     subtype?: BlockSubType;
+    content: string;
 }
 
 interface IResGetTemplates {
@@ -61,5 +62,13 @@ interface IResForwardProxy {
 
 interface IResExportResources {
     path: string;
+}
+
+interface IResGetConf {
+    conf: {
+        system: {
+            dataDir: string;
+        };
+    };
 }
 

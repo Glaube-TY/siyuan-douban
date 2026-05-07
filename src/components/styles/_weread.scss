@@ -1,191 +1,154 @@
 .wereadSetting {
     width: 100%;
-    max-width: 900px;
-    padding: 16px;
-    margin: 0 auto;
+    max-width: none;
+    padding: 0 16px;
     box-sizing: border-box;
 
-    // 统一区块基础间距
-    $section-padding: 16px;
-    $section-gap: 12px;
-
-    .cookie-weread-setting {
-        display: flex;
-        flex-wrap: wrap;
-        align-items: center;
-        justify-content: center;
-        gap: 10px;
-        row-gap: 10px;
-        border-bottom: 1px solid var(--b3-border-color);
-        padding: $section-padding 0;
-
-        .success {
-            color: var(--b3-theme-success);
-            margin-left: 10px;
-        }
-
-        .error {
-            color: var(--b3-theme-error);
-            margin-left: 10px;
-        }
-
-        .checking {
-            width: 100%;
-            text-align: center;
-            font-size: 13px;
-            margin-top: 4px;
-        }
-    }
-
-    .weread-notebooks-info {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        width: 100%;
-        padding: $section-padding 0;
-        gap: $section-gap;
+    .weread-section {
+        padding: 14px 0;
         border-bottom: 1px solid var(--b3-border-color);
 
-        .summary-info {
-            line-height: 1.6;
-            text-align: center;
-
-            .time {
-                color: var(--b3-theme-primary);
-                font-weight: bold;
-            }
-
-            .count {
-                color: var(--b3-theme-primary);
-                font-weight: bolder;
-            }
+        &:last-child {
+            border-bottom: none;
         }
     }
 
-    .weread-custom-books {
-        display: flex;
-        flex-wrap: wrap;
-        align-items: center;
-        justify-content: center;
-        width: 100%;
-        padding: $section-padding 0;
-        gap: 10px;
-        row-gap: 10px;
-        border-bottom: 1px solid var(--b3-border-color);
+    .weread-section-title {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--b3-theme-on-background);
+        margin-bottom: 10px;
+        padding: 0 0 6px;
     }
 
-    .booksinfo-button {
+    .weread-settings-row {
         display: flex;
-        flex-wrap: wrap;
         align-items: center;
-        justify-content: center;
-        gap: 8px;
-        row-gap: 8px;
-        margin-top: 4px;
-    }
-
-    .weread-notes-template {
-        display: flex;
-        flex-direction: column;
-        align-items: stretch;
-        width: 100%;
-        padding: $section-padding 0;
+        justify-content: space-between;
         gap: 16px;
-        border-bottom: 1px solid var(--b3-border-color);
+        padding: 10px 0;
 
-        .template-row {
-            display: flex;
-            flex-wrap: wrap;
-            align-items: center;
-            justify-content: center;
-            gap: 24px;
-            row-gap: 12px;
+        & + & {
+            border-top: 1px solid var(--b3-border-color);
         }
+    }
 
-        .template-item {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-        }
+    .weread-row-info {
+        flex: 1;
+        min-width: 0;
+    }
 
-        .template-status {
-            font-size: 11px;
-            padding: 2px 6px;
-            border-radius: 4px;
-            background-color: var(--b3-theme-surface);
-            color: var(--b3-theme-on-surface);
-            opacity: 0.6;
-            white-space: nowrap;
+    .weread-row-title {
+        font-size: 13px;
+        color: var(--b3-theme-on-background);
+        white-space: nowrap;
+    }
 
-            &.configured {
-                background-color: var(--b3-theme-success-light);
-                color: var(--b3-theme-success);
-                opacity: 1;
-            }
-        }
+    .weread-row-desc {
+        font-size: 12px;
+        color: var(--b3-theme-on-surface);
+        margin-top: 2px;
+        white-space: normal;
+    }
 
-        .position-row {
-            display: flex;
-            flex-wrap: wrap;
-            align-items: center;
-            justify-content: flex-start;
-            gap: 8px;
-            row-gap: 8px;
-            padding: 0 8px;
-        }
+    .weread-row-control {
+        flex-shrink: 0;
+        display: flex;
+        align-items: center;
+        gap: 8px;
 
-        .position-label {
-            font-size: 13px;
-            color: var(--b3-theme-on-surface);
-            white-space: nowrap;
-            flex-shrink: 0;
-        }
-
-        .position-input {
+        &.weread-row-control--inline {
             flex: 1;
-            min-width: 120px;
-            padding: 4px 8px;
-            border: 1px solid var(--b3-border-color);
-            border-radius: 4px;
-            background-color: var(--b3-theme-background);
-            color: var(--b3-theme-on-background);
-        }
-
-        .position-confirm {
-            flex-shrink: 0;
+            justify-content: flex-end;
         }
     }
 
-    .sync-setting {
-        display: flex;
-        flex-wrap: wrap;
-        align-items: center;
-        justify-content: center;
-        width: 100%;
-        padding: $section-padding 0;
-        gap: 10px;
-        row-gap: 10px;
-        border-bottom: 1px solid var(--b3-border-color);
+    .weread-tutorial-link {
+        color: var(--b3-theme-primary);
+        text-decoration: none;
+
+        &:hover {
+            text-decoration: underline;
+        }
     }
 
-    .syncing-notice {
+    .weread-status-panel {
         display: flex;
         align-items: center;
         justify-content: center;
-        flex-direction: column;
-        width: 100%;
-        padding: $section-padding 0;
-        gap: $section-gap;
-        border-bottom: 1px solid var(--b3-border-color);
+        padding: 16px 0;
+
+        span {
+            font-size: 14px;
+            color: var(--b3-theme-on-surface);
+            text-align: center;
+        }
     }
 
-    // 辅助文字/提示统一样式
-    .loading-notice,
-    .cookie-warning {
+    .weread-summary-panel {
+        padding: 12px 0;
+        text-align: center;
+        font-size: 13px;
+        color: var(--b3-theme-on-surface);
+    }
+
+    .weread-loading-notice {
         font-size: 13px;
         color: var(--b3-theme-on-surface);
         opacity: 0.8;
         text-align: center;
+    }
+
+    .weread-cookie-warning {
+        font-size: 13px;
+        color: var(--b3-theme-on-surface);
+        opacity: 0.8;
+        text-align: center;
+    }
+
+    .weread-position-input {
+        flex: 1;
+        min-width: 120px;
+        padding: 4px 8px;
+        border: 1px solid var(--b3-border-color);
+        border-radius: 4px;
+        background-color: var(--b3-theme-background);
+        color: var(--b3-theme-on-background);
+    }
+
+    .weread-syncing-notice {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-direction: column;
+        gap: 6px;
+        padding: 8px 0;
+    }
+
+    .weread-syncing-title {
+        font-size: 13px;
+        color: var(--b3-theme-primary);
+    }
+
+    .weread-syncing-tip {
+        font-size: 12px;
+        color: var(--b3-theme-on-surface);
+        opacity: 0.7;
+    }
+
+    .template-status {
+        font-size: 11px;
+        padding: 2px 6px;
+        border-radius: 4px;
+        background-color: var(--b3-theme-surface);
+        color: var(--b3-theme-on-surface);
+        opacity: 0.6;
+        white-space: nowrap;
+
+        &.configured {
+            background-color: var(--b3-theme-success-light);
+            color: var(--b3-theme-success);
+            opacity: 1;
+        }
     }
 }

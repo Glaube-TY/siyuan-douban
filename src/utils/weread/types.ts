@@ -203,15 +203,6 @@ export interface ForwardProxyResponse {
 
 /** 微信读书模块所需的插件最小接口 */
 export interface WereadPluginLike {
-    client: {
-        getChildBlocks: (params: { id: string }) => Promise<any>;
-        insertBlock: (params: any) => Promise<any>;
-        deleteBlock: (params: { id: string }) => Promise<any>;
-        getConf: () => Promise<any>;
-        render: (params: any) => Promise<any>;
-        updateBlock: (params: any) => Promise<any>;
-        forwardProxy: (params: any) => Promise<any>;
-    };
     loadData: (key: string) => Promise<any>;
     saveData: (key: string, value: any) => Promise<any>;
     i18n: Record<string, string>;

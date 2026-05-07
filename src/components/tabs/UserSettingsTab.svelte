@@ -13,54 +13,110 @@
     export let databaseStatusMessage: string;
 </script>
 
-<div class="settings">
-    <h3>{i18n.bookDatabaseID}</h3>
-    <div class="form-row">
-        <input
-            type="text"
-            bind:value={bookDatabassID}
-            placeholder={i18n.bookDatabaseIDPlaceholder}
-        />
-        {databaseStatusMessage}
+<div class="settings-panel">
+    <div class="settings-section">
+        <div class="settings-section-title">{i18n.bookDatabaseID}</div>
+        <div class="settings-item">
+            <div class="settings-item-info">
+                <div class="settings-item-title">{i18n.bookDatabaseID}</div>
+                <div class="settings-item-desc">{i18n.bookDatabaseIDDesc}</div>
+            </div>
+            <div class="settings-item-control">
+                <div class="settings-item-control-inner">
+                    <input
+                        type="text"
+                        bind:value={bookDatabassID}
+                        placeholder={i18n.bookDatabaseIDPlaceholder}
+                    />
+                    {#if databaseStatusMessage}
+                        <div class="settings-item-status">{databaseStatusMessage}</div>
+                    {/if}
+                </div>
+            </div>
+        </div>
     </div>
 
-    <h3>{i18n.preferenceSettings}</h3>
-    <div class="form-row custom-options">
-        <label
-            >{i18n.ratingsLevels}
-            <input bind:value={tempRatings} />
-        </label>
+    <div class="settings-section">
+        <div class="settings-section-title">{i18n.preferenceSettings}</div>
+        <div class="settings-item">
+            <div class="settings-item-info">
+                <div class="settings-item-title">{i18n.ratingsLevels}</div>
+                <div class="settings-item-desc">{i18n.ratingsLevelsDesc}</div>
+            </div>
+            <div class="settings-item-control">
+                <input class="b3-text-field settings-input-wide" bind:value={tempRatings} />
+            </div>
+        </div>
+
+        <div class="settings-item">
+            <div class="settings-item-info">
+                <div class="settings-item-title">{i18n.bookCategories}</div>
+                <div class="settings-item-desc">{i18n.bookCategoriesDesc}</div>
+            </div>
+            <div class="settings-item-control">
+                <input class="b3-text-field settings-input-wide" bind:value={tempCategories} />
+            </div>
+        </div>
+
+        <div class="settings-item">
+            <div class="settings-item-info">
+                <div class="settings-item-title">{i18n.readingStatuses}</div>
+                <div class="settings-item-desc">{i18n.readingStatusesDesc}</div>
+            </div>
+            <div class="settings-item-control">
+                <input class="b3-text-field settings-input-wide" bind:value={tempStatuses} />
+            </div>
+        </div>
     </div>
 
-    <div class="form-row custom-options">
-        <label
-            >{i18n.bookCategories}
-            <input bind:value={tempCategories} />
-        </label>
+    <div class="settings-section">
+        <div class="settings-section-title">{i18n.templateSettings}</div>
+        <div class="settings-item">
+            <div class="settings-item-info">
+                <div class="settings-item-title">{i18n.toggleGenerateNotes}</div>
+                <div class="settings-item-desc">{i18n.toggleGenerateNotesDesc}</div>
+            </div>
+            <div class="settings-item-control">
+                <label class="settings-switch-label">
+                    <input type="checkbox" class="settings-switch" bind:checked={addNotes1} />
+                    <span class="settings-switch-track">
+                        <span class="settings-switch-thumb"></span>
+                    </span>
+                </label>
+            </div>
+        </div>
+
+        <div class="settings-item">
+            <div class="settings-item-info">
+                <div class="settings-item-title">{i18n.toggleSYTemplateRender}</div>
+                <div class="settings-item-desc">{i18n.toggleSYTemplateRenderDesc}</div>
+            </div>
+            <div class="settings-item-control">
+                <label class="settings-switch-label">
+                    <input type="checkbox" class="settings-switch" bind:checked={isSYTemplateRender} />
+                    <span class="settings-switch-track">
+                        <span class="settings-switch-thumb"></span>
+                    </span>
+                </label>
+            </div>
+        </div>
+
+        <div class="settings-item">
+            <div class="settings-item-info">
+                <div class="settings-item-title">{i18n.setTemplate}</div>
+                <div class="settings-item-desc">{i18n.setTemplateDesc}</div>
+            </div>
+            <div class="settings-item-control">
+                <button class="b3-button" on:click={() => dispatch("openTemplate")}>
+                    {i18n.setTemplate}
+                </button>
+            </div>
+        </div>
     </div>
 
-    <div class="form-row custom-options">
-        <label
-            >{i18n.readingStatuses}
-            <input bind:value={tempStatuses} />
-        </label>
-    </div>
-
-    <div class="form-row template">
-        <label>
-            <input type="checkbox" bind:checked={addNotes1} />
-            {i18n.defaultGenerateNotes}
-        </label>
-        <button class="b3-button" on:click={() => dispatch("openTemplate")}
-            >📝 {i18n.setTemplate}</button
-        >
-        <label>
-            <input type="checkbox" bind:checked={isSYTemplateRender} />
-            {i18n.SYTemplateRender}
-        </label>
-    </div>
-
-    <div class="saveButton">
-        <button on:click={() => dispatch("save")}>{i18n.saveSettings}</button>
+    <div class="settings-actions">
+        <button class="b3-button b3-button--primary" on:click={() => dispatch("save")}>
+            {i18n.saveSettings}
+        </button>
     </div>
 </div>

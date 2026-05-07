@@ -1,5 +1,4 @@
-import { fetchSyncPost } from "siyuan";
-import { setBlockAttrs } from "@/api";
+import { setBlockAttrs, setAttributeViewBlockAttr } from "@/api";
 
 /**
  * 绑定数据库书籍与读书笔记文档
@@ -18,10 +17,10 @@ export async function bindBookToNote(
     });
 
     // 将数据库与读书笔记绑定
-    await fetchSyncPost('/api/av/setAttributeViewBlockAttr', {
+    await setAttributeViewBlockAttr({
         "avID": avID,
         "keyID": matchingValue.keyID,
-        "rowID": blockID,
+        "itemID": blockID,
         'value': {
             "id": matchingValue.id,
             "keyID": matchingValue.keyID,

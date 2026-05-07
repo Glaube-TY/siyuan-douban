@@ -1,7 +1,7 @@
 <script lang="ts">
     import { onMount } from "svelte";
-import { I18N, showMessage, fetchPost } from "siyuan";
-import { sql } from "../api";
+import { I18N, showMessage } from "siyuan";
+import { sql, reloadAttributeView } from "../api";
 import { fetchDoubanBook, fetchBookHtml } from "../utils/douban/book";
 import { openInteractiveSearchWindow } from "../utils/douban/book/searchBook";
 import "./styles/main.scss";
@@ -42,13 +42,22 @@ import AboutTab from "./tabs/AboutTab.svelte";
 
     let databaseStatus = "";
 
-    const tabs = [
-        "🔍 " + i18n.topTabname1,
-        "⚙️ " + i18n.topTabname2,
-        "📗 " + i18n.topTabname3,
-        "ℹ️ " + i18n.topTabname4,
+    const wereadIconUrl = `/plugins/${plugin.name}/asset/WeRead.png`;
+
+    interface TabItem {
+        key: string;
+        label: string;
+        iconType: "siyuan" | "image";
+        icon: string;
+    }
+
+    const tabs: TabItem[] = [
+        { key: "search", label: i18n.topTabname1, iconType: "siyuan", icon: "iconSearch" },
+        { key: "settings", label: i18n.topTabname2, iconType: "siyuan", icon: "iconSettings" },
+        { key: "weread", label: i18n.topTabname3, iconType: "image", icon: wereadIconUrl },
+        { key: "about", label: i18n.topTabname4, iconType: "siyuan", icon: "iconInfo" },
     ];
-    let activeTab = tabs[0];
+    let activeTabKey = "search";
 
     interface BookInfo {
         title: string;
@@ -169,7 +178,7 @@ import AboutTab from "./tabs/AboutTab.svelte";
                     `✅《${bookInfo.title}》${i18n.showMessage2}`,
                     3000,
                 );
-                await fetchPost("/api/ui/reloadAttributeView", { id: avID });
+                await reloadAttributeView(avID);
             }
         } catch (error) {
             showMessage(`${i18n.showMessage1} ${error.message}`, 5000);
@@ -306,64 +315,67 @@ import AboutTab from "./tabs/AboutTab.svelte";
     });
 </script>
 
-<div class="tab-container">
-    <ul class="tab-nav">
-        {#each tabs as tab}
-            <button
-                class:active={tab === activeTab}
-                role="tab"
-                tabindex="0"
-                on:click={() => (activeTab = tab)}
-                on:keydown={(e) => e.key === "Enter" && (activeTab = tab)}
-            >
-                {tab}
-            </button>
-        {/each}
-    </ul>
+<div class="plugin-settings-layout">
+    <div class="plugin-settings-sidebar">
+        <div class="plugin-settings-sidebar-title">{i18n.sidebarTitle}</div>
+        <nav class="plugin-settings-nav">
+            {#each tabs as tab}
+                <button
+                    class:active={tab.key === activeTabKey}
+                    role="tab"
+                    on:click={() => (activeTabKey = tab.key)}
+                >
+                    {#if tab.iconType === "siyuan"}
+                        <svg class="plugin-settings-nav-icon" aria-hidden="true">
+                            <use href={`#${tab.icon}`}></use>
+                        </svg>
+                    {:else if tab.iconType === "image"}
+                        <img class="plugin-settings-nav-icon plugin-settings-nav-icon--image" src={tab.icon} alt="" aria-hidden="true" />
+                    {/if}
+                    <span>{tab.label}</span>
+                </button>
+            {/each}
+        </nav>
+    </div>
 
-    <!-- 内容区域 -->
-    <div class="tab-content">
-        <!-- 第一个标签页 - 书籍查询 -->
-        {#if activeTab === tabs[0]}
-            <BookSearchTab
-                bind:inputVales
-                bind:bookInfo
-                bind:i18n
-                {statusMessage}
-                {customRatings}
-                {customCategories}
-                {customReadingStatuses}
-                bind:myRatingIndex
-                bind:bookCategoryIndex
-                bind:readingStatusIndex
-                on:fetchBookData={fetchBookData}
-                on:addBook={handleAddBook}
-                {databaseStatus}
-            />
-
-            <!-- 第二个标签页 - 用户设置 -->
-        {:else if activeTab === tabs[1]}
-            <UserSettingsTab
-                bind:bookDatabassID
-                bind:i18n
-                bind:tempRatings
-                bind:tempCategories
-                bind:tempStatuses
-                bind:addNotes1
-                bind:isSYTemplateRender
-                {databaseStatusMessage}
-                on:validate={validateDatabaseID}
-                on:save={handleSaveSettings}
-                on:openTemplate={openTemplateEditor}
-            />
-            <!-- 第三个标签页 - 微信读书设置-->
-        {:else if activeTab === tabs[2]}
-            <WereadTab bind:plugin bind:i18n {databaseStatus} />
-
-            <!-- 最后一个标签页 - 关于插件 -->
-        {:else}
-            <AboutTab bind:i18n />
-        {/if}
+    <div class="plugin-settings-main">
+        <div class="plugin-settings-content">
+            {#if activeTabKey === "search"}
+                <BookSearchTab
+                    bind:inputVales
+                    bind:bookInfo
+                    bind:i18n
+                    {statusMessage}
+                    {customRatings}
+                    {customCategories}
+                    {customReadingStatuses}
+                    bind:myRatingIndex
+                    bind:bookCategoryIndex
+                    bind:readingStatusIndex
+                    on:fetchBookData={fetchBookData}
+                    on:addBook={handleAddBook}
+                    {databaseStatus}
+                />
+            {:else if activeTabKey === "settings"}
+                <UserSettingsTab
+                    bind:bookDatabassID
+                    bind:i18n
+                    bind:tempRatings
+                    bind:tempCategories
+                    bind:tempStatuses
+                    bind:addNotes1
+                    bind:isSYTemplateRender
+                    {databaseStatusMessage}
+                    on:validate={validateDatabaseID}
+                    on:save={handleSaveSettings}
+                    on:openTemplate={openTemplateEditor}
+                />
+            {:else if activeTabKey === "weread"}
+                <WereadTab bind:plugin bind:i18n {databaseStatus} />
+            {:else}
+                <AboutTab bind:i18n />
+            {/if}
+        </div>
     </div>
 </div>
 

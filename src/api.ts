@@ -70,12 +70,18 @@ export async function setNotebookConf(notebook: NotebookId, conf: NotebookConf):
 
 
 // **************************************** File Tree ****************************************
-export async function createDocWithMd(notebook: NotebookId, path: string, markdown: string): Promise<DocumentId> {
-    let data = {
+export async function createDocWithMd(notebook: NotebookId, path: string, markdown: string, options?: { id?: string; parentID?: string }): Promise<DocumentId> {
+    let data: any = {
         notebook: notebook,
         path: path,
         markdown: markdown,
     };
+    if (options?.id) {
+        data.id = options.id;
+    }
+    if (options?.parentID) {
+        data.parentID = options.parentID;
+    }
     let url = '/api/filetree/createDocWithMd';
     return request(url, data);
 }
@@ -463,6 +469,11 @@ export async function forwardProxy(
 
 // **************************************** System ****************************************
 
+export async function getConf(): Promise<IResGetConf> {
+    return request('/api/system/getConf', {});
+}
+
+
 export async function bootProgress(): Promise<IResBootProgress> {
     return request('/api/system/bootProgress', {});
 }
@@ -475,4 +486,48 @@ export async function version(): Promise<string> {
 
 export async function currentTime(): Promise<number> {
     return request('/api/system/currentTime', {});
+}
+
+
+// **************************************** Attribute View ****************************************
+
+export async function getAttributeView(id: string): Promise<any> {
+    return request('/api/av/getAttributeView', { id });
+}
+
+
+export async function getAttributeViewKeysByAvID(avID: string): Promise<any> {
+    return request('/api/av/getAttributeViewKeysByAvID', { avID });
+}
+
+
+export async function addAttributeViewKey(payload: any): Promise<any> {
+    return request('/api/av/addAttributeViewKey', payload);
+}
+
+
+export async function appendAttributeViewDetachedBlocksWithValues(avID: string, blocksValues: any[]): Promise<any> {
+    return request('/api/av/appendAttributeViewDetachedBlocksWithValues', { avID, blocksValues });
+}
+
+
+export async function removeAttributeViewBlocks(avID: string, srcIDs: any[]): Promise<any> {
+    return request('/api/av/removeAttributeViewBlocks', { avID, srcIDs });
+}
+
+
+export async function setAttributeViewBlockAttr(payload: {
+    avID: string;
+    keyID: string;
+    itemID: string;
+    value: any;
+}): Promise<any> {
+    return request('/api/av/setAttributeViewBlockAttr', payload);
+}
+
+
+// **************************************** UI ****************************************
+
+export async function reloadAttributeView(id: string): Promise<any> {
+    return request('/api/ui/reloadAttributeView', { id });
 }

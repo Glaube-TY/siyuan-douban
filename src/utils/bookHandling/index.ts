@@ -1,5 +1,4 @@
-import { fetchSyncPost } from "siyuan";
-import { sql } from "@/api";
+import { sql, getConf, render, updateBlock, getAttributeView, removeAttributeViewBlocks, createDocWithMd } from "@/api";
 import { parseDateToTimestamp } from '../core/formatOp';
 import { getImage, downloadCover } from "@/utils/core/getImg";
 import { ensureAttributeViewKeys, appendBookToAttributeView } from './ensureAttributeViewKeys';
@@ -8,8 +7,8 @@ import { bindBookToNote } from './bindBookToNote';
 export async function loadAVData(avID: string, fullData: any, plugin: any) {
     try {
         // 判断数据库中是否含有该书籍（以 ISBN 为依据）
-        let originalDatabase = await fetchSyncPost("/api/av/getAttributeView", { "id": avID, });
-        let originalDatabasekeyValues = originalDatabase.data.av.keyValues;
+        let originalDatabase = await getAttributeView(avID);
+        let originalDatabasekeyValues = originalDatabase.av.keyValues;
 
         // 检查数据库是否为空或不存在 ISBN 列
         if (originalDatabasekeyValues && Array.isArray(originalDatabasekeyValues)) {
@@ -32,11 +31,11 @@ export async function loadAVData(avID: string, fullData: any, plugin: any) {
 
                 // 如果有需要清理的blockID，则调用removeAttributeViewBlocks方法
                 if (blockIDsToRemove.length > 0) {
-                    await fetchSyncPost('/api/av/removeAttributeViewBlocks', { "avID": avID, "srcIDs": blockIDsToRemove });
+                    await removeAttributeViewBlocks(avID, blockIDsToRemove);
 
                     // 重新获取数据库信息
-                    originalDatabase = await fetchSyncPost("/api/av/getAttributeView", { "id": avID, });
-                    originalDatabasekeyValues = originalDatabase.data.av.keyValues;
+                    originalDatabase = await getAttributeView(avID);
+                    originalDatabasekeyValues = originalDatabase.av.keyValues;
                 }
             }
 
@@ -85,12 +84,10 @@ export async function loadAVData(avID: string, fullData: any, plugin: any) {
             const setting = await plugin.loadData("settings.json");
             const isSYTemplateRender = setting.isSYTemplateRender;
             if (!isSYTemplateRender) {
-                const response = await fetchSyncPost('/api/filetree/createDocWithMd', {
-                    id: blockID, // 使读书笔记文档ID与数据库ID一致
-                    parentID: sqlresult[0].root_id,
-                    notebook: sqlresult[0].box,
-                    path: sqlresult[0].hpath + "/" + fullData.title,
-                    markdown: fullData.noteTemplate
+                const result = await createDocWithMd(
+                    sqlresult[0].box,
+                    sqlresult[0].hpath + "/" + fullData.title,
+                    fullData.noteTemplate
                         .replace(/{{书名}}/g, fullData.title || '无书名')
                         .replace(/{{副标题}}/g, fullData.subtitle || '')
                         .replace(/{{原作名}}/g, fullData.originalTitle || '')
@@ -113,21 +110,20 @@ export async function loadAVData(avID: string, fullData: any, plugin: any) {
                         .replace(/{{读完日期}}/g, fullData.finishDate || '未完成')
                         .replace(/{{封面}}/g, fullData.cover || '')
                         .replace(/{{书籍简介}}/g, fullData.description || '')
-                        .replace(/{{作者介绍}}/g, fullData.authorBio || '')
-                });
+                        .replace(/{{作者介绍}}/g, fullData.authorBio || ''),
+                    { id: blockID, parentID: sqlresult[0].root_id }
+                );
 
-                // 检查读书笔记是否创建成功
-                if (response.code !== 0) {
-                    throw new Error(response.msg || "创建读书笔记失败");
+                if (!result) {
+                    throw new Error("创建读书笔记失败");
                 }
             } else {
-                await fetchSyncPost('/api/filetree/createDocWithMd', {
-                    id: blockID, // 使读书笔记文档ID与数据库ID一致
-                    parentID: sqlresult[0].root_id,
-                    notebook: sqlresult[0].box,
-                    path: sqlresult[0].hpath + "/" + fullData.title,
-                    markdown: ""
-                });
+                await createDocWithMd(
+                    sqlresult[0].box,
+                    sqlresult[0].hpath + "/" + fullData.title,
+                    "",
+                    { id: blockID, parentID: sqlresult[0].root_id }
+                );
 
                 const template = fullData.noteTemplate
                     .replace(/{{书名}}/g, fullData.title || '无书名')
@@ -156,17 +152,10 @@ export async function loadAVData(avID: string, fullData: any, plugin: any) {
 
                 await plugin.saveData("noteTemplate.md", template);
 
-                const res = await plugin.client.getConf();
-                const dataDir = res.data.conf.system.dataDir;
-                const respo = await plugin.client.render({
-                    id: blockID,
-                    path: dataDir + "/storage/petal/siyuan-douban/noteTemplate.md",
-                });
-                await plugin.client.updateBlock({
-                    id: blockID,
-                    data: respo.data.content,
-                    dataType: "dom",
-                })
+                const conf = await getConf();
+                const dataDir = conf.conf.system.dataDir;
+                const rendered = await render(blockID, dataDir + "/storage/petal/siyuan-douban/noteTemplate.md");
+                await updateBlock("dom", rendered.content, blockID);
             }
 
             // 绑定数据库与读书笔记

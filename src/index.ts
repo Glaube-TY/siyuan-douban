@@ -4,7 +4,6 @@ import firstPage from "./components/common/firstDialog.svelte";
 import setPage from "./components/index.svelte";
 
 import { svelteDialog } from "./libs/dialog";
-import * as sdk from "@siyuan-community/siyuan-sdk";
 import { syncWereadNotes, buildTemporaryNotebookList } from "./utils/weread/syncWereadNotes";
 import { loadPluginData, DEFAULT_WEREAD_SETTINGS, DEFAULT_WEREAD_COOKIE } from "./utils/core/configDefaults";
 import {
@@ -27,8 +26,6 @@ export default class PluginDouban extends Plugin {
     isMobile: boolean;
 
     customTab: () => IModel;
-
-    client = new sdk.Client(undefined, 'fetch');
 
     async onload() {
         this.data[STORAGE_NAME] = { readonlyText: "Readonly" };
@@ -162,7 +159,8 @@ export default class PluginDouban extends Plugin {
     private showSetDialog() {
         svelteDialog({
             title: "",
-            width: "auto",
+            width: "900px",
+            height: "720px",
             constructor: (container: HTMLElement) => {
                 return new setPage({
                     target: container,

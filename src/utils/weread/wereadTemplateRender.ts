@@ -171,6 +171,27 @@ const TIME_FORMATS: Record<string, TimeFormat> = {
 };
 
 /**
+ * 内部 helper：规范化时间格式键名
+ * 将 highlightCreateTimeX / commentCreateTimeX 映射为 createTimeX
+ * @param formatKey 原始格式键
+ * @returns 规范化后的格式键（保证存在于 TIME_FORMATS 中）
+ */
+function normalizeWereadTimeFormatKey(formatKey: string): string {
+    // 如果已经是标准键，直接返回
+    if (TIME_FORMATS[formatKey]) return formatKey;
+
+    // 匹配 highlightCreateTime1~10 或 commentCreateTime1~10
+    const match = formatKey.match(/^(?:highlight|comment)(CreateTime\d+)$/);
+    if (match) {
+        const normalized = 'c' + match[1]; // CreateTime7 -> createTime7
+        if (TIME_FORMATS[normalized]) return normalized;
+    }
+
+    // 未识别字段回退到 createTime1
+    return 'createTime1';
+}
+
+/**
  * 格式化时间戳为人类可读字符串（微信读书模板专用）
  * 支持 createTime1-10、highlightCreateTime1-10、commentCreateTime1-10 等格式键
  * @param timestamp 秒级时间戳
@@ -182,12 +203,8 @@ export function formatWereadTimestamp(timestamp: number, formatKey: string = 'cr
         return '';
     }
     const date = new Date(timestamp * 1000);
-    let format = TIME_FORMATS[formatKey];
-    if (!format) {
-        // 支持 highlightCreateTimeX 和 commentCreateTimeX 映射到基础格式
-        const baseKey = formatKey.replace(/^highlight/, '').replace(/^comment/, '');
-        format = TIME_FORMATS[baseKey] || TIME_FORMATS['createTime1'];
-    }
+    const normalizedKey = normalizeWereadTimeFormatKey(formatKey);
+    const format = TIME_FORMATS[normalizedKey];
 
     const year = date.getFullYear();
     const month = format.padZero ? String(date.getMonth() + 1).padStart(2, '0') : date.getMonth() + 1;

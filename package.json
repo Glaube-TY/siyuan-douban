@@ -1,6 +1,6 @@
 {
   "name": "siyuan-douban",
-  "version": "2.13.0",
+  "version": "2.14.0",
   "type": "module",
   "description": "Get book information from Douban and import it into the book database(https://github.com/Glaube-TY/siyuan-douban)",
   "repository": "",
@@ -34,7 +34,5 @@
     "vite-plugin-static-copy": "^1.0.2",
     "vite-plugin-zip-pack": "^1.0.5"
   },
-  "dependencies": {
-    "@siyuan-community/siyuan-sdk": "^0.3.14"
-  }
+  "dependencies": {}
 }

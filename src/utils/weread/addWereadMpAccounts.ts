@@ -1,5 +1,4 @@
-import { fetchSyncPost } from "siyuan";
-import { sql, renameDoc } from "@/api";
+import { sql, renameDoc, getAttributeView, appendAttributeViewDetachedBlocksWithValues, setAttributeViewBlockAttr, createDocWithMd } from "@/api";
 import { ensureAttributeViewKeys } from '../bookHandling/ensureAttributeViewKeys';
 import { bindBookToNote } from '../bookHandling/bindBookToNote';
 
@@ -154,8 +153,8 @@ export async function ensureMpAccountInDatabase(
     const databaseKeys = await ensureAttributeViewKeys(avID, requiredAttributes, getAttributeType);
 
     // 获取数据库当前状态，检查是否已存在该账号
-    const avData = await fetchSyncPost('/api/av/getAttributeView', { id: avID });
-    const keyValues = avData.data?.av?.keyValues || [];
+    const avData = await getAttributeView(avID);
+    const keyValues = avData?.av?.keyValues || [];
 
     // 优先：如果本地缓存中已有 blockID，直接复用（更新同步路径）
     // 这是公众号更新同步走"复用现有文档 -> 位置标记后整篇刷新"书籍式路径的关键
@@ -169,8 +168,8 @@ export async function ensureMpAccountInDatabase(
             await updateMpAccountRowFields(avID, databaseKeys, keyValues, blockID, record);
 
             // 重新获取最新 keyValues（字段刷新后可能有新增 cell，如书名 block cell）
-            const refreshedAvData = await fetchSyncPost('/api/av/getAttributeView', { id: avID });
-            const refreshedKeyValues = refreshedAvData.data?.av?.keyValues || [];
+            const refreshedAvData = await getAttributeView(avID);
+            const refreshedKeyValues = refreshedAvData?.av?.keyValues || [];
 
             // 使用最新快照进行完整性检查（传入 databaseKeys 用于可能的主动修复）
             await ensureMpAccountDocIntegrity(plugin, avID, refreshedKeyValues, blockID, record, databaseKeys);
@@ -194,8 +193,8 @@ export async function ensureMpAccountInDatabase(
             await updateMpAccountRowFields(avID, databaseKeys, keyValues, blockID, record);
 
             // 重新获取最新 keyValues（字段刷新后可能有新增 cell，如书名 block cell）
-            const refreshedAvData = await fetchSyncPost('/api/av/getAttributeView', { id: avID });
-            const refreshedKeyValues = refreshedAvData.data?.av?.keyValues || [];
+            const refreshedAvData = await getAttributeView(avID);
+            const refreshedKeyValues = refreshedAvData?.av?.keyValues || [];
 
             // 使用最新快照进行完整性检查（传入 databaseKeys 用于可能的主动修复）
             await ensureMpAccountDocIntegrity(plugin, avID, refreshedKeyValues, blockID, record, databaseKeys);
@@ -223,14 +222,11 @@ export async function ensureMpAccountInDatabase(
     const blocksValues = buildAccountBlocksValues(databaseKeys, record);
 
     // 插入到数据库
-    await fetchSyncPost("/api/av/appendAttributeViewDetachedBlocksWithValues", {
-        avID: avID,
-        blocksValues: [blocksValues]
-    });
+    await appendAttributeViewDetachedBlocksWithValues(avID, [blocksValues]);
 
     // 重新获取数据库，按 bookID 回查 blockID
-    const updatedDatabase = await fetchSyncPost("/api/av/getAttributeView", { id: avID });
-    const updatedKeyValues = updatedDatabase.data?.av?.keyValues || [];
+    const updatedDatabase = await getAttributeView(avID);
+    const updatedKeyValues = updatedDatabase?.av?.keyValues || [];
 
     const updatedBookIDKey = updatedKeyValues.find((kv: any) => kv.key?.name === "bookID");
     if (!updatedBookIDKey || !updatedBookIDKey.values) {
@@ -256,13 +252,12 @@ export async function ensureMpAccountInDatabase(
     const bookNameKeyID = bookNameKeyFromDB?.id || bookNameKeyFromKV;
 
     // 创建空白文档
-    await fetchSyncPost('/api/filetree/createDocWithMd', {
-        id: blockID,
-        parentID: parentInfo.root_id,
-        notebook: parentInfo.box,
-        path: parentInfo.hpath + "/" + (record.accountTitle || "未命名公众号"),
-        markdown: "" // 空白文档
-    });
+    await createDocWithMd(
+        parentInfo.box,
+        parentInfo.hpath + "/" + (record.accountTitle || "未命名公众号"),
+        "",
+        { id: blockID, parentID: parentInfo.root_id }
+    );
 
     // 绑定数据库与文档（使用安全绑定，与自愈路径统一）
     await performSafeRebind(avID, blockID, matchingValue, record, bookNameKeyID);
@@ -334,7 +329,7 @@ async function updateMpAccountRowFields(
         const updatePayload: any = {
             avID: avID,
             keyID: keyID,
-            rowID: blockID,
+            itemID: blockID,
             value: {}
         };
 
@@ -359,7 +354,7 @@ async function updateMpAccountRowFields(
         }
 
         try {
-            await fetchSyncPost("/api/av/setAttributeViewBlockAttr", updatePayload);
+            await setAttributeViewBlockAttr(updatePayload);
         } catch (err) {
             // 单个字段更新失败不影响其他字段
             console.warn(`[ensureMpAccountInDatabase] 更新字段 ${field.keyName} 失败:`, err);
@@ -446,17 +441,16 @@ async function ensureMpAccountDocIntegrity(
         const parentInfo = sqlresult[0];
 
         // 补建空白文档
-        await fetchSyncPost('/api/filetree/createDocWithMd', {
-            id: blockID,
-            parentID: parentInfo.root_id,
-            notebook: parentInfo.box,
-            path: parentInfo.hpath + "/" + (record.accountTitle || "未命名公众号"),
-            markdown: ""
-        });
+        await createDocWithMd(
+            parentInfo.box,
+            parentInfo.hpath + "/" + (record.accountTitle || "未命名公众号"),
+            "",
+            { id: blockID, parentID: parentInfo.root_id }
+        );
 
         // 重新获取 matchingValue（补建后可能需要刷新）
-        const refreshedDb = await fetchSyncPost('/api/av/getAttributeView', { id: avID });
-        const refreshedKeyValues = refreshedDb.data?.av?.keyValues || [];
+        const refreshedDb = await getAttributeView(avID);
+        const refreshedKeyValues = refreshedDb?.av?.keyValues || [];
         const refreshedBookNameKey = refreshedKeyValues.find((kv: any) => kv.key?.name === "书名");
         matchingValue = refreshedBookNameKey?.values?.find((v: any) => v.blockID === blockID);
     }
@@ -484,10 +478,10 @@ async function ensureMpAccountDocIntegrity(
             const bookNameKey = databaseKeys.find((k: any) => k.name === "书名");
             if (bookNameKey) {
                 try {
-                    await fetchSyncPost("/api/av/setAttributeViewBlockAttr", {
+                    await setAttributeViewBlockAttr({
                         avID: avID,
                         keyID: bookNameKey.id,
-                        rowID: blockID,
+                        itemID: blockID,
                         value: {
                             block: { content: record.accountTitle || "未命名公众号" }
                         }
@@ -495,8 +489,8 @@ async function ensureMpAccountDocIntegrity(
                     console.log(`[ensureMpAccountDocIntegrity] 已补写书名 cell，刷新后重试`);
 
                     // 刷新 keyValues 并重新获取 matchingValue
-                    const refreshedDb = await fetchSyncPost('/api/av/getAttributeView', { id: avID });
-                    const refreshedKeyValues = refreshedDb.data?.av?.keyValues || [];
+                    const refreshedDb = await getAttributeView(avID);
+                    const refreshedKeyValues = refreshedDb?.av?.keyValues || [];
                     matchingValue = getBookNameMatchingValue(refreshedKeyValues, blockID);
 
                     // 重新进入绑定检查逻辑（如果补写成功）

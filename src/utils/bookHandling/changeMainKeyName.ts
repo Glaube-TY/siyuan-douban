@@ -1,33 +1,21 @@
-import { fetchSyncPost, fetchPost } from "siyuan";
+import { getFile, putFile, reloadAttributeView } from "@/api";
 import { logError } from "../core/logger";
 
-// ==== 将主键名改为“书名” ====
 export async function changeMainKeyName(avID: any) {
     try {
-        // 获取文件内容
-        const response = await fetchSyncPost('/api/file/getFile', {
-            path: `/data/storage/av/${avID}.json`
-        }) as unknown as { keyValues: any[]; };
+        const response = await getFile(`/data/storage/av/${avID}.json`) as unknown as { keyValues: any[]; };
 
-        // 修改数据
         if (response.keyValues && response.keyValues.length > 0 && response.keyValues[0].key) {
             response.keyValues[0].key.name = "书名";
-            const formData = new FormData();
-            formData.append("path", `/data/storage/av/${avID}.json`);
-            formData.append("file", new File(
+            const file = new File(
                 [JSON.stringify(response, null, 2)],
                 `${avID}.json`,
                 { type: 'application/json' }
-            ));
+            );
 
-            const putResponse = await fetchSyncPost('/api/file/putFile', formData);
+            await putFile(`/data/storage/av/${avID}.json`, false, file);
 
-            if (putResponse.code !== 0) {
-                throw new Error(putResponse.msg || "保存数据库文件失败");
-            }
-
-            // 刷新数据库视图
-            fetchPost("/api/ui/reloadAttributeView", { id: avID });
+            await reloadAttributeView(avID);
         } else {
             logError("bookHandling/changeMainKeyName", "Invalid data structure - keyValues not found or empty");
         }

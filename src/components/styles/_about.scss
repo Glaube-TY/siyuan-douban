@@ -1,60 +1,68 @@
 .about {
-    padding: 20px;
-    max-width: 800px;
-    margin: 0 auto;
+    padding: 16px;
 
     .about-header {
         text-align: center;
-        margin-bottom: 2rem;
+        margin-bottom: 24px;
 
         h3 {
-            font-size: 1.8rem;
-            color: var(--b3-theme-primary);
-            margin-bottom: 0.5rem;
+            font-size: 18px;
+            color: var(--b3-theme-on-background);
+            margin-bottom: 8px;
         }
 
         .motto {
-            color: var(--b3-theme-secondary);
-            font-size: 0.9rem;
+            color: var(--b3-theme-on-surface);
+            font-size: 13px;
         }
     }
 
     .about-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-        gap: 1.5rem;
-        margin-bottom: 2rem;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: 12px;
+        margin-bottom: 24px;
     }
 
     .about-card {
         background: var(--b3-theme-surface);
-        border-radius: 8px;
-        padding: 1.5rem;
+        border: 1px solid var(--b3-border-color);
+        border-radius: 6px;
+        padding: 16px;
         display: flex;
-        align-items: center;
-        transition: transform 0.2s;
+        flex-direction: column;
+        gap: 8px;
 
-        &:hover {
-            transform: translateY(-3px);
-        }
+        .card-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
 
-        .icon {
-            font-size: 2rem;
-            margin-right: 1rem;
-        }
+            .icon {
+                font-size: 16px;
+                flex-shrink: 0;
+            }
 
-        .label {
-            color: var(--b3-theme-secondary);
-            margin-bottom: 0.3rem;
-            font-size: 0.9rem;
-        }
+            .label {
+                color: var(--b3-theme-on-surface);
+                font-size: 12px;
+                flex-shrink: 0;
+            }
 
-        .link {
-            color: var(--b3-theme-primary);
-            text-decoration: none;
+            .link {
+                color: var(--b3-theme-primary);
+                text-decoration: none;
+                font-size: 13px;
 
-            &:hover {
-                text-decoration: underline;
+                &:hover {
+                    text-decoration: underline;
+                }
+            }
+
+            .link-disabled {
+                color: var(--b3-theme-on-surface);
+                opacity: 0.6;
+                font-size: 13px;
             }
         }
     }
@@ -62,31 +70,11 @@
     .about-footer {
         text-align: center;
         border-top: 1px solid var(--b3-border-color);
-        padding-top: 1.5rem;
+        padding-top: 16px;
 
-        .copyright {
-            color: var(--b3-theme-secondary);
-            font-size: 0.8rem;
-            margin-top: 1rem;
-        }
-    }
-
-    .sponsor-options {
-        display: flex;
-        gap: 1rem;
-        justify-content: center;
-        margin-top: 1rem;
-
-        .qr-code {
-            width: 120px;
-            height: 120px;
-            border-radius: 8px;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-            transition: transform 0.3s ease;
-
-            &:hover {
-                transform: scale(1.05);
-            }
+        p {
+            color: var(--b3-theme-on-surface);
+            font-size: 12px;
         }
     }
 }

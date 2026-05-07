@@ -1,4 +1,4 @@
-import { fetchSyncPost } from "siyuan";
+import { getAttributeViewKeysByAvID, addAttributeViewKey, appendAttributeViewDetachedBlocksWithValues, getAttributeView } from "@/api";
 import { changeMainKeyName } from './changeMainKeyName';
 import { generateUniqueBlocked } from '../core/formatOp';
 
@@ -17,7 +17,7 @@ export async function ensureAttributeViewKeys(
     let databaseKeys: any;
 
     // 获取数据库详细列配置
-    await fetchSyncPost("/api/av/getAttributeViewKeysByAvID", { avID: avID }).then((res) => databaseKeys = res.data);
+    databaseKeys = await getAttributeViewKeysByAvID(avID);
 
     // 检查数据库主键是否为书名
     if (databaseKeys[0].name !== "书名") {
@@ -30,7 +30,7 @@ export async function ensureAttributeViewKeys(
 
         // 如果不存在，则添加该属性列
         if (!existingAttribute) {
-            await fetchSyncPost("/api/av/addAttributeViewKey", {
+            await addAttributeViewKey({
                 avID: avID,
                 keyID: generateUniqueBlocked(),
                 keyName: attributeName,
@@ -42,9 +42,7 @@ export async function ensureAttributeViewKeys(
     }
 
     // 获取更新后的数据库列配置
-    await fetchSyncPost("/api/av/getAttributeViewKeysByAvID", {
-        avID: avID,
-    }).then((res) => databaseKeys = res.data);
+    databaseKeys = await getAttributeViewKeysByAvID(avID);
 
     return databaseKeys;
 }
@@ -67,14 +65,11 @@ export async function appendBookToAttributeView(
     const blocksValues = buildBlocksValues(databaseKeys, bookData);
 
     // 添加书籍数据到数据库
-    await fetchSyncPost("/api/av/appendAttributeViewDetachedBlocksWithValues", {
-        avID: avID,
-        blocksValues: [blocksValues]
-    });
+    await appendAttributeViewDetachedBlocksWithValues(avID, [blocksValues]);
 
     // 获取数据库信息并匹配新添加的书籍行的 blockID
-    const updatedDatabase = await fetchSyncPost("/api/av/getAttributeView", { "id": avID });
-    const updatedDatabaseKeyValues = updatedDatabase.data.av.keyValues;
+    const updatedDatabase = await getAttributeView(avID);
+    const updatedDatabaseKeyValues = updatedDatabase.av.keyValues;
 
     // 查找书名列
     const bookNameKeyNew = updatedDatabaseKeyValues.find((kv: any) => kv.key.name === "书名");

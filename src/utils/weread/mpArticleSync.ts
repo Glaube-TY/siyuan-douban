@@ -685,7 +685,7 @@ export interface MpAccountTemplateVars {
  * @param fallbackUpdateTime 账号级更新时间回退值（当文章单元为空时使用）
  */
 export function buildMpAccountTemplateVariables(
-    rawBookID: string,
+    _rawBookID: string,
     accountInfo: { accountTitle: string; accountIntro: string; accountCover: string },
     articleUnits: MpArticleSyncUnit[],
     fallbackUpdateTime?: number

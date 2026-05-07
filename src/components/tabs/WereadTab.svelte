@@ -1,6 +1,6 @@
 <script lang="ts">
-    import { showMessage, I18N, fetchSyncPost } from "siyuan";
-    import { sql } from "@/api";
+    import { showMessage, I18N } from "siyuan";
+    import { sql, getAttributeView, removeAttributeViewBlocks } from "@/api";
     import { onMount } from "svelte";
     import { svelteDialog } from "@/libs/dialog";
     import PromiseLimitPool from "@/libs/promise-pool";
@@ -40,8 +40,8 @@
         if (!avID) return { validISBNs: new Set<string>(), validBookIDs: new Set<string>(), validBookNames: new Set<string>() };
 
         try {
-            let database = await fetchSyncPost('/api/av/getAttributeView', { id: avID });
-            let avData = database.data?.av || {};
+            let database = await getAttributeView(avID);
+            let avData = database?.av || {};
             let keyValues: any[] = avData.keyValues || [];
 
             const isbnKey = keyValues.find((item: any) => item.key?.name === "ISBN");
@@ -63,9 +63,9 @@
             );
 
             if (blockIDsToRemove.length > 0) {
-                await fetchSyncPost('/api/av/removeAttributeViewBlocks', { avID, srcIDs: blockIDsToRemove });
-                database = await fetchSyncPost('/api/av/getAttributeView', { id: avID });
-                avData = database.data?.av || {};
+                await removeAttributeViewBlocks(avID, blockIDsToRemove);
+                database = await getAttributeView(avID);
+                avData = database?.av || {};
                 keyValues = avData.keyValues || [];
 
                 const updatedISBNKey = keyValues.find((item: any) => item.key?.name === "ISBN");
@@ -450,109 +450,185 @@
     {#if databaseStatus === "error"}
         <div class="error-message">{i18n.databaseStatusMessage3}</div>
     {:else if databaseStatus === "success"}
-        <div style="margin-bottom: 10px;">
-            <label for="tutorial">
-                {i18n.tutorial}<a
-                    id="tutorial"
-                    href="https://blog.glaube-ty.top/archives/019d1f09-0d1c-71b5-a53d-395321304440"
-                    >{i18n.tutorialLink}</a
-                ></label
-            >
+        <div class="weread-section">
+            <div class="weread-section-title">{i18n.wereadSectionTutorial}</div>
+            <div class="weread-settings-row">
+                <div class="weread-row-label">
+                    <span>{i18n.tutorial}</span>
+                </div>
+                <div class="weread-row-action">
+                    <a
+                        class="weread-tutorial-link"
+                        href="https://blog.glaube-ty.top/archives/019d1f09-0d1c-71b5-a53d-395321304440"
+                        target="_blank"
+                    >{i18n.tutorialLink}</a>
+                </div>
+            </div>
         </div>
-        <div class="cookie-weread-setting">
-            <button
-                class="scan-qrcode"
-                on:click={async () => {
-                    try {
-                        const autoCookies = await createWereadQRCodeDialog(
-                            i18n,
-                            true,
-                        );
 
-                        cookies = await saveAndReloadQRCodeCookies(autoCookies);
-                        const verifyResult = await verifyAndUpdateStatus(cookies);
+        <div class="weread-section">
+            <div class="weread-section-title">{i18n.wereadSectionLogin}</div>
+            <div class="weread-settings-row">
+                <div class="weread-row-info">
+                    <div class="weread-row-title">{i18n.scanQRCodeLogin}</div>
+                    <div class="weread-row-desc">{i18n.scanQRCodeLoginDesc}</div>
+                </div>
+                <div class="weread-row-control">
+                    <button
+                        class="b3-button b3-button--outline"
+                        on:click={async () => {
+                            try {
+                                const autoCookies = await createWereadQRCodeDialog(
+                                    i18n,
+                                    true,
+                                );
 
-                        if (verifyResult.success) {
-                            await getNotebooksList();
-                        }
-                    } catch (error) {
-                        // 用户取消操作，静默结束，不更新状态
-                        if (error === "__CANCELLED__") {
-                            return;
-                        }
-                        checkMessage = i18n.checkMessage6;
-                        showMessage(i18n.checkMessage6);
-                    }
-                }}>{i18n.scanQRCodeLogin}</button>
-            <button
-                on:click={createWereadDialog(plugin, cookies, async (newCookies) => {
-                    cookies = newCookies;
-                    const savedata = {
-                        cookies: newCookies,
-                        isQRCode: false,
-                    };
-                    await plugin.saveData("weread_cookie", savedata);
+                                cookies = await saveAndReloadQRCodeCookies(autoCookies);
+                                const verifyResult = await verifyAndUpdateStatus(cookies);
 
-                    const verifyResult = await verifyAndUpdateStatus(newCookies);
-                    if (verifyResult.success) {
-                        await getNotebooksList();
-                    }
-                })}>{i18n.fillCookie}</button
-            >
-            <span class="checking">{checkMessage}</span>
-        </div>
-        <div class="weread-notebooks-info">
-            {#if checkMessage.includes("✅")}
-                {#if notebooksInfo}
-                    {@html notebooksInfo}
-                    <div class="booksinfo-button">
-                        <button
-                            disabled={isNotebookListLoading || !isNotebookListReady}
-                            on:click={() => {
-                                if (isNotebookListLoading || !isNotebookListReady) {
-                                    showMessage(i18n.showMessageWereadCacheNotReady);
+                                if (verifyResult.success) {
+                                    await getNotebooksList();
+                                }
+                            } catch (error) {
+                                if (error === "__CANCELLED__") {
                                     return;
                                 }
-                                createNotebooksDialog(plugin, notebooksList);
-                            }}>{i18n.hasNotesBooks}</button
-                        >
-                        <button on:click={openBookShelf}
-                            >{i18n.bookShelf}</button
-                        >
+                                checkMessage = i18n.checkMessage6;
+                                showMessage(i18n.checkMessage6);
+                            }
+                        }}>{i18n.scanQRCodeLogin}</button>
+                </div>
+            </div>
+            <div class="weread-settings-row">
+                <div class="weread-row-info">
+                    <div class="weread-row-title">{i18n.fillCookie}</div>
+                    <div class="weread-row-desc">{i18n.fillCookieDesc}</div>
+                </div>
+                <div class="weread-row-control">
+                    <button
+                        class="b3-button b3-button--outline"
+                        on:click={createWereadDialog(plugin, cookies, async (newCookies) => {
+                            cookies = newCookies;
+                            const savedata = {
+                                cookies: newCookies,
+                                isQRCode: false,
+                            };
+                            await plugin.saveData("weread_cookie", savedata);
+
+                            const verifyResult = await verifyAndUpdateStatus(newCookies);
+                            if (verifyResult.success) {
+                                await getNotebooksList();
+                            }
+                        })}>{i18n.fillCookie}</button>
+                </div>
+            </div>
+            <div class="weread-status-panel">
+                <span>{checkMessage}</span>
+            </div>
+        </div>
+
+        <div class="weread-section">
+            <div class="weread-section-title">{i18n.wereadSectionOverview}</div>
+            {#if checkMessage.includes("✅")}
+                {#if notebooksInfo}
+                    <div class="weread-summary-panel">
+                        {@html notebooksInfo}
+                    </div>
+                    <div class="weread-settings-row">
+                        <div class="weread-row-info">
+                            <div class="weread-row-title">{i18n.hasNotesBooks}</div>
+                            <div class="weread-row-desc">{i18n.hasNotesBooksDesc}</div>
+                        </div>
+                        <div class="weread-row-control">
+                            <button
+                                class="b3-button b3-button--outline"
+                                disabled={isNotebookListLoading || !isNotebookListReady}
+                                on:click={() => {
+                                    if (isNotebookListLoading || !isNotebookListReady) {
+                                        showMessage(i18n.showMessageWereadCacheNotReady);
+                                        return;
+                                    }
+                                    createNotebooksDialog(plugin, notebooksList);
+                                }}>{i18n.hasNotesBooks}</button>
+                        </div>
+                    </div>
+                    <div class="weread-settings-row">
+                        <div class="weread-row-info">
+                            <div class="weread-row-title">{i18n.bookShelf}</div>
+                            <div class="weread-row-desc">{i18n.bookShelfDesc}</div>
+                        </div>
+                        <div class="weread-row-control">
+                            <button class="b3-button b3-button--outline" on:click={openBookShelf}>{i18n.bookShelf}</button>
+                        </div>
                     </div>
                     {#if loadingBookShelf}
-                        <div class="loading-notice">
-                            ⌛ {i18n.loadingBookShelf}
+                        <div class="weread-settings-row">
+                            <div class="weread-row-info"></div>
+                            <div class="weread-row-control">
+                                <div class="weread-loading-notice">⌛ {i18n.loadingBookShelf}</div>
+                            </div>
                         </div>
                     {/if}
                 {:else}
-                    <div class="loading-notice">⌛ {i18n.loadingBookInfo}</div>
-                    <div class="loading-notice">
-                        {i18n.loadingBookInfoTip}
+                    <div class="weread-settings-row">
+                        <div class="weread-row-info"></div>
+                        <div class="weread-row-control">
+                            <div class="weread-loading-notice">⌛ {i18n.loadingBookInfo}</div>
+                            <div class="weread-loading-notice">{i18n.loadingBookInfoTip}</div>
+                        </div>
                     </div>
                 {/if}
             {:else}
-                <div class="cookie-warning">
-                    {i18n.pleaseFillCookie}
+                <div class="weread-settings-row">
+                    <div class="weread-row-info"></div>
+                    <div class="weread-row-control">
+                        <div class="weread-cookie-warning">{i18n.pleaseFillCookie}</div>
+                    </div>
                 </div>
             {/if}
         </div>
-        <div class="weread-custom-books">
-            <button on:click={createManageISBNDialog}
-                >{i18n.manageCustomISBNBooks}</button
-            >
-            <button on:click={createIgnoredBooksDialog}
-                >{i18n.manageIgnoredBooks}</button
-            >
-            <button on:click={createWereadUseBookIDBooksDialog}
-                >{i18n.manageUseBookIDBooks}</button
-            >
+
+        <div class="weread-section">
+            <div class="weread-section-title">{i18n.wereadSectionBooks}</div>
+            <div class="weread-settings-row">
+                <div class="weread-row-info">
+                    <div class="weread-row-title">{i18n.manageCustomISBNBooks}</div>
+                    <div class="weread-row-desc">{i18n.manageCustomISBNBooksDesc}</div>
+                </div>
+                <div class="weread-row-control">
+                    <button class="b3-button b3-button--outline" on:click={createManageISBNDialog}>{i18n.manageCustomISBNBooks}</button>
+                </div>
+            </div>
+            <div class="weread-settings-row">
+                <div class="weread-row-info">
+                    <div class="weread-row-title">{i18n.manageIgnoredBooks}</div>
+                    <div class="weread-row-desc">{i18n.manageIgnoredBooksDesc}</div>
+                </div>
+                <div class="weread-row-control">
+                    <button class="b3-button b3-button--outline" on:click={createIgnoredBooksDialog}>{i18n.manageIgnoredBooks}</button>
+                </div>
+            </div>
+            <div class="weread-settings-row">
+                <div class="weread-row-info">
+                    <div class="weread-row-title">{i18n.manageUseBookIDBooks}</div>
+                    <div class="weread-row-desc">{i18n.manageUseBookIDBooksDesc}</div>
+                </div>
+                <div class="weread-row-control">
+                    <button class="b3-button b3-button--outline" on:click={createWereadUseBookIDBooksDialog}>{i18n.manageUseBookIDBooks}</button>
+                </div>
+            </div>
         </div>
-        <div class="weread-notes-template">
-            <!-- 第一层：模板相关 -->
-            <div class="template-row">
-                <div class="template-item">
+
+        <div class="weread-section">
+            <div class="weread-section-title">{i18n.wereadSectionTemplate}</div>
+            <div class="weread-settings-row">
+                <div class="weread-row-info">
+                    <div class="weread-row-title">{i18n.setBookNotesTemplate}</div>
+                    <div class="weread-row-desc">{i18n.setBookNotesTemplateDesc}</div>
+                </div>
+                <div class="weread-row-control">
                     <button
+                        class="b3-button b3-button--outline"
                         on:click={createWereadNotesTemplateDialog(
                             i18n,
                             async (newWereadTemplates) => {
@@ -561,12 +637,18 @@
                             },
                             wereadTemplates,
                             i18n.setBookNotesTemplateTitle,
-                        )}>{i18n.setBookNotesTemplate}</button
-                    >
+                        )}>{i18n.setBookNotesTemplate}</button>
                     <span class="template-status" class:configured={wereadTemplates?.trim()}>{wereadTemplates?.trim() ? i18n.templateConfigured : i18n.templateNotConfigured}</span>
                 </div>
-                <div class="template-item">
+            </div>
+            <div class="weread-settings-row">
+                <div class="weread-row-info">
+                    <div class="weread-row-title">{i18n.setMpNotesTemplate}</div>
+                    <div class="weread-row-desc">{i18n.setMpNotesTemplateDesc}</div>
+                </div>
+                <div class="weread-row-control">
                     <button
+                        class="b3-button b3-button--outline"
                         on:click={createWereadNotesTemplateDialog(
                             i18n,
                             async (newWereadMpTemplates) => {
@@ -575,83 +657,116 @@
                             },
                             wereadMpTemplates,
                             i18n.setMpNotesTemplateTitle,
-                        )}>{i18n.setMpNotesTemplate}</button
-                    >
+                        )}>{i18n.setMpNotesTemplate}</button>
                     <span class="template-status" class:configured={wereadMpTemplates?.trim()}>{wereadMpTemplates?.trim() ? i18n.templateConfigured : i18n.templateNotConfigured}</span>
                 </div>
             </div>
-            <!-- 第二层：位置标记相关 -->
-            <div class="position-row">
-                <span class="position-label" title={i18n.notesSyncPositionTip}>{i18n.positionMark}:</span>
-                <input type="text" bind:value={wereadPositionMark} class="position-input" />
-                <button
-                    class="position-confirm"
-                    on:click={async () => {
-                        await plugin.saveData(
-                            "weread_position_mark",
-                            wereadPositionMark,
-                        );
-                        showMessage(i18n.showMessage14);
-                    }}
-                >
-                    {i18n.confirm}
-                </button>
+            <div class="weread-settings-row">
+                <div class="weread-row-info">
+                    <div class="weread-row-title">{i18n.positionMark}</div>
+                    <div class="weread-row-desc" title={i18n.notesSyncPositionTip}>{i18n.positionMarkDesc}</div>
+                </div>
+                <div class="weread-row-control weread-row-control--inline">
+                    <input type="text" bind:value={wereadPositionMark} class="weread-position-input" />
+                    <button
+                        class="b3-button b3-button--outline"
+                        on:click={async () => {
+                            await plugin.saveData(
+                                "weread_position_mark",
+                                wereadPositionMark,
+                            );
+                            showMessage(i18n.showMessage14);
+                        }}
+                    >{i18n.confirm}</button>
+                </div>
             </div>
         </div>
-        <div class="sync-setting">
-            <button
-                disabled={!checkMessage.includes("✅") || isNotebookListLoading || !isNotebookListReady || isSyncing}
-                on:click={async () => {
-                    if (isSyncing) return;
-                    if (!checkMessage.includes("✅")) {
-                        showMessage(i18n.showMessage15);
-                        return;
-                    }
-                    isSyncing = true;
-                    try {
-                        // 手动同步：复制一份本地快照，避免同步过程中 UI 状态变化带来来源不一致
-                        const notebooksSnapshot = notebooksList.map(item => ({ ...item }));
-                        await syncWereadNotes(plugin, cookies, false, undefined, "ui-cache-only", notebooksSnapshot);
-                    } finally {
-                        isSyncing = false;
-                    }
-                }}>{i18n.syncAll}</button
-            >
-            <button
-                disabled={!checkMessage.includes("✅") || isNotebookListLoading || !isNotebookListReady || isSyncing}
-                on:click={async () => {
-                    if (isSyncing) return;
-                    if (!checkMessage.includes("✅")) {
-                        showMessage(i18n.showMessage15);
-                        return;
-                    }
-                    isSyncing = true;
-                    try {
-                        // 手动同步：复制一份本地快照，避免同步过程中 UI 状态变化带来来源不一致
-                        const notebooksSnapshot = notebooksList.map(item => ({ ...item }));
-                        await syncWereadNotes(plugin, cookies, true, undefined, "ui-cache-only", notebooksSnapshot);
-                    } finally {
-                        isSyncing = false;
-                    }
-                }}>{i18n.updateSync}</button
-            >
-            <label>
-                <input
-                    type="checkbox"
-                    title={i18n.autoSyncTip}
-                    bind:checked={autoSync}
-                    on:change={async () => {
-                        await plugin.saveData("weread_settings", { autoSync });
-                    }}
-                />
-                {i18n.autoSync}
-            </label>
-        </div>
-        {#if isSyncing}
-            <div class="syncing-notice">
-                <span class="syncing-title">⏳ {i18n.syncing}</span>
-                <span class="tip">{i18n.syncingTip}</span>
+
+        <div class="weread-section">
+            <div class="weread-section-title">{i18n.wereadSectionSync}</div>
+            <div class="weread-settings-row">
+                <div class="weread-row-info">
+                    <div class="weread-row-title">{i18n.syncAll}</div>
+                    <div class="weread-row-desc">{i18n.syncAllDesc}</div>
+                </div>
+                <div class="weread-row-control">
+                    <button
+                        class="b3-button b3-button--outline"
+                        disabled={!checkMessage.includes("✅") || isNotebookListLoading || !isNotebookListReady || isSyncing}
+                        on:click={async () => {
+                            if (isSyncing) return;
+                            if (!checkMessage.includes("✅")) {
+                                showMessage(i18n.showMessage15);
+                                return;
+                            }
+                            isSyncing = true;
+                            try {
+                                const notebooksSnapshot = notebooksList.map(item => ({ ...item }));
+                                await syncWereadNotes(plugin, cookies, false, undefined, "ui-cache-only", notebooksSnapshot);
+                            } finally {
+                                isSyncing = false;
+                            }
+                        }}>{i18n.syncAll}</button>
+                </div>
             </div>
-        {/if}
+            <div class="weread-settings-row">
+                <div class="weread-row-info">
+                    <div class="weread-row-title">{i18n.updateSync}</div>
+                    <div class="weread-row-desc">{i18n.updateSyncDesc}</div>
+                </div>
+                <div class="weread-row-control">
+                    <button
+                        class="b3-button b3-button--outline"
+                        disabled={!checkMessage.includes("✅") || isNotebookListLoading || !isNotebookListReady || isSyncing}
+                        on:click={async () => {
+                            if (isSyncing) return;
+                            if (!checkMessage.includes("✅")) {
+                                showMessage(i18n.showMessage15);
+                                return;
+                            }
+                            isSyncing = true;
+                            try {
+                                const notebooksSnapshot = notebooksList.map(item => ({ ...item }));
+                                await syncWereadNotes(plugin, cookies, true, undefined, "ui-cache-only", notebooksSnapshot);
+                            } finally {
+                                isSyncing = false;
+                            }
+                        }}>{i18n.updateSync}</button>
+                </div>
+            </div>
+            <div class="weread-settings-row">
+                <div class="weread-row-info">
+                    <div class="weread-row-title">{i18n.autoSync}</div>
+                    <div class="weread-row-desc">{i18n.autoSyncDesc}</div>
+                </div>
+                <div class="weread-row-control">
+                    <label class="settings-switch-label">
+                        <input
+                            type="checkbox"
+                            class="settings-switch"
+                            title={i18n.autoSyncTip}
+                            bind:checked={autoSync}
+                            on:change={async () => {
+                                await plugin.saveData("weread_settings", { autoSync });
+                            }}
+                        />
+                        <span class="settings-switch-track">
+                            <span class="settings-switch-thumb"></span>
+                        </span>
+                    </label>
+                </div>
+            </div>
+            {#if isSyncing}
+                <div class="weread-settings-row">
+                    <div class="weread-row-info"></div>
+                    <div class="weread-row-control">
+                        <div class="weread-syncing-notice">
+                            <span class="weread-syncing-title">⏳ {i18n.syncing}</span>
+                            <span class="weread-syncing-tip">{i18n.syncingTip}</span>
+                        </div>
+                    </div>
+                </div>
+            {/if}
+        </div>
     {/if}
 </div>

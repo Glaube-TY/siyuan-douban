@@ -1,14 +1,13 @@
-import { fetchSyncPost } from "siyuan";
 import { parseDateToTimestamp } from '../core/formatOp';
-import { sql } from "@/api";
+import { sql, getConf, render, updateBlock, getAttributeView, removeAttributeViewBlocks, createDocWithMd } from "@/api";
 import { getImage, downloadCover } from "@/utils/core/getImg";
 import { ensureAttributeViewKeys, appendBookToAttributeView } from '../bookHandling/ensureAttributeViewKeys';
 import { bindBookToNote } from '../bookHandling/bindBookToNote';
 
 // 添加 useBookID 书籍到数据库
 export async function addUseBookIDsToDatabase(plugin: any, avID: string, bookDetail: any) {
-    let getdatabase = await fetchSyncPost('/api/av/getAttributeView', { "id": avID });
-    let originalDatabasekeyValues = getdatabase.data.av.keyValues;
+    let getdatabase = await getAttributeView(avID);
+    let originalDatabasekeyValues = getdatabase.av.keyValues;
 
     // 检查数据库是否为空或不存在 bookID 列
     if (originalDatabasekeyValues && Array.isArray(originalDatabasekeyValues)) {
@@ -31,11 +30,11 @@ export async function addUseBookIDsToDatabase(plugin: any, avID: string, bookDet
 
             // 如果有需要清理的blockID，则调用removeAttributeViewBlocks方法
             if (blockIDsToRemove.length > 0) {
-                await fetchSyncPost('/api/av/removeAttributeViewBlocks', { "avID": avID, "srcIDs": blockIDsToRemove });
+                await removeAttributeViewBlocks(avID, blockIDsToRemove);
 
                 // 重新获取数据库信息
-                getdatabase = await fetchSyncPost("/api/av/getAttributeView", { "id": avID, });
-                originalDatabasekeyValues = getdatabase.data.av.keyValues;
+                getdatabase = await getAttributeView(avID);
+                originalDatabasekeyValues = getdatabase.av.keyValues;
             }
         }
 
@@ -90,12 +89,10 @@ export async function addUseBookIDsToDatabase(plugin: any, avID: string, bookDet
     // 根据是否使用思源笔记模板渲染分别进行
     const isSYTemplateRender = setting.isSYTemplateRender;
     if (!isSYTemplateRender) {
-        const response = await fetchSyncPost('/api/filetree/createDocWithMd', {
-            id: blockID, // 使读书笔记文档ID与数据库ID一致
-            parentID: sqlresult[0].root_id,
-            notebook: sqlresult[0].box,
-            path: sqlresult[0].hpath + "/" + bookDetail.title,
-            markdown: setting.noteTemplate
+        const result = await createDocWithMd(
+            sqlresult[0].box,
+            sqlresult[0].hpath + "/" + bookDetail.title,
+            setting.noteTemplate
                 .replace(/{{书名}}/g, bookDetail.title || '无书名')
                 .replace(/{{副标题}}/g, bookDetail.subtitle || '')
                 .replace(/{{原作名}}/g, bookDetail.originalTitle || '')
@@ -118,21 +115,20 @@ export async function addUseBookIDsToDatabase(plugin: any, avID: string, bookDet
                 .replace(/{{读完日期}}/g, bookDetail.finishDate || '未完成')
                 .replace(/{{封面}}/g, bookDetail.cover || '无封面')
                 .replace(/{{微信读书评分}}/g, bookDetail.rating ? `${bookDetail.rating}` : '无评分')
-                .replace(/{{微信读书评分人数}}/g, bookDetail.ratingCount ? `${bookDetail.ratingCount}` : '暂无评价')
-        });
+                .replace(/{{微信读书评分人数}}/g, bookDetail.ratingCount ? `${bookDetail.ratingCount}` : '暂无评价'),
+            { id: blockID, parentID: sqlresult[0].root_id }
+        );
 
-        // 检查读书笔记是否创建成功
-        if (response.code !== 0) {
-            throw new Error(response.msg || "创建读书笔记失败");
+        if (!result) {
+            throw new Error("创建读书笔记失败");
         }
     } else {
-        await fetchSyncPost('/api/filetree/createDocWithMd', {
-            id: blockID, // 使读书笔记文档ID与数据库ID一致
-            parentID: sqlresult[0].root_id,
-            notebook: sqlresult[0].box,
-            path: sqlresult[0].hpath + "/" + bookDetail.title,
-            markdown: ""
-        });
+        await createDocWithMd(
+            sqlresult[0].box,
+            sqlresult[0].hpath + "/" + bookDetail.title,
+            "",
+            { id: blockID, parentID: sqlresult[0].root_id }
+        );
 
         const template = setting.noteTemplate
             .replace(/{{书名}}/g, bookDetail.title || '无书名')
@@ -161,17 +157,10 @@ export async function addUseBookIDsToDatabase(plugin: any, avID: string, bookDet
 
         await plugin.saveData("noteTemplate.md", template);
 
-        const res = await plugin.client.getConf();
-        const dataDir = res.data.conf.system.dataDir;
-        const respo = await plugin.client.render({
-            id: blockID,
-            path: dataDir + "/storage/petal/siyuan-douban/noteTemplate.md",
-        });
-        await plugin.client.updateBlock({
-            id: blockID,
-            data: respo.data.content,
-            dataType: "dom",
-        })
+        const conf = await getConf();
+        const dataDir = conf.conf.system.dataDir;
+        const rendered = await render(blockID, dataDir + "/storage/petal/siyuan-douban/noteTemplate.md");
+        await updateBlock("dom", rendered.content, blockID);
     }
 
     // 绑定数据库与读书笔记

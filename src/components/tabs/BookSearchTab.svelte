@@ -35,279 +35,230 @@
     }
 </script>
 
-<div class="b3-dialog__content book-info">
+<div class="book-search-workspace">
     {#if databaseStatus === "error"}
         <div class="error-message">{i18n.databaseStatusMessage3}</div>
     {:else if databaseStatus === "success"}
-        <div class="input-group">
-            <input
-                type="text"
-                bind:value={inputVales}
-                placeholder={i18n.placeholder1}
-                on:keydown={(e) =>
-                    e.key === "Enter" && dispatch("fetchBookData")}
-            />
-            <button on:click={() => dispatch("fetchBookData")}>🔍</button>
-            <div class="loading-spinner">{statusMessage}</div>
-            <button
-                class="addBookButton"
-                on:click={() => {
-                    dispatch("addBook");
-                }}
-            >
-                {i18n.addBookButton}
-            </button>
-        </div>
-
-        {#if bookInfo}
-            <div class="book-layout">
-                <!-- 上部区域 -->
-                <div class="book-top-area">
-                    <!-- 封面列 -->
-                    <div class="cover-column" style="center">
-                        {#if bookInfo.cover}
-                            <img
-                                src={coverData}
-                                alt={i18n.bookCover}
-                                class="book-cover"
-                                style={!coverData ? "display: none;" : ""}
-                            />
-                        {/if}
-                    </div>
-                    <div class="info-column">
-                        <div class="form-row">
-                            <label
-                                >{i18n.bookTitle}<input
-                                    bind:value={bookInfo.title}
-                                    style="width: 30em;"
-                                /></label
-                            >
-                        </div>
-                        <div class="form-row">
-                            <label
-                                >{i18n.bookSubtitle}
-                                <input
-                                    bind:value={bookInfo.subtitle}
-                                    style="width: 29em;"
-                                />
-                            </label>
-                        </div>
-                        <div class="form-row">
-                            <label
-                                >{i18n.bookOriginalTitle}
-                                <input
-                                    bind:value={bookInfo.originalTitle}
-                                    style="width: 29em;"
-                                />
-                            </label>
-                        </div>
-
-                        <div
-                            class="form-row"
-                            style="display: flex; gap: 20px; justify-content: space-between;"
-                        >
-                            <div style="flex: 1;">
-                                <label
-                                    >{i18n.bookAuthors}<input
-                                        bind:value={bookInfo.authors}
-                                        style="flex: 1;"
-                                    /></label
-                                >
-                            </div>
-                            <div>
-                                <label
-                                    >{i18n.bookTranslators}<input
-                                        bind:value={bookInfo.translators}
-                                        style="width: 10em; min-width: 0;"
-                                    /></label
-                                >
-                            </div>
-                        </div>
-                        <div
-                            class="form-row"
-                            style="display: flex; gap: 1em; justify-content: space-between;"
-                        >
-                            <div style="flex: 1;">
-                                <label
-                                    >{i18n.bookPublishers}<input
-                                        bind:value={bookInfo.publisher}
-                                        style="flex: 1;"
-                                    /></label
-                                >
-                            </div>
-                            <div>
-                                <label
-                                    >{i18n.bookPublishDate}<input
-                                        bind:value={bookInfo.publishDate}
-                                        style="width: 9em; min-width: 0;"
-                                    /></label
-                                >
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- 中上区域 -->
-                <div class="book-middle-up-area">
-                    <div
-                        class="form-row"
-                        style="display: flex; justify-content: space-between; gap: 1em;"
-                    >
-                        <div>
-                            <label
-                                >{i18n.bookProducers}<input
-                                    bind:value={bookInfo.producer}
-                                    style="width: 18em; min-width: 0;"
-                                /></label
-                            >
-                        </div>
-                        <div>
-                            <label
-                                >{i18n.bookSeries}<input
-                                    bind:value={bookInfo.series}
-                                    style="width: 18em; min-width: 0;"
-                                /></label
-                            >
-                        </div>
-                    </div>
-
-                    <div
-                        class="form-row"
-                        style="display: flex; justify-content: space-between; gap: 1em;"
-                    >
-                        <div>
-                            <label
-                                >{i18n.bookRating}<input
-                                    bind:value={bookInfo.rating}
-                                    style="width: 3em; min-width: 0;"
-                                /></label
-                            >
-                        </div>
-                        <div>
-                            <label
-                                >{i18n.bookRatingCount}<input
-                                    bind:value={bookInfo.ratingCount}
-                                    style="width: 3em; min-width: 0;"
-                                /></label
-                            >
-                        </div>
-                        <div>
-                            <label
-                                >{i18n.bookPrice}<input
-                                    bind:value={bookInfo.price}
-                                    style="width: 3em; min-width: 0;"
-                                /></label
-                            >
-                        </div>
-                        <div class="form-row">
-                            <label
-                                >{i18n.bookBinding}<input
-                                    bind:value={bookInfo.binding}
-                                    style="width: 3em; min-width: 0;"
-                                /></label
-                            >
-                        </div>
-                        <div>
-                            <label
-                                >{i18n.bookPages}<input
-                                    bind:value={bookInfo.pages}
-                                    style="width: 3em; min-width: 0;"
-                                /></label
-                            >
-                        </div>
-                    </div>
-                </div>
-
-                <!-- 中下部区域 -->
-                <div class="book-middle-down-area">
-                    <div
-                        class="form-row"
-                        style="display: flex; gap: 1em; justify-content: space-between;"
-                    >
-                        <div>
-                            <label>
-                                {i18n.bookMyRating}
-                                <select bind:value={myRatingIndex}>
-                                    {#each customRatings as rating, index}
-                                        <option value={index}>{rating}</option>
-                                    {/each}
-                                </select>
-                            </label>
-                        </div>
-                        <div>
-                            <label>
-                                {i18n.bookCategory}
-                                <select bind:value={bookCategoryIndex}>
-                                    {#each customCategories as category, index}
-                                        <option value={index}>{category}</option
-                                        >
-                                    {/each}
-                                </select>
-                            </label>
-                        </div>
-                        <div>
-                            <label>
-                                {i18n.bookReadingStatus}
-                                <select bind:value={readingStatusIndex}>
-                                    {#each customReadingStatuses as status, index}
-                                        <option value={index}>{status}</option>
-                                    {/each}
-                                </select>
-                            </label>
-                        </div>
-                        <div>
-                            <label>
-                                <input
-                                    type="checkbox"
-                                    bind:checked={bookInfo.addNotes}
-                                />{i18n.bookAddNotes}
-                            </label>
-                        </div>
-                    </div>
-
-                    <div
-                        class="form-row"
-                        style="display: flex; gap: 1em; justify-content: space-between;"
-                    >
-                        <div>
-                            <label>
-                                {i18n.bookStartDate}
-                                <input
-                                    type="date"
-                                    bind:value={bookInfo.startDate}
-                                />
-                            </label>
-                        </div>
-                        <div>
-                            <label>
-                                {i18n.bookFinishDate}
-                                <input
-                                    type="date"
-                                    bind:value={bookInfo.finishDate}
-                                />
-                            </label>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- 下部区域 -->
-                <div class="book-bottom-area">
-                    <div class="form-row">
-                        <label>
-                            {i18n.bookDescription}
-                            <textarea bind:value={bookInfo.description} rows="4"
-                            ></textarea>
-                        </label>
-                    </div>
-                    <div class="form-row">
-                        <label>
-                            {i18n.bookAuthorBio}
-                            <textarea bind:value={bookInfo.authorBio} rows="4"
-                            ></textarea>
-                        </label>
-                    </div>
-                </div>
+        <div class="book-search-inner">
+            <div class="search-bar">
+                <input
+                    type="text"
+                    class="b3-text-field"
+                    bind:value={inputVales}
+                    placeholder={i18n.searchPlaceholder}
+                    on:keydown={(e) =>
+                        e.key === "Enter" && dispatch("fetchBookData")}
+                />
+                <button class="b3-button b3-button--outline" on:click={() => dispatch("fetchBookData")}>{i18n.searchButton}</button>
+                <button
+                    class="b3-button b3-button--primary"
+                    on:click={() => dispatch("addBook")}
+                    disabled={!bookInfo}
+                >
+                    {i18n.addBookButton}
+                </button>
+                {#if statusMessage}
+                    <span class="status-indicator">{statusMessage}</span>
+                {/if}
             </div>
-        {/if}
+
+            {#if bookInfo}
+                <div class="book-form">
+                    <div class="book-meta-card">
+                        <div class="book-meta-top">
+                            <div class="book-cover-panel">
+                                {#if bookInfo.cover}
+                                    <img
+                                        src={coverData}
+                                        alt={i18n.bookCover}
+                                        class="book-cover"
+                                        style={!coverData ? "display: none;" : ""}
+                                    />
+                                {/if}
+                                <label class="book-cover-note-toggle">
+                                    <span class="settings-switch-label-text">{i18n.bookAddNotes}</span>
+                                    <input
+                                        type="checkbox"
+                                        class="settings-switch"
+                                        bind:checked={bookInfo.addNotes}
+                                    />
+                                    <span class="settings-switch-track">
+                                        <span class="settings-switch-thumb"></span>
+                                    </span>
+                                </label>
+                            </div>
+                            <div class="book-title-panel">
+                                <div class="field field-full">
+                                    <label>
+                                        <span>{i18n.bookTitle}</span>
+                                        <input class="b3-text-field" bind:value={bookInfo.title} />
+                                    </label>
+                                </div>
+                                <div class="field field-full">
+                                    <label>
+                                        <span>{i18n.bookSubtitle}</span>
+                                        <input class="b3-text-field" bind:value={bookInfo.subtitle} />
+                                    </label>
+                                </div>
+                                <div class="field field-full">
+                                    <label>
+                                        <span>{i18n.bookOriginalTitle}</span>
+                                        <input class="b3-text-field" bind:value={bookInfo.originalTitle} />
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="book-meta-bottom">
+                            <div class="field field-half">
+                                <label>
+                                    <span>{i18n.bookAuthors}</span>
+                                    <input class="b3-text-field" bind:value={bookInfo.authors} />
+                                </label>
+                            </div>
+                            <div class="field field-half">
+                                <label>
+                                    <span>{i18n.bookTranslators}</span>
+                                    <input class="b3-text-field" bind:value={bookInfo.translators} />
+                                </label>
+                            </div>
+                            <div class="field field-third">
+                                <label>
+                                    <span>{i18n.bookPublishers}</span>
+                                    <input class="b3-text-field" bind:value={bookInfo.publisher} />
+                                </label>
+                            </div>
+                            <div class="field field-third">
+                                <label>
+                                    <span>{i18n.bookPublishDate}</span>
+                                    <input class="b3-text-field" bind:value={bookInfo.publishDate} />
+                                </label>
+                            </div>
+                            <div class="field field-third">
+                                <label>
+                                    <span>{i18n.bookProducers}</span>
+                                    <input class="b3-text-field" bind:value={bookInfo.producer} />
+                                </label>
+                            </div>
+                            <div class="field field-half">
+                                <label>
+                                    <span>{i18n.bookSeries}</span>
+                                    <input class="b3-text-field" bind:value={bookInfo.series} />
+                                </label>
+                            </div>
+                            <div class="field field-quarter">
+                                <label>
+                                    <span>{i18n.bookRating}</span>
+                                    <input class="b3-text-field" bind:value={bookInfo.rating} />
+                                </label>
+                            </div>
+                            <div class="field field-quarter">
+                                <label>
+                                    <span>{i18n.bookRatingCount}</span>
+                                    <input class="b3-text-field" bind:value={bookInfo.ratingCount} />
+                                </label>
+                            </div>
+                            <div class="field field-quarter">
+                                <label>
+                                    <span>{i18n.bookPrice}</span>
+                                    <input class="b3-text-field" bind:value={bookInfo.price} />
+                                </label>
+                            </div>
+                            <div class="field field-quarter">
+                                <label>
+                                    <span>{i18n.bookBinding}</span>
+                                    <input class="b3-text-field" bind:value={bookInfo.binding} />
+                                </label>
+                            </div>
+                            <div class="field field-quarter">
+                                <label>
+                                    <span>{i18n.bookPages}</span>
+                                    <input class="b3-text-field" bind:value={bookInfo.pages} />
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="book-section">
+                        <div class="book-section-title">{i18n.personalRecord}</div>
+                        <div class="book-info-grid">
+                            <div class="field field-third">
+                                <label>
+                                    <span>{i18n.bookMyRating}</span>
+                                    <select class="b3-select" bind:value={myRatingIndex}>
+                                        {#each customRatings as rating, index}
+                                            <option value={index}>{rating}</option>
+                                        {/each}
+                                    </select>
+                                </label>
+                            </div>
+                            <div class="field field-third">
+                                <label>
+                                    <span>{i18n.bookCategory}</span>
+                                    <select class="b3-select" bind:value={bookCategoryIndex}>
+                                        {#each customCategories as category, index}
+                                            <option value={index}>{category}</option>
+                                        {/each}
+                                    </select>
+                                </label>
+                            </div>
+                            <div class="field field-third">
+                                <label>
+                                    <span>{i18n.bookReadingStatus}</span>
+                                    <select class="b3-select" bind:value={readingStatusIndex}>
+                                        {#each customReadingStatuses as status, index}
+                                            <option value={index}>{status}</option>
+                                        {/each}
+                                    </select>
+                                </label>
+                            </div>
+                            <div class="field field-half">
+                                <label>
+                                    <span>{i18n.bookStartDate}</span>
+                                    <input
+                                        type="date"
+                                        class="b3-text-field"
+                                        bind:value={bookInfo.startDate}
+                                    />
+                                </label>
+                            </div>
+                            <div class="field field-half">
+                                <label>
+                                    <span>{i18n.bookFinishDate}</span>
+                                    <input
+                                        type="date"
+                                        class="b3-text-field"
+                                        bind:value={bookInfo.finishDate}
+                                    />
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="book-section">
+                        <div class="book-section-title">{i18n.bookIntro}</div>
+                        <textarea
+                            class="b3-text-field book-textarea"
+                            bind:value={bookInfo.description}
+                            rows="4"
+                        ></textarea>
+                    </div>
+
+                    <div class="book-section">
+                        <div class="book-section-title">{i18n.authorIntro}</div>
+                        <textarea
+                            class="b3-text-field book-textarea"
+                            bind:value={bookInfo.authorBio}
+                            rows="4"
+                        ></textarea>
+                    </div>
+                </div>
+            {:else}
+                <div class="empty-state">
+                    <div class="empty-state-icon">📚</div>
+                    <div class="empty-state-title">{i18n.noBookInfo}</div>
+                    <div class="empty-state-desc">{i18n.noBookInfoDesc}</div>
+                </div>
+            {/if}
+        </div>
     {/if}
 </div>
