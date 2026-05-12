@@ -19,7 +19,7 @@
         getBookShelf,
     } from "@/utils/weread/wereadInterface";
     import { syncWereadNotes, buildTemporaryNotebookList } from "@/utils/weread/syncWereadNotes";
-    import { loadPluginData, DEFAULT_WEREAD_COOKIE, DEFAULT_WEREAD_SETTINGS } from "@/utils/core/configDefaults";
+    import { loadPluginData, DEFAULT_WEREAD_COOKIE, DEFAULT_WEREAD_SETTINGS, normalizeWereadPositionMark } from "@/utils/core/configDefaults";
 
     import wereadManageISBN from "@/components/common/wereadManageISBN.svelte";
     import wereadIgnoredBooksDialog from "@/components/common/wereadIgnoredBooksDialog.svelte";
@@ -151,7 +151,8 @@
     onMount(async () => {
         // 加载本地配置
         const savedcookies = await loadPluginData(plugin, "weread_cookie", DEFAULT_WEREAD_COOKIE);
-        wereadPositionMark = await plugin.loadData("weread_position_mark");
+        const savedPositionMark = await plugin.loadData("weread_position_mark");
+        wereadPositionMark = normalizeWereadPositionMark(savedPositionMark);
         const wereadSetting = await loadPluginData(plugin, "weread_settings", DEFAULT_WEREAD_SETTINGS);
         autoSync = wereadSetting.autoSync;
         const savedTemplates = await plugin.loadData("weread_templates");
@@ -671,9 +672,11 @@
                     <button
                         class="b3-button b3-button--outline"
                         on:click={async () => {
+                            const normalizedMark = normalizeWereadPositionMark(wereadPositionMark);
+                            wereadPositionMark = normalizedMark;
                             await plugin.saveData(
                                 "weread_position_mark",
-                                wereadPositionMark,
+                                normalizedMark,
                             );
                             showMessage(i18n.showMessage14);
                         }}

@@ -9,6 +9,7 @@ import { addUseBookIDsToDatabase } from "@/utils/weread/addUseBookIDs";
 import WereadNewBooks from "@/components/common/wereadNewBooksDialog.svelte";
 import PromiseLimitPool from "@/libs/promise-pool";
 import { updateEndBlocks } from "./updateWereadBlocks";
+import { normalizeWereadPositionMark } from "@/utils/core/configDefaults";
 import { saveIgnoredBooks, saveCustomBooksISBN, saveUseBookIDBooks } from "./wereadSyncStorage";
 import { logError } from "../core/logger";
 import { getImage, downloadCover } from "@/utils/core/getImg";
@@ -2028,7 +2029,8 @@ async function syncNotesProcess(plugin: WereadPluginLike, cookies: string, noteb
     }
 
     // 本轮同步统一读取一次插入位置配置
-    const wereadPositionMark = await plugin.loadData("weread_position_mark");
+    const savedPositionMark = await plugin.loadData("weread_position_mark");
+    const wereadPositionMark = normalizeWereadPositionMark(savedPositionMark);
 
     // ========== 公众号账号文章同步 ==========
     let mpSyncSuccess = true;

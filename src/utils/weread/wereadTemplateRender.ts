@@ -180,10 +180,10 @@ function normalizeWereadTimeFormatKey(formatKey: string): string {
     // 如果已经是标准键，直接返回
     if (TIME_FORMATS[formatKey]) return formatKey;
 
-    // 匹配 highlightCreateTime1~10 或 commentCreateTime1~10
-    const match = formatKey.match(/^(?:highlight|comment)(CreateTime\d+)$/);
-    if (match) {
-        const normalized = 'c' + match[1]; // CreateTime7 -> createTime7
+    // 匹配 highlightCreateTime1~10 或 commentCreateTime1~10，映射为 createTime1~10
+    const aliasMatch = formatKey.match(/^(?:highlight|comment)CreateTime(10|[1-9])$/);
+    if (aliasMatch) {
+        const normalized = `createTime${aliasMatch[1]}`;
         if (TIME_FORMATS[normalized]) return normalized;
     }
 

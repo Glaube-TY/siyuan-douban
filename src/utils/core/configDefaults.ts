@@ -8,6 +8,13 @@ export const DEFAULT_WEREAD_SETTINGS = {
     autoSync: false,
 };
 
+export const DEFAULT_WEREAD_POSITION_MARK = "【微信读书同步笔记】";
+
+export function normalizeWereadPositionMark(mark: any): string {
+    const normalized = String(mark ?? "").trim();
+    return normalized || DEFAULT_WEREAD_POSITION_MARK;
+}
+
 export const DEFAULT_WEREAD_COOKIE: WereadCookieData = {
     cookies: "",
     isQRCode: false,
