@@ -157,7 +157,7 @@ export default class PluginDouban extends Plugin {
     }
 
     private showSetDialog() {
-        svelteDialog({
+        const { dialog } = svelteDialog({
             title: "",
             width: "900px",
             height: "720px",
@@ -171,6 +171,56 @@ export default class PluginDouban extends Plugin {
                 });
             }
         });
+        dialog.element.classList.add("siyuan-douban-settings-dialog");
+        this.lockSettingsDialogOuterScroll(dialog.element);
+    }
+
+    private lockSettingsDialogOuterScroll(dialogElement: HTMLElement) {
+        const apply = () => {
+            dialogElement.classList.add("siyuan-douban-settings-dialog");
+            dialogElement.style.overflow = "hidden";
+            dialogElement.style.minHeight = "0";
+
+            const outerSelectors = [
+                ".b3-dialog",
+                ".b3-dialog__container",
+                ".b3-dialog__body",
+                ".b3-dialog__content",
+                ".dialog-content",
+            ];
+
+            dialogElement.querySelectorAll<HTMLElement>(outerSelectors.join(",")).forEach((el) => {
+                el.style.overflow = "hidden";
+                el.style.minHeight = "0";
+                el.style.boxSizing = "border-box";
+            });
+
+            const contentEls = dialogElement.querySelectorAll<HTMLElement>(".b3-dialog__content, .dialog-content");
+            contentEls.forEach((el) => {
+                el.style.height = "100%";
+                el.style.display = "flex";
+                el.style.flexDirection = "column";
+            });
+
+            const layout = dialogElement.querySelector<HTMLElement>(".plugin-settings-layout");
+            if (layout) {
+                layout.style.height = "100%";
+                layout.style.minHeight = "0";
+                layout.style.overflow = "hidden";
+            }
+
+            const main = dialogElement.querySelector<HTMLElement>(".plugin-settings-main");
+            if (main) {
+                main.style.flex = "1";
+                main.style.minHeight = "0";
+                main.style.overflowY = "auto";
+                main.style.overflowX = "hidden";
+            }
+        };
+
+        apply();
+        requestAnimationFrame(apply);
+        window.setTimeout(apply, 50);
     }
 
     private registerCommand() {

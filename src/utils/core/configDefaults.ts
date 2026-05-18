@@ -6,6 +6,7 @@ interface PluginDataLoader {
 
 export const DEFAULT_WEREAD_SETTINGS = {
     autoSync: false,
+    skipNewBookCheck: false,
 };
 
 export const DEFAULT_WEREAD_POSITION_MARK = "【微信读书同步笔记】";

@@ -31,6 +31,8 @@
     let ignoredBooks: BookItem[] = [];
     let useBookIDs: BookItem[] = [];
 
+    let activeTab: "books" | "mp" = "books";
+
     // 处理中状态，防止重复点击
     let isProcessing = false;
 
@@ -44,6 +46,13 @@
     // 分成两组
     $: normalBooks = books.filter(b => b.sourceType !== "weread_mp_account");
     $: mpAccounts = books.filter(b => b.sourceType === "weread_mp_account");
+
+    // 默认标签页：优先书籍，没有书籍则默认公众号
+    $: if (normalBooks.length === 0 && mpAccounts.length > 0) {
+        activeTab = "mp";
+    } else if (normalBooks.length > 0) {
+        activeTab = "books";
+    }
 
     const isValidISBN = (isbn: string) => {
         const cleaned = isbn.replace(/[-\s]/g, "");
@@ -75,10 +84,8 @@
 
     function toggleAllNormalBooks() {
         if (allNormalSelected) {
-            // 取消所有当前可选普通书的选择，保留公众号选择
             selectedBooks = selectedBooks.filter(b => b.sourceType === "weread_mp_account" || !selectableNormalBooks.some(sb => sb.bookID === b.bookID));
         } else {
-            // 只添加当前可选但未选的普通书
             const toAdd = selectableNormalBooks.filter(b => !selectedBooks.some(sb => sb.bookID === b.bookID));
             selectedBooks = [...selectedBooks, ...toAdd];
         }
@@ -86,10 +93,8 @@
 
     function toggleAllMpAccounts() {
         if (allMpSelected) {
-            // 取消所有当前可选公众号的选择，保留普通书选择
             selectedBooks = selectedBooks.filter(b => b.sourceType !== "weread_mp_account" || !selectableMpAccounts.some(sb => sb.bookID === b.bookID));
         } else {
-            // 只添加当前可选但未选的公众号
             const toAdd = selectableMpAccounts.filter(b => !selectedBooks.some(sb => sb.bookID === b.bookID));
             selectedBooks = [...selectedBooks, ...toAdd];
         }
@@ -102,12 +107,10 @@
             selectedBooks.splice(index, 1);
         } else {
             selectedBooks.push(book);
-            // 选择时，从其他列表中移除
             const ignoreIndex = ignoredBooks.findIndex((b) => b.bookID === book.bookID);
             if (ignoreIndex > -1) {
                 ignoredBooks.splice(ignoreIndex, 1);
             }
-            // 公众号账号不使用BookID
             if (!isMp) {
                 const useBookIDIndex = useBookIDs.findIndex((b) => b.bookID === book.bookID);
                 if (useBookIDIndex > -1) {
@@ -127,7 +130,6 @@
             ignoredBooks.splice(index, 1);
         } else {
             ignoredBooks.push(book);
-            // 忽略时，从其他列表中移除
             const selectedIndex = selectedBooks.findIndex((b) => b.bookID === book.bookID);
             if (selectedIndex > -1) {
                 selectedBooks.splice(selectedIndex, 1);
@@ -145,7 +147,6 @@
     }
 
     function toggleUseBookID(book: BookItem) {
-        // 公众号账号不使用BookID
         if (book.sourceType === "weread_mp_account") return;
         const index = useBookIDs.findIndex((b) => b.bookID === book.bookID);
         if (index > -1) {
@@ -166,7 +167,6 @@
         useBookIDs = [...useBookIDs];
     }
 
-    // 处理确认选择按钮点击
     async function handleConfirm() {
         if (isProcessing) return;
         isProcessing = true;
@@ -177,7 +177,6 @@
         }
     }
 
-    // 处理继续同步按钮点击
     async function handleContinue() {
         if (isProcessing) return;
         isProcessing = true;
@@ -188,7 +187,6 @@
         }
     }
 
-    // 处理取消同步按钮点击
     function handleCancel() {
         if (isProcessing) return;
         onCancel();
@@ -207,12 +205,31 @@
             disabled={isProcessing}
             >{i18n.continueSync}</button
         >
-        <button class="cancel-btn" on:click={handleCancel} disabled={isProcessing}>取消同步</button>
+        <button class="cancel-btn" on:click={handleCancel} disabled={isProcessing}>{i18n.cancelSync}</button>
     </div>
 
+    <!-- 标签页按钮 -->
+    {#if normalBooks.length > 0 || mpAccounts.length > 0}
+    <div class="tab-bar">
+        {#if normalBooks.length > 0}
+        <button
+            class="tab-btn"
+            class:active={activeTab === "books"}
+            on:click={() => { activeTab = "books"; }}
+        >{i18n.newBooksTabBooks}（{normalBooks.length}）</button>
+        {/if}
+        {#if mpAccounts.length > 0}
+        <button
+            class="tab-btn"
+            class:active={activeTab === "mp"}
+            on:click={() => { activeTab = "mp"; }}
+        >{i18n.newBooksTabMpAccounts}（{mpAccounts.length}）</button>
+        {/if}
+    </div>
+    {/if}
+
     <!-- 新书籍表格 -->
-    {#if normalBooks.length > 0}
-    <div class="section-title">新书籍</div>
+    {#if activeTab === "books" && normalBooks.length > 0}
     <table class="book-table">
         <thead>
             <tr>
@@ -227,8 +244,8 @@
                 </th>
                 <th class="book-title">{i18n.bookTitle1}</th>
                 <th class="book-isbn">{i18n.bookIsbn1}</th>
-                <th class="ignore-column" title="选择、忽略、使用BookID 三选一">{i18n.ignore}</th>
-                <th class="use-bookid-column" title="选择、忽略、使用BookID 三选一">使用BookID</th>
+                <th class="ignore-column" title={i18n.choiceExclusiveTip}>{i18n.ignore}</th>
+                <th class="use-bookid-column" title={i18n.choiceExclusiveTip}>{i18n.useBookID}</th>
             </tr>
         </thead>
         <tbody>
@@ -246,7 +263,7 @@
                                      useBookIDs.some((b) => b.bookID === book.bookID)}
                         />
                     </td>
-                    <td>{book.title || book.bookID || "未命名书籍"}</td>
+                    <td>{book.title || book.bookID || i18n.unnamedBook}</td>
                     <td>
                         <input
                             type="text"
@@ -297,8 +314,7 @@
     {/if}
 
     <!-- 新公众号表格 -->
-    {#if mpAccounts.length > 0}
-    <div class="section-title">新公众号</div>
+    {#if activeTab === "mp" && mpAccounts.length > 0}
     <table class="book-table">
         <thead>
             <tr>
@@ -311,9 +327,9 @@
                     />
                     {i18n.select}
                 </th>
-                <th class="book-title">公众号名称</th>
-                <th class="book-intro">简介</th>
-                <th class="note-count-column">笔记/评论</th>
+                <th class="book-title">{i18n.mpAccountName}</th>
+                <th class="book-intro">{i18n.mpAccountIntro}</th>
+                <th class="note-count-column">{i18n.noteReviewCount}</th>
                 <th class="ignore-column">{i18n.ignore}</th>
             </tr>
         </thead>
@@ -330,7 +346,7 @@
                             disabled={ignoredBooks.some((b) => b.bookID === book.bookID)}
                         />
                     </td>
-                    <td>{book.title || book.bookID || "未命名公众号"}</td>
+                    <td>{book.title || book.bookID || i18n.unnamedMpAccount}</td>
                     <td class="intro-cell">{book.introduction || ""}</td>
                     <td class="note-count-cell">{book.noteCount ?? 0}/{book.reviewCount ?? 0}</td>
                     <td class="ignore-checkbox" 
@@ -381,6 +397,33 @@
                 &:hover {
                     background-color: var(--b3-theme-error);
                     color: white;
+                }
+            }
+        }
+
+        .tab-bar {
+            display: flex;
+            gap: 8px;
+            margin: 12px 0 8px 0;
+
+            .tab-btn {
+                padding: 6px 16px;
+                border: 1px solid var(--b3-border-color);
+                border-radius: 6px;
+                background: transparent;
+                color: var(--b3-theme-on-background);
+                font-size: 13px;
+                cursor: pointer;
+                transition: background 0.15s ease, color 0.15s ease;
+
+                &.active {
+                    background: var(--b3-theme-primary);
+                    color: var(--b3-theme-on-primary, #fff);
+                    font-weight: 500;
+                }
+
+                &:hover:not(.active) {
+                    background: var(--b3-list-hover);
                 }
             }
         }
@@ -472,14 +515,5 @@
                 text-align: center;
             }
         }
-    }
-
-    .section-title {
-        font-weight: bold;
-        font-size: 14px;
-        margin: 16px 0 8px 0;
-        padding: 4px 8px;
-        background-color: var(--b3-theme-background-light);
-        border-left: 3px solid var(--b3-theme-primary);
     }
 </style>

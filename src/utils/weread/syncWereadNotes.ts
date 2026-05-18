@@ -9,7 +9,7 @@ import { addUseBookIDsToDatabase } from "@/utils/weread/addUseBookIDs";
 import WereadNewBooks from "@/components/common/wereadNewBooksDialog.svelte";
 import PromiseLimitPool from "@/libs/promise-pool";
 import { updateEndBlocks } from "./updateWereadBlocks";
-import { normalizeWereadPositionMark } from "@/utils/core/configDefaults";
+import { normalizeWereadPositionMark, loadPluginData, DEFAULT_WEREAD_SETTINGS } from "@/utils/core/configDefaults";
 import { saveIgnoredBooks, saveCustomBooksISBN, saveUseBookIDBooks } from "./wereadSyncStorage";
 import { logError } from "../core/logger";
 import { getImage, downloadCover } from "@/utils/core/getImg";
@@ -394,8 +394,12 @@ export async function syncWereadNotes(plugin: WereadPluginLike, cookies: string,
 
     // const cloudNewBooks = cloudNotebooksList.filter((item: any) => !ISBNColumn.some((isbnItem: any) => isbnItem.number?.content?.toString() === item.isbn)); // 筛选出云端有但本地没有的书籍
 
-    // 若有新增书籍，则显示新增书籍弹窗
-    if (cloudNewBooks.length > 0) {
+    // 读取跳过新书籍检查设置
+    const wereadSettings = await loadPluginData(plugin, "weread_settings", DEFAULT_WEREAD_SETTINGS);
+    const skipNewBookCheck = wereadSettings.skipNewBookCheck;
+
+    // 若有新增书籍且未跳过检查，则显示新增书籍弹窗
+    if (!skipNewBookCheck && cloudNewBooks.length > 0) {
         const dialog = svelteDialog({
             title: plugin.i18n.newBooksConfirm,
             constructor: (containerEl: HTMLElement) => {

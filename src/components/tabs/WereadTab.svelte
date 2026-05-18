@@ -109,6 +109,7 @@
     export let databaseStatus = "";
 
     let autoSync = false;
+    let skipNewBookCheck = false;
     let isSyncing = false;
     let userVid = "";
     let checkMessage = "";
@@ -155,6 +156,7 @@
         wereadPositionMark = normalizeWereadPositionMark(savedPositionMark);
         const wereadSetting = await loadPluginData(plugin, "weread_settings", DEFAULT_WEREAD_SETTINGS);
         autoSync = wereadSetting.autoSync;
+        skipNewBookCheck = wereadSetting.skipNewBookCheck;
         const savedTemplates = await plugin.loadData("weread_templates");
         if (savedTemplates) {
             wereadTemplates = savedTemplates;
@@ -278,6 +280,27 @@
         } finally {
             isNotebookListLoading = false;
         }
+    }
+
+    async function openCachedNotebooksDialog() {
+        let cachedNotebooks = Array.isArray(notebooksList) && notebooksList.length > 0
+            ? notebooksList
+            : [];
+
+        if (cachedNotebooks.length === 0) {
+            const savedCache = await plugin.loadData("temporary_weread_notebooksList");
+            if (Array.isArray(savedCache)) {
+                cachedNotebooks = savedCache;
+                notebooksList = savedCache;
+            }
+        }
+
+        if (!Array.isArray(cachedNotebooks)) {
+            cachedNotebooks = [];
+        }
+
+        const showDialog = createNotebooksDialog(plugin, cachedNotebooks);
+        showDialog();
     }
 
     async function openBookShelf() {
@@ -543,14 +566,8 @@
                         <div class="weread-row-control">
                             <button
                                 class="b3-button b3-button--outline"
-                                disabled={isNotebookListLoading || !isNotebookListReady}
-                                on:click={() => {
-                                    if (isNotebookListLoading || !isNotebookListReady) {
-                                        showMessage(i18n.showMessageWereadCacheNotReady);
-                                        return;
-                                    }
-                                    createNotebooksDialog(plugin, notebooksList);
-                                }}>{i18n.hasNotesBooks}</button>
+                                disabled={isNotebookListLoading}
+                                on:click={openCachedNotebooksDialog}>{i18n.hasNotesBooks}</button>
                         </div>
                     </div>
                     <div class="weread-settings-row">
@@ -739,6 +756,29 @@
             </div>
             <div class="weread-settings-row">
                 <div class="weread-row-info">
+                    <div class="weread-row-title">{i18n.skipNewBookCheck}</div>
+                    <div class="weread-row-desc">{i18n.skipNewBookCheckDesc}</div>
+                </div>
+                <div class="weread-row-control">
+                    <label class="settings-switch-label">
+                        <input
+                            type="checkbox"
+                            class="settings-switch"
+                            title={i18n.skipNewBookCheckTip}
+                            bind:checked={skipNewBookCheck}
+                            on:change={async () => {
+                                const current = await loadPluginData(plugin, "weread_settings", DEFAULT_WEREAD_SETTINGS);
+                                await plugin.saveData("weread_settings", { ...current, skipNewBookCheck });
+                            }}
+                        />
+                        <span class="settings-switch-track">
+                            <span class="settings-switch-thumb"></span>
+                        </span>
+                    </label>
+                </div>
+            </div>
+            <div class="weread-settings-row">
+                <div class="weread-row-info">
                     <div class="weread-row-title">{i18n.autoSync}</div>
                     <div class="weread-row-desc">{i18n.autoSyncDesc}</div>
                 </div>
@@ -750,7 +790,8 @@
                             title={i18n.autoSyncTip}
                             bind:checked={autoSync}
                             on:change={async () => {
-                                await plugin.saveData("weread_settings", { autoSync });
+                                const current = await loadPluginData(plugin, "weread_settings", DEFAULT_WEREAD_SETTINGS);
+                                await plugin.saveData("weread_settings", { ...current, autoSync });
                             }}
                         />
                         <span class="settings-switch-track">

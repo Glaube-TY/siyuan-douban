@@ -12,7 +12,8 @@
         weread: "https://weread.qq.com/",
         issues: "https://github.com/Glaube-TY/siyuan-douban/issues",
         tencent: "https://pd.qq.com/s/724c4lpoc",
-        myblog: "https://blog.glaube-ty.top/du-shu-bi-ji-cha-jian"
+        myblog: "https://blog.glaube-ty.top/du-shu-bi-ji-cha-jian",
+        donate: "https://blog.glaube-ty.top/da-shang"
     };
 </script>
 
@@ -55,7 +56,7 @@
             <div class="card-row">
                 <span class="icon">💖</span>
                 <span class="label">{i18n.pluginSupport}：</span>
-                <span class="link-disabled">{i18n.pluginSupport1}</span>
+                <a href={LINKS.donate} class="link" target="_blank">{i18n.pluginSupport1}</a>
             </div>
             <div class="card-row">
                 <span class="icon">⁉</span>

@@ -198,3 +198,34 @@
     animation: dialog-enter 0.2s ease;
     color: var(--text-color);
 }
+
+.siyuan-douban-settings-dialog,
+.siyuan-douban-settings-dialog .b3-dialog,
+.siyuan-douban-settings-dialog .b3-dialog__container,
+.siyuan-douban-settings-dialog .b3-dialog__body,
+.siyuan-douban-settings-dialog .b3-dialog__content,
+.siyuan-douban-settings-dialog .dialog-content {
+    overflow: hidden !important;
+    min-height: 0;
+    box-sizing: border-box;
+}
+
+.siyuan-douban-settings-dialog .b3-dialog__content,
+.siyuan-douban-settings-dialog .dialog-content {
+    height: 100% !important;
+    display: flex !important;
+    flex-direction: column;
+}
+
+.siyuan-douban-settings-dialog .plugin-settings-layout {
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.siyuan-douban-settings-dialog .plugin-settings-main {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+}

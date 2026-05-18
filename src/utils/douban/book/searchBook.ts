@@ -10,74 +10,89 @@ interface SearchResult {
  * 注入持久化顶部控制栏（幂等：每次注入前先移除旧的）
  */
 function injectPersistentControlBar(searchWindow: any) {
-    searchWindow.webContents.executeJavaScript(`
-        (function() {
-            // 如果已存在控制栏，先移除
-            const existingBar = document.getElementById('douban-persistent-control-bar');
-            if (existingBar) {
-                existingBar.remove();
-            }
-
-            // 创建控制栏容器
-            const controlBar = document.createElement('div');
-            controlBar.id = 'douban-persistent-control-bar';
-            controlBar.innerHTML = \`
-                <div style="position: fixed; top: 0; left: 0; right: 0; height: 56px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; display: flex; align-items: center; justify-content: space-between; padding: 0 20px; z-index: 999999; box-shadow: 0 2px 10px rgba(0,0,0,0.2); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
-                    <div style="display: flex; align-items: center; gap: 12px;">
-                        <span style="font-size: 16px; font-weight: 500;">📚 豆瓣图书搜索</span>
-                        <span style="font-size: 12px; opacity: 0.85;">请进入书籍详情页后再点击获取</span>
-                    </div>
-                    <div>
-                        <button id="get-book-info-persistent" style="background: #28a745; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; margin-right: 10px; font-size: 14px; transition: background 0.3s;" onmouseover="this.style.background='#218838'" onmouseout="this.style.background='#28a745'">📖 获取此书信息</button>
-                        <button id="close-window-persistent" style="background: #dc3545; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-size: 14px; transition: background 0.3s;" onmouseover="this.style.background='#c82333'" onmouseout="this.style.background='#dc3545'">❌ 关闭窗口</button>
-                    </div>
-                </div>
-            \`;
-
-            // 添加控制栏到页面
-            document.documentElement.appendChild(controlBar);
-
-            // 为页面内容添加顶部边距，避免被控制栏遮挡
-            if (!document.body.style.paddingTop || document.body.style.paddingTop === '0px') {
-                document.body.style.paddingTop = '56px';
-            }
-
-            // 定义按钮点击处理函数
-            window._doubanGetBookInfo = function() {
-                const btn = document.getElementById('get-book-info-persistent');
-                if (btn) {
-                    btn.innerHTML = '⏳ 获取中...';
-                    btn.disabled = true;
+    try {
+        searchWindow.webContents.executeJavaScript(`
+            (function() {
+                const existingBar = document.getElementById('douban-persistent-control-bar');
+                if (existingBar) {
+                    existingBar.remove();
                 }
 
-                // 获取当前页面的HTML
-                const htmlContent = document.documentElement.outerHTML;
+                const controlBar = document.createElement('div');
+                controlBar.id = 'douban-persistent-control-bar';
+                controlBar.innerHTML = \`
+                    <div style="position: fixed; top: 0; left: 0; right: 0; height: 56px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; display: flex; align-items: center; justify-content: space-between; padding: 0 20px; z-index: 2147483647; box-shadow: 0 2px 10px rgba(0,0,0,0.2); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+                        <div style="display: flex; align-items: center; gap: 12px;">
+                            <span style="font-size: 16px; font-weight: 500;">📚 豆瓣图书搜索</span>
+                            <span style="font-size: 12px; opacity: 0.85;">请进入书籍详情页后再点击获取</span>
+                        </div>
+                        <div>
+                            <button id="get-book-info-persistent" style="background: #28a745; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; margin-right: 10px; font-size: 14px; transition: background 0.3s;" onmouseover="this.style.background='#218838'" onmouseout="this.style.background='#28a745'">📖 获取此书信息</button>
+                            <button id="close-window-persistent" style="background: #dc3545; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-size: 14px; transition: background 0.3s;" onmouseover="this.style.background='#c82333'" onmouseout="this.style.background='#dc3545'">❌ 关闭窗口</button>
+                        </div>
+                    </div>
+                \`;
 
-                // 显示处理中提示
-                const processingTip = document.createElement('div');
-                processingTip.innerHTML = '<div style="position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0, 123, 255, 0.9); color: white; padding: 20px; border-radius: 8px; z-index: 1000000; font-size: 16px; text-align: center;">📚 正在处理书籍信息...<br><small>请稍候</small></div>';
-                document.body.appendChild(processingTip);
+                document.documentElement.appendChild(controlBar);
 
-                // 使用console.log发送数据给Electron
-                console.log('[CAPTURE]' + htmlContent);
+                document.body.style.paddingTop = '56px';
 
-                // 1秒后关闭窗口
-                setTimeout(() => {
+                window._doubanGetBookInfo = function() {
+                    const btn = document.getElementById('get-book-info-persistent');
+                    if (btn) {
+                        btn.innerHTML = '⏳ 获取中...';
+                        btn.disabled = true;
+                    }
+
+                    const htmlContent = document.documentElement.outerHTML;
+
+                    const processingTip = document.createElement('div');
+                    processingTip.innerHTML = '<div style="position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0, 123, 255, 0.9); color: white; padding: 20px; border-radius: 8px; z-index: 1000000; font-size: 16px; text-align: center;">📚 正在处理书籍信息...<br><small>请稍候</small></div>';
+                    document.body.appendChild(processingTip);
+
+                    console.log('[CAPTURE]' + htmlContent);
+
+                    setTimeout(() => {
+                        window.close();
+                    }, 1000);
+                };
+
+                window._doubanCloseWindow = function() {
                     window.close();
-                }, 1000);
-            };
+                };
 
-            window._doubanCloseWindow = function() {
-                window.close();
-            };
+                const getBtn = document.getElementById('get-book-info-persistent');
+                const closeBtn = document.getElementById('close-window-persistent');
+                if (getBtn) getBtn.addEventListener('click', window._doubanGetBookInfo);
+                if (closeBtn) closeBtn.addEventListener('click', window._doubanCloseWindow);
+            })();
+        `);
+    } catch {
+        // executeJavaScript 失败时静默处理，不抛出未处理异常
+    }
+}
 
-            // 绑定按钮事件
-            const getBtn = document.getElementById('get-book-info-persistent');
-            const closeBtn = document.getElementById('close-window-persistent');
-            if (getBtn) getBtn.addEventListener('click', window._doubanGetBookInfo);
-            if (closeBtn) closeBtn.addEventListener('click', window._doubanCloseWindow);
-        })();
-    `);
+/**
+ * 启动控制栏看门狗：立即注入一次，之后每 500ms 注入一次，窗口销毁后自动停止
+ */
+function startControlBarWatchdog(searchWindow: any) {
+    injectPersistentControlBar(searchWindow);
+
+    const timer = setInterval(() => {
+        try {
+            if (searchWindow.isDestroyed()) {
+                clearInterval(timer);
+                return;
+            }
+            injectPersistentControlBar(searchWindow);
+        } catch {
+            clearInterval(timer);
+        }
+    }, 500);
+
+    searchWindow.on('closed', () => {
+        clearInterval(timer);
+    });
 }
 
 export async function openInteractiveSearchWindow(
@@ -121,13 +136,24 @@ export async function openInteractiveSearchWindow(
                 }
             });
 
-            // 监听页面导航完成事件，重新注入控制栏
+            // 启动看门狗，在多个导航事件上持续注入控制栏
+            searchWindow.webContents.on('dom-ready', () => {
+                injectPersistentControlBar(searchWindow);
+            });
+            searchWindow.webContents.on('did-start-navigation', () => {
+                injectPersistentControlBar(searchWindow);
+            });
             searchWindow.webContents.on('did-navigate', () => {
                 injectPersistentControlBar(searchWindow);
-                // 500ms 后补注入一次，确保页面完全渲染
-                setTimeout(() => {
-                    injectPersistentControlBar(searchWindow);
-                }, 500);
+            });
+            searchWindow.webContents.on('did-navigate-in-page', () => {
+                injectPersistentControlBar(searchWindow);
+            });
+            searchWindow.webContents.on('did-finish-load', () => {
+                injectPersistentControlBar(searchWindow);
+            });
+            searchWindow.webContents.on('did-stop-loading', () => {
+                injectPersistentControlBar(searchWindow);
             });
 
             const searchUrl = `https://search.douban.com/book/subject_search?search_text=${encodeURIComponent(searchKeyword)}&cat=1001`;
@@ -156,19 +182,17 @@ export async function openInteractiveSearchWindow(
                 callback({ requestHeaders: details.requestHeaders });
             });
 
+            // 在 loadURL 前启动看门狗
+            startControlBarWatchdog(searchWindow);
+
             // 加载搜索页面
             await searchWindow.loadURL(searchUrl, {
                 userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0',
                 httpReferrer: "https://www.douban.com/"
             });
 
-            // loadURL 完成后立即注入控制栏
+            // loadURL 完成后立即补注入一次
             injectPersistentControlBar(searchWindow);
-
-            // 300ms 后补注入一次
-            setTimeout(() => {
-                injectPersistentControlBar(searchWindow);
-            }, 300);
 
             // 显示窗口
             searchWindow.show();
