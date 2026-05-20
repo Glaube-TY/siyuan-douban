@@ -1,0 +1,363 @@
+import { updateEndBlocks } from "../updateWereadBlocks";
+import { normalizeWereadPositionMark } from "../../core/configDefaults";
+import { buildWereadApiEnhancedNotebook } from "./buildWereadApiEnhancedNotebook";
+import { renderWereadBookMarkdown } from "../wereadTemplateRender";
+import { findWereadApiBookTargetDoc } from "./findWereadApiBookTargetDoc";
+import { preflightWereadApiBooksSync } from "./preflightWereadApiBooksSync";
+import { ensureWereadApiNotebookCacheDetails } from "./ensureWereadApiNotebookCacheDetails";
+import PromiseLimitPool from "@/libs/promise-pool";
+
+interface WereadPluginLike {
+  loadData: (key: string) => Promise<any>;
+  saveData: (key: string, value: any) => Promise<void>;
+  i18n: Record<string, string>;
+}
+
+interface OldRecord {
+  bookID: string;
+  isbn?: string;
+  title?: string;
+  author?: string;
+  updatedTime: number;
+  blockID?: string;
+  sourceType?: string;
+  syncID?: string;
+  rawBookID?: string;
+}
+
+type PreparedNormalSyncItem =
+  | { ok: true; bookID: string; title: string; isbn: string; markdown: string; targetBlockID: string; markdownLength: number; cacheUpdatedTime?: number }
+  | { ok: false; bookID: string; title: string; message: string };
+
+export interface WereadApiNormalBooksSyncResult {
+  total: number;
+  planned: number;
+  success: number;
+  failed: number;
+  skippedMp: number;
+  skippedNotReady: number;
+  skippedUnchanged: number;
+  items: Array<{
+    bookID: string;
+    title: string;
+    status: "success" | "failed" | "skipped_mp" | "skipped_not_ready" | "skipped_unchanged";
+    blockID?: string;
+    markdownLength?: number;
+    message: string;
+  }>;
+}
+
+export async function syncWereadApiNormalBooks(
+  plugin: WereadPluginLike,
+  apiKey: string,
+  template: string,
+  options: {
+    mode: "all" | "update";
+    forceBookIDs?: string[];
+  }
+): Promise<WereadApiNormalBooksSyncResult> {
+  const enrichedCache = await ensureWereadApiNotebookCacheDetails(plugin, apiKey, { limit: 100 });
+  const cache = enrichedCache.length > 0 ? enrichedCache : await plugin.loadData("temporary_weread_notebooksList");
+
+  await plugin.saveData("temporary_weread_notebooksList", cache);
+
+  if (!Array.isArray(cache) || cache.length === 0) {
+    return {
+      total: 0,
+      planned: 0,
+      success: 0,
+      failed: 1,
+      skippedMp: 0,
+      skippedNotReady: 0,
+      skippedUnchanged: 0,
+      items: [{
+        bookID: "",
+        title: "",
+        status: "failed",
+        message: "请先拉取有笔记书籍缓存",
+      }],
+    };
+  }
+
+  const preflight = await preflightWereadApiBooksSync(plugin);
+
+  const readyItems = preflight.items.filter((i) => i.status === "ready");
+  const mpItems = preflight.items.filter((i) => i.status === "skipped_mp");
+  const notReadyItems = preflight.items.filter((i) => i.status === "failed");
+
+  const forceBookIDSet = new Set((options.forceBookIDs || []).filter(Boolean));
+
+  const readyMap = new Map<string, typeof readyItems[0]>();
+  for (const item of readyItems) {
+    readyMap.set(item.bookID, item);
+  }
+
+  for (const forceBookID of forceBookIDSet) {
+    if (readyMap.has(forceBookID)) continue;
+
+    const cacheRecord = cache.find((c: any) => (c?.bookID || c?.bookId) === forceBookID);
+    if (!cacheRecord) continue;
+
+    const title = cacheRecord?.title || "";
+    const isbn = cacheRecord?.isbn || "";
+    const sourceType = cacheRecord?.sourceType || "";
+
+    let matched = false;
+    for (let attempt = 0; attempt < 8; attempt++) {
+      try {
+        const result = await findWereadApiBookTargetDoc(plugin, { bookID: forceBookID, title, isbn }, { cleanupOrphans: false });
+        if (result.success && result.blockID) {
+          readyMap.set(forceBookID, {
+            bookID: forceBookID,
+            title,
+            sourceType,
+            status: "ready",
+            matchType: result.matchType,
+            blockID: result.blockID,
+            message: "强制同步来源匹配成功",
+          });
+          matched = true;
+          break;
+        }
+      } catch {}
+      if (attempt < 7) {
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+    }
+
+    if (!matched) {
+      const existingNotReady = notReadyItems.find((i) => i.bookID === forceBookID);
+      if (!existingNotReady) {
+        notReadyItems.push({
+          bookID: forceBookID,
+          title,
+          sourceType,
+          status: "failed",
+          message: `强制同步来源匹配失败（bookID=${forceBookID}, isbn=${isbn || "空"}）`,
+        });
+      }
+    }
+  }
+
+  const finalReadyItems = Array.from(readyMap.values());
+
+  const oldNotebooks: OldRecord[] = await plugin.loadData("weread_notebooks") || [];
+  const oldMap = new Map<string, OldRecord>();
+  for (const old of oldNotebooks) {
+    if (old?.bookID) {
+      oldMap.set(old.bookID, old);
+    }
+  }
+
+  const items: Array<{
+    bookID: string;
+    title: string;
+    status: "success" | "failed" | "skipped_mp" | "skipped_not_ready" | "skipped_unchanged";
+    blockID?: string;
+    markdownLength?: number;
+    message: string;
+  }> = [];
+
+  const plannedMap = new Map<string, { bookID: string; title: string; isbn?: string; cacheUpdatedTime?: number }>();
+  let skippedUnchanged = 0;
+
+  const skippedUnchangedItems: Array<{
+    bookID: string;
+    title: string;
+    status: "skipped_unchanged";
+    blockID?: string;
+    message: string;
+  }> = [];
+
+  for (const ready of finalReadyItems) {
+    const bookID = ready.bookID;
+    const cacheRecord = cache.find((c: any) => (c?.bookID || c?.bookId) === bookID);
+    const currentUpdatedTime = cacheRecord?.updatedTime;
+    const title = ready.title || cacheRecord?.title || "";
+    const isbn = cacheRecord?.isbn || "";
+    const isForced = forceBookIDSet.has(bookID);
+
+    if (options.mode === "all") {
+      plannedMap.set(bookID, { bookID, title, isbn, cacheUpdatedTime: currentUpdatedTime });
+    } else {
+      if (isForced) {
+        plannedMap.set(bookID, { bookID, title, isbn, cacheUpdatedTime: currentUpdatedTime });
+        continue;
+      }
+      const old = oldMap.get(bookID);
+      if (!old) {
+        plannedMap.set(bookID, { bookID, title, isbn, cacheUpdatedTime: currentUpdatedTime });
+        continue;
+      }
+      if (old.updatedTime !== currentUpdatedTime) {
+        plannedMap.set(bookID, { bookID, title, isbn, cacheUpdatedTime: currentUpdatedTime });
+        continue;
+      }
+      skippedUnchanged++;
+      skippedUnchangedItems.push({
+        bookID,
+        title,
+        status: "skipped_unchanged",
+        blockID: ready.blockID,
+        message: "无变化跳过",
+      });
+      continue;
+    }
+  }
+
+  for (const mp of mpItems) {
+    items.push({
+      bookID: mp.bookID,
+      title: mp.title,
+      status: "skipped_mp",
+      message: "公众号书籍跳过",
+    });
+  }
+
+  for (const nr of notReadyItems) {
+    if (forceBookIDSet.has(nr.bookID) && readyMap.has(nr.bookID)) continue;
+    items.push({
+      bookID: nr.bookID,
+      title: nr.title,
+      status: "skipped_not_ready",
+      message: nr.message,
+    });
+  }
+
+  for (const unchanged of skippedUnchangedItems) {
+    items.push(unchanged);
+  }
+
+  let success = 0;
+  let failed = 0;
+
+  const savedPositionMark = await plugin.loadData("weread_position_mark");
+  const wereadPositionMark = normalizeWereadPositionMark(savedPositionMark);
+
+  const successBookIDs: string[] = [];
+
+  const plannedItems = Array.from(plannedMap.values());
+
+  // 阶段 1：并发准备数据（并发数 3）
+  const pool = new PromiseLimitPool<PreparedNormalSyncItem>(3);
+
+  for (const planned of plannedItems) {
+    const bookID = planned.bookID;
+    const title = planned.title;
+    const isbn = planned.isbn || "";
+
+    pool.add(async () => {
+      try {
+        const enhanced = await buildWereadApiEnhancedNotebook(apiKey, { bookID, title });
+        const markdown = renderWereadBookMarkdown(template, enhanced);
+        const targetIsbn = isbn || enhanced.bookDetails?.isbn || enhanced.isbn || "";
+
+        const targetResult = await findWereadApiBookTargetDoc(
+          plugin,
+          { bookID, title, isbn: targetIsbn },
+          { cleanupOrphans: false }
+        );
+
+        if (!targetResult.success || !targetResult.blockID) {
+          return { ok: false, bookID, title, message: targetResult.message || "同步前未找到目标文档" };
+        }
+
+        if (!markdown || typeof markdown !== "string" || markdown.length === 0) {
+          return { ok: false, bookID, title, message: "渲染后的 Markdown 内容为空" };
+        }
+
+        return { ok: true, bookID, title, isbn, markdown, targetBlockID: targetResult.blockID, markdownLength: markdown.length, cacheUpdatedTime: planned.cacheUpdatedTime };
+      } catch (error: any) {
+        return { ok: false, bookID, title, message: error?.message || "同步过程中发生未知错误" };
+      }
+    });
+  }
+
+  const preparedResults = await pool.awaitAll();
+
+  // 按 plannedItems 顺序排列
+  const preparedMap = new Map<string, PreparedNormalSyncItem>();
+  for (const result of preparedResults) {
+    preparedMap.set(result.bookID, result);
+  }
+
+  const orderedResults: PreparedNormalSyncItem[] = [];
+  for (const planned of plannedItems) {
+    orderedResults.push(preparedMap.get(planned.bookID)!);
+  }
+
+  // 阶段 2：串行写入
+  for (const prepared of orderedResults) {
+    if (prepared.ok === false) {
+      failed++;
+      items.push({
+        bookID: prepared.bookID,
+        title: prepared.title,
+        status: "failed",
+        message: prepared.message,
+      });
+      continue;
+    }
+
+    try {
+      await updateEndBlocks(plugin, prepared.targetBlockID, wereadPositionMark, prepared.markdown);
+
+      success++;
+      successBookIDs.push(prepared.bookID);
+      items.push({
+        bookID: prepared.bookID,
+        title: prepared.title,
+        status: "success",
+        blockID: prepared.targetBlockID,
+        markdownLength: prepared.markdownLength,
+        message: "同步成功",
+      });
+    } catch (error: any) {
+      failed++;
+      items.push({
+        bookID: prepared.bookID,
+        title: prepared.title,
+        status: "failed",
+        message: error?.message || "写入文档失败",
+      });
+    }
+  }
+
+  const mergedMap = new Map<string, OldRecord>();
+  for (const old of oldNotebooks) {
+    if (old?.bookID) {
+      mergedMap.set(old.bookID, { ...old });
+    }
+  }
+
+  for (const bookID of successBookIDs) {
+    const cacheRecord = cache.find((c: any) => (c?.bookID || c?.bookId) === bookID);
+    const preflightItem = preflight.items.find((i) => i.bookID === bookID) || readyMap.get(bookID);
+    const merged: OldRecord = {
+      bookID,
+      isbn: cacheRecord?.isbn || "",
+      title: cacheRecord?.title || "",
+      author: cacheRecord?.author || "",
+      updatedTime: cacheRecord?.updatedTime || 0,
+      blockID: preflightItem?.blockID || mergedMap.get(bookID)?.blockID,
+      sourceType: cacheRecord?.sourceType || "",
+      syncID: bookID,
+      rawBookID: bookID,
+    };
+    mergedMap.set(bookID, merged);
+  }
+
+  const mergedRecords = Array.from(mergedMap.values());
+  await plugin.saveData("weread_notebooks", mergedRecords);
+
+  return {
+    total: cache.length,
+    planned: plannedItems.length,
+    success,
+    failed,
+    skippedMp: mpItems.length,
+    skippedNotReady: notReadyItems.filter((i) => !forceBookIDSet.has(i.bookID) || !readyMap.has(i.bookID)).length,
+    skippedUnchanged,
+    items,
+  };
+}

@@ -1,4 +1,6 @@
-import type { WereadCookieData, PluginSettings } from "../weread/types";
+import type { PluginSettings } from "../weread/types";
+import type { WereadAuthSettings } from "../weread/api/types";
+import { WEREAD_API_PROTOCOL_VERSION } from "../weread/api/constants";
 
 interface PluginDataLoader {
     loadData: (key: string) => Promise<any>;
@@ -16,9 +18,23 @@ export function normalizeWereadPositionMark(mark: any): string {
     return normalized || DEFAULT_WEREAD_POSITION_MARK;
 }
 
-export const DEFAULT_WEREAD_COOKIE: WereadCookieData = {
-    cookies: "",
-    isQRCode: false,
+export const DEFAULT_WEREAD_AUTH_SETTINGS: WereadAuthSettings = {
+    provider: "apiKey",
+    apiKey: "",
+    verified: false,
+    verifiedAt: 0,
+    apiProtocolVersion: WEREAD_API_PROTOCOL_VERSION,
+    lastError: "",
+};
+
+export const WEREAD_API_MODE_STATE_SCHEMA = 1;
+
+export const DEFAULT_WEREAD_API_MODE_STATE = {
+    schema: 1,
+    provider: "apiKey",
+    enabledAt: 0,
+    ordinaryBookSyncEnabled: true,
+    mpSyncEnabled: true,
 };
 
 export const DEFAULT_SETTINGS: PluginSettings = {

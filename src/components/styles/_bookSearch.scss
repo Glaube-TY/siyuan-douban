@@ -9,26 +9,45 @@
         width: 100%;
     }
 
-    .search-bar {
-        display: flex;
-        align-items: center;
-        gap: 8px;
+    .search-header {
         margin-bottom: 16px;
         padding: 10px 12px;
         background: var(--b3-theme-background);
         border: 1px solid var(--b3-border-color);
         border-radius: 6px;
+    }
+
+    .search-bar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 0;
+        padding: 0;
+        background: transparent;
+        border: none;
+        border-radius: 0;
 
         .b3-text-field {
             flex: 1;
             min-width: 0;
         }
+    }
 
-        .status-indicator {
-            font-size: 12px;
-            color: var(--b3-theme-primary);
-            white-space: nowrap;
-        }
+    .search-status-row {
+        display: flex;
+        justify-content: center;
+        margin-top: 8px;
+        min-height: 18px;
+    }
+
+    .status-indicator {
+        max-width: 100%;
+        font-size: 12px;
+        color: var(--b3-theme-primary);
+        text-align: center;
+        white-space: normal;
+        word-break: break-word;
+        line-height: 1.5;
     }
 
     .book-form {
@@ -217,6 +236,14 @@
 
 @media (max-width: 600px) {
     .book-search-workspace {
+        .search-bar {
+            flex-wrap: wrap;
+        }
+
+        .search-bar .b3-text-field {
+            flex-basis: 100%;
+        }
+
         .book-form {
             .book-meta-card {
                 .book-meta-top {

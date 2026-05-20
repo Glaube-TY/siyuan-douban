@@ -51,6 +51,22 @@
         white-space: normal;
     }
 
+    .weread-api-key-help {
+        font-size: 12px;
+        color: var(--b3-theme-on-surface);
+        margin-top: 4px;
+
+        a {
+            color: var(--b3-theme-primary);
+            text-decoration: none;
+            margin-left: 4px;
+
+            &:hover {
+                text-decoration: underline;
+            }
+        }
+    }
+
     .weread-row-control {
         flex-shrink: 0;
         display: flex;
@@ -99,7 +115,7 @@
         text-align: center;
     }
 
-    .weread-cookie-warning {
+    .weread-api-warning {
         font-size: 13px;
         color: var(--b3-theme-on-surface);
         opacity: 0.8;
@@ -150,5 +166,790 @@
             color: var(--b3-theme-success);
             opacity: 1;
         }
+    }
+
+    .weread-render-preview {
+        margin-top: 8px;
+        padding: 12px;
+        max-height: 500px;
+        overflow: auto;
+        font-size: 12px;
+        line-height: 1.6;
+        font-family: var(--b3-font-family-code, monospace);
+        background-color: var(--b3-theme-surface);
+        color: var(--b3-theme-on-surface);
+        border: 1px solid var(--b3-border-color);
+        border-radius: 4px;
+        white-space: pre-wrap;
+        word-break: break-word;
+    }
+
+    .weread-collapsible-section {
+        margin: 0 0 8px;
+        border: 1px solid var(--b3-border-color);
+        border-radius: 6px;
+        padding: 0;
+
+        summary {
+            cursor: pointer;
+            padding: 10px 14px;
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--b3-theme-on-surface);
+            list-style: none;
+            user-select: none;
+
+            &::-webkit-details-marker {
+                display: none;
+            }
+
+            &::before {
+                content: "▸ ";
+                display: inline-block;
+                transition: transform 0.15s ease;
+            }
+        }
+
+        &[open] summary::before {
+            transform: rotate(90deg);
+        }
+    }
+
+    .weread-collapsible-title {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--b3-theme-on-background);
+    }
+
+    .weread-dashboard-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 10px;
+        padding: 10px 0;
+    }
+
+    @media (max-width: 900px) {
+        .weread-dashboard-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+    }
+
+    @media (max-width: 560px) {
+        .weread-dashboard-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    .weread-dashboard-card {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 10px 8px;
+        border-radius: 8px;
+        background-color: var(--b3-theme-surface);
+        border: 1px solid var(--b3-border-color);
+        text-align: center;
+        min-height: 64px;
+    }
+
+    .weread-dashboard-label {
+        font-size: 11px;
+        color: var(--b3-theme-on-surface);
+        opacity: 0.7;
+        margin-bottom: 4px;
+    }
+
+    .weread-dashboard-value {
+        font-size: 15px;
+        font-weight: 600;
+        color: var(--b3-theme-on-background);
+    }
+
+    .weread-dashboard-sub {
+        font-size: 11px;
+        color: var(--b3-theme-on-surface);
+        opacity: 0.6;
+        margin-top: 2px;
+    }
+
+    .weread-reading-stats-error {
+        font-size: 12px;
+        color: var(--b3-theme-error);
+        padding: 4px 0;
+        text-align: center;
+    }
+
+    .weread-reading-actions {
+        display: flex;
+        justify-content: center;
+        padding: 8px 0;
+    }
+}
+
+.weread-reading-stats-dialog {
+    width: 100%;
+    height: 100%;
+    flex: 1;
+    min-width: 0;
+    overflow-y: auto;
+    box-sizing: border-box;
+    padding: 16px 20px 22px;
+    background: color-mix(in srgb, var(--b3-theme-background) 92%, #ffffff 8%);
+}
+
+.weread-reading-header {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 12px;
+}
+
+.weread-reading-updated-at {
+    font-size: 12px;
+    color: var(--b3-theme-on-surface);
+    opacity: 0.5;
+    white-space: nowrap;
+}
+
+.weread-reading-summary-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px;
+    margin-bottom: 18px;
+}
+
+.weread-reading-summary-card {
+    cursor: pointer;
+    padding: 14px;
+    border-radius: 14px;
+    border: 1px solid var(--b3-border-color);
+    background-color: var(--b3-theme-surface);
+    text-align: center;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    font: inherit;
+    color: inherit;
+    width: 100%;
+    display: block;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+
+    &:hover {
+        border-color: var(--b3-theme-primary);
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+    }
+
+    &.active {
+        border-color: var(--b3-theme-primary);
+        box-shadow: 0 0 0 1px color-mix(in srgb, var(--b3-theme-primary) 60%, transparent) inset;
+        background: var(--b3-theme-surface);
+        position: relative;
+
+        &::before {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 32px;
+            height: 3px;
+            border-radius: 0 0 3px 3px;
+            background-color: var(--b3-theme-primary);
+        }
+    }
+}
+
+.weread-reading-summary-label {
+    font-size: 12px;
+    color: var(--b3-theme-on-surface);
+    opacity: 0.6;
+    margin-bottom: 6px;
+}
+
+.weread-reading-summary-value {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--b3-theme-primary);
+}
+
+.weread-reading-summary-sub {
+    font-size: 11px;
+    color: var(--b3-theme-on-surface);
+    opacity: 0.5;
+    margin-top: 4px;
+}
+
+.weread-reading-current-period {
+    min-width: 0;
+    padding: 18px;
+    border-radius: 16px;
+    border: 1px solid var(--b3-border-color);
+    background-color: var(--b3-theme-surface);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.weread-reading-current-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--b3-theme-on-background);
+    margin-bottom: 12px;
+}
+
+.weread-reading-compare {
+    font-size: 12px;
+    font-weight: 400;
+    color: var(--b3-theme-on-surface);
+    opacity: 0.6;
+    margin-left: 8px;
+}
+
+.weread-reading-metric-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+    margin-bottom: 14px;
+}
+
+.weread-reading-metric-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 10px 8px;
+    border-radius: 12px;
+    background: color-mix(in srgb, var(--b3-theme-surface) 88%, #ffffff 12%);
+    border: 1px solid color-mix(in srgb, var(--b3-border-color) 80%, transparent);
+    text-align: center;
+}
+
+.weread-reading-metric-label {
+    font-size: 11px;
+    color: var(--b3-theme-on-surface);
+    opacity: 0.6;
+    margin-bottom: 4px;
+}
+
+.weread-reading-metric-value {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--b3-theme-primary);
+}
+
+.weread-reading-content-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.weread-reading-panel {
+    min-width: 0;
+    padding: 12px;
+    border: 1px solid color-mix(in srgb, var(--b3-border-color) 80%, transparent);
+    border-radius: 12px;
+    background: color-mix(in srgb, var(--b3-theme-surface) 88%, #ffffff 12%);
+}
+
+.weread-reading-panel-books {
+    grid-column: 1 / -1;
+}
+
+.weread-reading-panel-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--b3-theme-on-surface);
+    margin-bottom: 8px;
+}
+
+.weread-reading-list-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 5px 8px;
+    font-size: 12px;
+    color: var(--b3-theme-on-surface);
+    border-bottom: 1px solid color-mix(in srgb, var(--b3-border-color) 60%, transparent);
+
+    &:last-child {
+        border-bottom: none;
+    }
+
+    span:last-child {
+        white-space: nowrap;
+        flex-shrink: 0;
+        text-align: right;
+    }
+}
+
+.weread-reading-book-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px;
+    border-bottom: 1px solid color-mix(in srgb, var(--b3-border-color) 60%, transparent);
+
+    &:last-child {
+        border-bottom: none;
+    }
+}
+
+.weread-reading-cover {
+    width: 40px;
+    height: 56px;
+    object-fit: cover;
+    border-radius: 4px;
+    flex-shrink: 0;
+}
+
+.weread-reading-book-info {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.weread-reading-book-title {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--b3-theme-on-background);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.weread-reading-book-meta {
+    font-size: 11px;
+    color: var(--b3-theme-on-surface);
+    opacity: 0.6;
+}
+
+.weread-reading-book-time {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--b3-theme-primary);
+    flex-shrink: 0;
+    white-space: nowrap;
+    opacity: 0.85;
+}
+
+.weread-reading-empty {
+    font-size: 12px;
+    color: var(--b3-theme-on-surface);
+    opacity: 0.5;
+    padding: 8px 0;
+    text-align: center;
+}
+
+.weread-reading-radar {
+    position: relative;
+    width: 100%;
+    min-height: 320px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    overflow: visible;
+}
+
+.weread-reading-radar-svg {
+    width: min(100%, 560px);
+    height: 320px;
+    overflow: visible;
+}
+
+.weread-reading-radar-hit {
+    fill: transparent;
+    pointer-events: none;
+}
+
+.weread-reading-radar-grid {
+    fill: none;
+    stroke: color-mix(in srgb, var(--b3-border-color) 50%, transparent);
+    stroke-width: 0.8;
+}
+
+.weread-reading-radar-axis {
+    stroke: color-mix(in srgb, var(--b3-border-color) 40%, transparent);
+    stroke-width: 0.6;
+}
+
+.weread-reading-radar-area {
+    fill: color-mix(in srgb, var(--b3-theme-primary) 20%, transparent);
+    stroke: var(--b3-theme-primary);
+    stroke-width: 1.5;
+    stroke-linejoin: round;
+}
+
+.weread-reading-radar-dot {
+    fill: var(--b3-theme-primary);
+    stroke: var(--b3-theme-background);
+    stroke-width: 1.5;
+    pointer-events: none;
+}
+
+.weread-reading-radar-label {
+    font-size: 12px;
+    fill: var(--b3-theme-on-surface);
+    pointer-events: all;
+    cursor: help;
+}
+
+.weread-reading-radar-tooltip {
+    position: absolute;
+    z-index: 10;
+    max-width: 220px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    border: 1px solid var(--b3-border-color);
+    background: var(--b3-theme-surface);
+    color: var(--b3-theme-on-surface);
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12);
+    font-size: 12px;
+    line-height: 1.6;
+    pointer-events: none;
+    white-space: nowrap;
+}
+
+.weread-reading-radar-tooltip .index-title {
+    font-weight: 600;
+    color: var(--b3-theme-primary);
+    margin-bottom: 2px;
+}
+
+.weread-reading-radar-empty {
+    font-size: 12px;
+    color: var(--b3-theme-on-surface);
+    opacity: 0.5;
+    padding: 12px 0;
+    text-align: center;
+}
+
+.weread-reading-panel-preference {
+    grid-column: 1 / -1;
+}
+
+@media (max-width: 760px) {
+    .weread-reading-header {
+        justify-content: flex-start;
+    }
+
+    .weread-reading-summary-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .weread-reading-content-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .weread-reading-panel-books {
+        grid-column: auto;
+    }
+}
+
+@media (max-width: 480px) {
+    .weread-reading-summary-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* 书架视图 */
+.weread-bookshelf-view {
+    width: 100%;
+    min-width: 0;
+    padding: 12px 16px 20px;
+    max-height: 72vh;
+    overflow-y: auto;
+    position: relative;
+}
+
+.weread-bookshelf-rows {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+}
+
+/* 每排书架 */
+.weread-bookshelf-row {
+    position: relative;
+    margin-bottom: 20px;
+}
+
+.weread-bookshelf-books {
+    display: grid;
+    gap: 0 16px;
+    padding: 8px 12px 0;
+    align-items: end;
+    justify-items: center;
+    min-height: 142px;
+}
+
+/* 木纹书架板 */
+.weread-bookshelf-board {
+    position: relative;
+    height: 14px;
+    margin: -3px -4px 0;
+    border-radius: 3px;
+    background:
+        linear-gradient(to bottom,
+            #d7b77a 0%,
+            #c49a52 22%,
+            #a97733 58%,
+            #8a5a23 100%
+        );
+    box-shadow:
+        0 3px 8px rgba(70, 45, 12, 0.18),
+        inset 0 1px 0 rgba(255, 255, 255, 0.28),
+        inset 0 -2px 3px rgba(80, 45, 10, 0.18);
+
+    /* 木纹纹理 */
+    &::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        border-radius: inherit;
+        background:
+            repeating-linear-gradient(90deg,
+                rgba(255, 255, 255, 0.05) 0 2px,
+                transparent 2px 10px,
+                rgba(80, 45, 10, 0.06) 10px 12px,
+                transparent 12px 22px
+            );
+        pointer-events: none;
+    }
+
+    /* 木板顶面高光 */
+    &::after {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: 2px;
+        right: 2px;
+        height: 3px;
+        border-radius: 3px 3px 0 0;
+        background: linear-gradient(to bottom,
+            rgba(255, 255, 255, 0.3),
+            rgba(255, 255, 255, 0.08)
+        );
+        pointer-events: none;
+    }
+}
+
+/* 书本 item */
+.weread-bookshelf-item {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+/* 书本容器 */
+.weread-bookshelf-book {
+    position: relative;
+    width: 78px;
+    height: 114px;
+    perspective: 600px;
+    cursor: pointer;
+    transition: transform 0.25s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+
+    /* 底部阴影 */
+    &::after {
+        content: "";
+        position: absolute;
+        bottom: -2px;
+        left: 8px;
+        right: 0;
+        height: 4px;
+        background: radial-gradient(ellipse at center, rgba(0, 0, 0, 0.12) 0%, transparent 70%);
+        border-radius: 50%;
+        transition: all 0.25s ease;
+    }
+}
+
+.weread-bookshelf-cover {
+    width: 100%;
+    height: 100%;
+    border-radius: 2px 4px 4px 2px;
+    overflow: hidden;
+    box-shadow:
+        1px 2px 6px rgba(0, 0, 0, 0.12),
+        inset -1px 0 2px rgba(0, 0, 0, 0.04);
+    transform: rotateY(-2deg);
+    transform-origin: left center;
+    transition:
+        transform 0.25s cubic-bezier(0.25, 0.46, 0.45, 0.94),
+        box-shadow 0.25s ease;
+    z-index: 1;
+    position: relative;
+
+    /* 封面内侧阴影 */
+    &::before {
+        content: "";
+        position: absolute;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        width: 6px;
+        background: linear-gradient(to right, rgba(0, 0, 0, 0.14), rgba(0, 0, 0, 0.02), transparent);
+        pointer-events: none;
+        z-index: 2;
+    }
+}
+
+.weread-bookshelf-item:hover .weread-bookshelf-book {
+    transform: translateY(-8px) scale(1.035);
+    z-index: 20;
+}
+
+.weread-bookshelf-item:hover .weread-bookshelf-book::after {
+    bottom: -4px;
+    height: 6px;
+    background: radial-gradient(ellipse at center, rgba(0, 0, 0, 0.22) 0%, transparent 75%);
+}
+
+.weread-bookshelf-item:hover .weread-bookshelf-cover {
+    transform: rotateY(-3deg);
+    box-shadow: 7px 11px 20px rgba(0, 0, 0, 0.22);
+}
+
+.weread-bookshelf-item.has-local-doc .weread-bookshelf-book {
+    cursor: pointer;
+}
+
+.weread-bookshelf-local-doc-badge {
+    position: absolute;
+    right: 5px;
+    bottom: 5px;
+    width: 16px;
+    height: 16px;
+    border-radius: 999px;
+    background: #22c55e;
+    color: #fff;
+    font-size: 10px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 4;
+    box-shadow: 0 1px 5px rgba(0, 0, 0, 0.22);
+    border: 1px solid rgba(255, 255, 255, 0.75);
+}
+
+.weread-bookshelf-cover-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.weread-bookshelf-placeholder {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg,
+        var(--b3-theme-surface) 0%,
+        color-mix(in srgb, var(--b3-theme-surface) 80%, var(--b3-theme-background)) 100%
+    );
+    border: 1px dashed var(--b3-border-color);
+    border-radius: 2px 4px 4px 2px;
+    color: var(--b3-theme-on-surface);
+    opacity: 0.5;
+    font-size: 28px;
+    font-weight: 300;
+}
+
+/* 详情浮层 - fixed 定位 */
+.weread-bookshelf-tooltip {
+    position: fixed;
+    width: 280px;
+    z-index: 9999;
+    padding: 10px 14px;
+    border-radius: 8px;
+    border: 1px solid var(--b3-border-color);
+    background: var(--b3-theme-surface);
+    color: var(--b3-theme-on-surface);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+    font-size: 12px;
+    line-height: 1.5;
+    pointer-events: none;
+    animation: weread-tooltip-fade-in 0.12s ease-out;
+}
+
+@keyframes weread-tooltip-fade-in {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+.weread-bookshelf-tooltip-title {
+    font-weight: 600;
+    font-size: 13px;
+    color: var(--b3-theme-primary);
+    margin-bottom: 6px;
+    padding-bottom: 5px;
+    border-bottom: 1px solid var(--b3-border-color);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.weread-bookshelf-tooltip-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.weread-bookshelf-tooltip-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+
+    .label {
+        color: var(--b3-theme-on-surface);
+        opacity: 0.65;
+        flex-shrink: 0;
+        margin-right: 10px;
+        font-size: 11px;
+    }
+
+    .value {
+        color: var(--b3-theme-on-surface);
+        text-align: right;
+        word-break: break-all;
+        font-size: 12px;
+    }
+}
+
+@media (max-width: 640px) {
+    .weread-bookshelf-view {
+        padding: 10px 10px 16px;
+    }
+
+    .weread-bookshelf-books {
+        gap: 0 12px;
+        padding: 6px 8px 0;
+        min-height: 120px;
+    }
+
+    .weread-bookshelf-book {
+        width: 66px;
+        height: 96px;
+    }
+}
+
+@media (max-width: 480px) {
+    .weread-bookshelf-view {
+        padding: 8px 6px 12px;
+    }
+
+    .weread-bookshelf-books {
+        gap: 0 8px;
+        padding: 4px 4px 0;
+        min-height: 100px;
+    }
+
+    .weread-bookshelf-book {
+        width: 60px;
+        height: 88px;
     }
 }

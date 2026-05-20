@@ -19,6 +19,7 @@
     const dispatch = createEventDispatcher<{
         fetchBookData: void;
         addBook: void;
+        openLocalBookShelf: void;
     }>();
 
     let coverData = "";
@@ -40,25 +41,36 @@
         <div class="error-message">{i18n.databaseStatusMessage3}</div>
     {:else if databaseStatus === "success"}
         <div class="book-search-inner">
-            <div class="search-bar">
-                <input
-                    type="text"
-                    class="b3-text-field"
-                    bind:value={inputVales}
-                    placeholder={i18n.searchPlaceholder}
-                    on:keydown={(e) =>
-                        e.key === "Enter" && dispatch("fetchBookData")}
-                />
-                <button class="b3-button b3-button--outline" on:click={() => dispatch("fetchBookData")}>{i18n.searchButton}</button>
-                <button
-                    class="b3-button b3-button--primary"
-                    on:click={() => dispatch("addBook")}
-                    disabled={!bookInfo}
-                >
-                    {i18n.addBookButton}
-                </button>
+            <div class="search-header">
+                <div class="search-bar">
+                    <input
+                        type="text"
+                        class="b3-text-field"
+                        bind:value={inputVales}
+                        placeholder={i18n.searchPlaceholder}
+                        on:keydown={(e) =>
+                            e.key === "Enter" && dispatch("fetchBookData")}
+                    />
+                    <button class="b3-button b3-button--outline" on:click={() => dispatch("fetchBookData")}>{i18n.searchButton}</button>
+                    <button
+                        class="b3-button b3-button--primary"
+                        on:click={() => dispatch("addBook")}
+                        disabled={!bookInfo}
+                    >
+                        {i18n.addBookButton}
+                    </button>
+                    <button
+                        class="b3-button b3-button--outline"
+                        on:click={() => dispatch("openLocalBookShelf")}
+                    >
+                        {i18n.localBookShelfButton || "本地书架"}
+                    </button>
+                </div>
+
                 {#if statusMessage}
-                    <span class="status-indicator">{statusMessage}</span>
+                    <div class="search-status-row">
+                        <span class="status-indicator">{statusMessage}</span>
+                    </div>
                 {/if}
             </div>
 

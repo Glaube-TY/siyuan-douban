@@ -245,23 +245,48 @@ export function buildRefMpInfoMap(
 }
 
 /**
+ * 从 bookmarkId 反推公众号文章 ID
+ * API 返回的 bookmark 没有 refMpReviewId，需要从 bookmarkId 推断
+ * bookmarkId 示例: MP_WXS_2399013300_a5HJ~5FuQm-q~8wzht9wSA_98-184
+ * 结构: {bookId}_{articleMiddle}_{range}
+ */
+function inferMpArticleIDFromBookmark(bookmark: RawBookmark): string {
+    if (bookmark.refMpReviewId) return bookmark.refMpReviewId;
+    const bookId = bookmark.bookId || "";
+    const bookmarkId = bookmark.bookmarkId || "";
+    const range = bookmark.range || "";
+    if (!bookId || !bookmarkId || !range) return "";
+    const prefix = `${bookId}_`;
+    const suffix = `_${range}`;
+    if (bookmarkId.startsWith(prefix) && bookmarkId.endsWith(suffix)) {
+        const middle = bookmarkId.slice(prefix.length, bookmarkId.length - suffix.length);
+        if (middle) return `${bookId}_${middle}`;
+    }
+    return "";
+}
+
+/**
  * 提取并标准化公众号划线记录
  * @param bookmarkPayload 划线数据负载（支持 .updated 或 .bookmarks）
  */
 export function extractMpBookmarks(bookmarkPayload: { updated?: RawBookmark[]; bookmarks?: RawBookmark[] }): MpBookmarkRecord[] {
-    // 优先读取 updated（真实接口返回），其次 bookmarks（兼容旧形式）
     const rawBookmarks = bookmarkPayload?.updated || bookmarkPayload?.bookmarks || [];
 
-    return rawBookmarks
-        .filter(b => b?.refMpReviewId)
-        .map(b => ({
+    const result: MpBookmarkRecord[] = [];
+    for (const b of rawBookmarks) {
+        if (!b) continue;
+        const articleID = b.refMpReviewId || inferMpArticleIDFromBookmark(b);
+        if (!articleID) continue;
+        result.push({
             bookId: b.bookId,
-            bookmarkId: b.bookmarkId,
+            bookmarkId: b.bookmarkId || "",
             markText: b.markText || "",
             range: b.range || "",
             createTime: normalizeWereadTimestamp(b.createTime),
-            refMpReviewId: b.refMpReviewId!
-        }));
+            refMpReviewId: articleID
+        });
+    }
+    return result;
 }
 
 /**
@@ -347,7 +372,8 @@ export function buildMpArticleGroups(
         const updatedTime = allTimes.length > 0 ? Math.max(...allTimes) : 0;
 
         // 文章级字段
-        const articleTitle = refInfo?.title || `公众号文章_${articleID}`;
+        const shortArticleID = articleID.length > 8 ? articleID.slice(-8) : articleID;
+        const articleTitle = refInfo?.title || `未知公众号文章_${shortArticleID}`;
         // 文章级封面：已停用，按当前规则统一置空字符串
         // 只保留账号级封面，文章级封面不再同步到数据库
         const articleCover = "";

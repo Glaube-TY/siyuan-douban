@@ -1,11 +1,5 @@
 // ========== 配置相关 ==========
 
-/** 微信读书 Cookie 配置 */
-export interface WereadCookieData {
-    cookies: string;
-    isQRCode: boolean;
-}
-
 /** 插件设置 */
 export interface PluginSettings {
     ratings: string[];
@@ -35,7 +29,6 @@ export interface WereadBookSummary {
     totalWords: number;
     star: number;
     ratingCount: number;
-    AISummary: string;
     noteCount: number;
     reviewCount: number;
     updatedTime: number;
@@ -58,7 +51,6 @@ export interface WereadBookDetail {
     totalWords: number;
     newRating: number;
     ratingCount: number;
-    AISummary: string;
     copyrightInfo?: {
         name?: string;
     };

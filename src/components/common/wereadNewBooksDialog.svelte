@@ -35,6 +35,7 @@
 
     // 处理中状态，防止重复点击
     let isProcessing = false;
+    let processingMessage = "";
 
     // 归一化 ISBN 避免 UI 异常
     books.forEach((book) => {
@@ -59,11 +60,9 @@
         return cleaned.length === 13 || cleaned.length === 10;
     };
 
-    // 普通书可选项：ISBN有效 且 未忽略 且 未使用BookID
-    $: selectableNormalBooks = normalBooks.filter(
-        b => isValidISBN(b.isbn) &&
-             !ignoredBooks.some(ib => ib.bookID === b.bookID) &&
-             !useBookIDs.some(ub => ub.bookID === b.bookID)
+    // 普通书可选择基础集合：仅判断 ISBN 有效，不排除忽略/使用BookID
+    $: selectableNormalBookBase = normalBooks.filter(
+        b => isValidISBN(b.isbn)
     );
 
     // 公众号可选项：未忽略
@@ -72,32 +71,103 @@
     );
 
     $: allNormalSelected =
-        selectableNormalBooks.length > 0 &&
-        selectableNormalBooks.every((book) => selectedBooks.some((b) => b.bookID === book.bookID));
+        selectableNormalBookBase.length > 0 &&
+        selectableNormalBookBase.every((book) => selectedBooks.some((b) => b.bookID === book.bookID));
 
     $: allMpSelected =
         selectableMpAccounts.length > 0 &&
         selectableMpAccounts.every((book) => selectedBooks.some((b) => b.bookID === book.bookID));
 
+    $: allNormalIgnored =
+        normalBooks.length > 0 &&
+        normalBooks.every(book => ignoredBooks.some(b => b.bookID === book.bookID));
+
+    $: allMpIgnored =
+        mpAccounts.length > 0 &&
+        mpAccounts.every(book => ignoredBooks.some(b => b.bookID === book.bookID));
+
+    $: allNormalUseBookID =
+        normalBooks.length > 0 &&
+        normalBooks.every(book => useBookIDs.some(b => b.bookID === book.bookID));
+
     // 是否有有效确认选择（选中书籍或useBookID）
     $: hasConfirmSelection = selectedBooks.length > 0 || useBookIDs.length > 0;
 
+    function getBookIDSet(items: BookItem[]) {
+        return new Set(items.map(b => b.bookID));
+    }
+
     function toggleAllNormalBooks() {
+        const ids = getBookIDSet(selectableNormalBookBase);
         if (allNormalSelected) {
-            selectedBooks = selectedBooks.filter(b => b.sourceType === "weread_mp_account" || !selectableNormalBooks.some(sb => sb.bookID === b.bookID));
+            selectedBooks = selectedBooks.filter(b => !ids.has(b.bookID));
         } else {
-            const toAdd = selectableNormalBooks.filter(b => !selectedBooks.some(sb => sb.bookID === b.bookID));
-            selectedBooks = [...selectedBooks, ...toAdd];
+            ignoredBooks = ignoredBooks.filter(b => !ids.has(b.bookID));
+            useBookIDs = useBookIDs.filter(b => !ids.has(b.bookID));
+            const exists = new Set(selectedBooks.map(b => b.bookID));
+            selectedBooks = [...selectedBooks, ...selectableNormalBookBase.filter(b => !exists.has(b.bookID))];
         }
+        selectedBooks = [...selectedBooks];
+        ignoredBooks = [...ignoredBooks];
+        useBookIDs = [...useBookIDs];
     }
 
     function toggleAllMpAccounts() {
+        const ids = getBookIDSet(selectableMpAccounts);
         if (allMpSelected) {
-            selectedBooks = selectedBooks.filter(b => b.sourceType !== "weread_mp_account" || !selectableMpAccounts.some(sb => sb.bookID === b.bookID));
+            selectedBooks = selectedBooks.filter(b => !ids.has(b.bookID));
         } else {
-            const toAdd = selectableMpAccounts.filter(b => !selectedBooks.some(sb => sb.bookID === b.bookID));
-            selectedBooks = [...selectedBooks, ...toAdd];
+            ignoredBooks = ignoredBooks.filter(b => !ids.has(b.bookID));
+            const exists = new Set(selectedBooks.map(b => b.bookID));
+            selectedBooks = [...selectedBooks, ...selectableMpAccounts.filter(b => !exists.has(b.bookID))];
         }
+        selectedBooks = [...selectedBooks];
+        ignoredBooks = [...ignoredBooks];
+        useBookIDs = [...useBookIDs];
+    }
+
+    function toggleAllNormalIgnored() {
+        const ids = getBookIDSet(normalBooks);
+        if (allNormalIgnored) {
+            ignoredBooks = ignoredBooks.filter(b => !ids.has(b.bookID));
+        } else {
+            selectedBooks = selectedBooks.filter(b => !ids.has(b.bookID));
+            useBookIDs = useBookIDs.filter(b => !ids.has(b.bookID));
+            const exists = new Set(ignoredBooks.map(b => b.bookID));
+            ignoredBooks = [...ignoredBooks, ...normalBooks.filter(b => !exists.has(b.bookID))];
+        }
+        selectedBooks = [...selectedBooks];
+        ignoredBooks = [...ignoredBooks];
+        useBookIDs = [...useBookIDs];
+    }
+
+    function toggleAllMpIgnored() {
+        const ids = getBookIDSet(mpAccounts);
+        if (allMpIgnored) {
+            ignoredBooks = ignoredBooks.filter(b => !ids.has(b.bookID));
+        } else {
+            selectedBooks = selectedBooks.filter(b => !ids.has(b.bookID));
+            const exists = new Set(ignoredBooks.map(b => b.bookID));
+            ignoredBooks = [...ignoredBooks, ...mpAccounts.filter(b => !exists.has(b.bookID))];
+        }
+        selectedBooks = [...selectedBooks];
+        ignoredBooks = [...ignoredBooks];
+        useBookIDs = [...useBookIDs];
+    }
+
+    function toggleAllNormalUseBookID() {
+        const ids = getBookIDSet(normalBooks);
+        if (allNormalUseBookID) {
+            useBookIDs = useBookIDs.filter(b => !ids.has(b.bookID));
+        } else {
+            selectedBooks = selectedBooks.filter(b => !ids.has(b.bookID));
+            ignoredBooks = ignoredBooks.filter(b => !ids.has(b.bookID));
+            const exists = new Set(useBookIDs.map(b => b.bookID));
+            useBookIDs = [...useBookIDs, ...normalBooks.filter(b => !exists.has(b.bookID))];
+        }
+        selectedBooks = [...selectedBooks];
+        ignoredBooks = [...ignoredBooks];
+        useBookIDs = [...useBookIDs];
     }
 
     function toggleBook(book: BookItem) {
@@ -169,6 +239,7 @@
 
     async function handleConfirm() {
         if (isProcessing) return;
+        processingMessage = i18n.wereadNewSourcesConfirmProcessing || "正在处理选择的新来源，请稍候...";
         isProcessing = true;
         try {
             await onConfirm(selectedBooks, ignoredBooks, useBookIDs);
@@ -179,6 +250,7 @@
 
     async function handleContinue() {
         if (isProcessing) return;
+        processingMessage = i18n.wereadNewSourcesContinueProcessing || "正在继续同步已有书籍，请稍候...";
         isProcessing = true;
         try {
             await onContinue(ignoredBooks);
@@ -194,19 +266,23 @@
 </script>
 
 <div class="notebooks-dialog">
-    <div class="confirm-btn-container">
-        <button
-            class="confirm-btn"
-            on:click={handleConfirm}
-            disabled={!hasConfirmSelection || isProcessing}
-            >{i18n.confirmSelect}</button
-        >
-        <button class="continue-btn" on:click={handleContinue}
-            disabled={isProcessing}
-            >{i18n.continueSync}</button
-        >
-        <button class="cancel-btn" on:click={handleCancel} disabled={isProcessing}>{i18n.cancelSync}</button>
-    </div>
+        <div class="confirm-btn-container">
+            <button
+                class="confirm-btn"
+                on:click={handleConfirm}
+                disabled={!hasConfirmSelection || isProcessing}
+                >{i18n.confirmSelect}</button
+            >
+            <button class="continue-btn" on:click={handleContinue}
+                disabled={isProcessing}
+                >{i18n.continueSync}</button
+            >
+            <button class="cancel-btn" on:click={handleCancel} disabled={isProcessing}>{i18n.cancelSync}</button>
+        </div>
+
+        {#if processingMessage}
+            <div class="new-sources-processing-tip">{processingMessage}</div>
+        {/if}
 
     <!-- 标签页按钮 -->
     {#if normalBooks.length > 0 || mpAccounts.length > 0}
@@ -244,8 +320,24 @@
                 </th>
                 <th class="book-title">{i18n.bookTitle1}</th>
                 <th class="book-isbn">{i18n.bookIsbn1}</th>
-                <th class="ignore-column" title={i18n.choiceExclusiveTip}>{i18n.ignore}</th>
-                <th class="use-bookid-column" title={i18n.choiceExclusiveTip}>{i18n.useBookID}</th>
+                <th class="ignore-column" title={i18n.choiceExclusiveTip}>
+                    <input
+                        type="checkbox"
+                        title={i18n.ignoreAll || "全部忽略"}
+                        on:change={toggleAllNormalIgnored}
+                        checked={allNormalIgnored}
+                    />
+                    {i18n.ignore}
+                </th>
+                <th class="use-bookid-column" title={i18n.choiceExclusiveTip}>
+                    <input
+                        type="checkbox"
+                        title={i18n.useBookIDAll || "全部使用BookID"}
+                        on:change={toggleAllNormalUseBookID}
+                        checked={allNormalUseBookID}
+                    />
+                    {i18n.useBookID}
+                </th>
             </tr>
         </thead>
         <tbody>
@@ -330,7 +422,15 @@
                 <th class="book-title">{i18n.mpAccountName}</th>
                 <th class="book-intro">{i18n.mpAccountIntro}</th>
                 <th class="note-count-column">{i18n.noteReviewCount}</th>
-                <th class="ignore-column">{i18n.ignore}</th>
+                <th class="ignore-column">
+                    <input
+                        type="checkbox"
+                        title={i18n.ignoreAll || "全部忽略"}
+                        on:change={toggleAllMpIgnored}
+                        checked={allMpIgnored}
+                    />
+                    {i18n.ignore}
+                </th>
             </tr>
         </thead>
         <tbody>
@@ -399,6 +499,19 @@
                     color: white;
                 }
             }
+        }
+
+        .new-sources-processing-tip {
+            margin: 8px auto 12px;
+            padding: 8px 12px;
+            max-width: 520px;
+            border: 1px solid var(--b3-border-color);
+            border-radius: 8px;
+            background: color-mix(in srgb, var(--b3-theme-primary) 8%, var(--b3-theme-surface));
+            color: var(--b3-theme-on-surface);
+            text-align: center;
+            font-size: 13px;
+            line-height: 1.5;
         }
 
         .tab-bar {

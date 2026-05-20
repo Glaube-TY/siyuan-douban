@@ -1,17 +1,19 @@
 <script lang="ts">
     import { onMount } from "svelte";
-import { I18N, showMessage } from "siyuan";
-import { sql, reloadAttributeView } from "../api";
-import { fetchDoubanBook, fetchBookHtml } from "../utils/douban/book";
-import { openInteractiveSearchWindow } from "../utils/douban/book/searchBook";
-import "./styles/main.scss";
-import { loadAVData } from "../utils/bookHandling";
-import { svelteDialog } from "../libs/dialog";
-import TemplateEditorDialog from "./common/templateEditorDialog.svelte";
-import BookSearchTab from "./tabs/BookSearchTab.svelte";
-import UserSettingsTab from "./tabs/UserSettingsTab.svelte";
-import WereadTab from "./tabs/WereadTab.svelte";
-import AboutTab from "./tabs/AboutTab.svelte";
+    import { I18N, showMessage } from "siyuan";
+    import { sql, reloadAttributeView } from "../api";
+    import { fetchDoubanBook, fetchBookHtml } from "../utils/douban/book";
+    import { openInteractiveSearchWindow } from "../utils/douban/book/searchBook";
+    import "./styles/main.scss";
+    import { loadAVData } from "../utils/bookHandling";
+    import { loadLocalBookShelfBooks } from "../utils/bookHandling/loadLocalBookShelfBooks";
+    import { svelteDialog } from "../libs/dialog";
+    import TemplateEditorDialog from "./common/templateEditorDialog.svelte";
+    import BookSearchTab from "./tabs/BookSearchTab.svelte";
+    import UserSettingsTab from "./tabs/UserSettingsTab.svelte";
+    import WereadTab from "./tabs/WereadTab.svelte";
+    import AboutTab from "./tabs/AboutTab.svelte";
+    import { createLocalBookShelfDialog } from "../utils/weread/wereadDialogs";
 
     export let i18n: I18N;
     export let plugin: any;
@@ -52,10 +54,30 @@ import AboutTab from "./tabs/AboutTab.svelte";
     }
 
     const tabs: TabItem[] = [
-        { key: "search", label: i18n.topTabname1, iconType: "siyuan", icon: "iconSearch" },
-        { key: "settings", label: i18n.topTabname2, iconType: "siyuan", icon: "iconSettings" },
-        { key: "weread", label: i18n.topTabname3, iconType: "image", icon: wereadIconUrl },
-        { key: "about", label: i18n.topTabname4, iconType: "siyuan", icon: "iconInfo" },
+        {
+            key: "search",
+            label: i18n.topTabname1,
+            iconType: "siyuan",
+            icon: "iconSearch",
+        },
+        {
+            key: "settings",
+            label: i18n.topTabname2,
+            iconType: "siyuan",
+            icon: "iconSettings",
+        },
+        {
+            key: "weread",
+            label: i18n.topTabname3,
+            iconType: "image",
+            icon: wereadIconUrl,
+        },
+        {
+            key: "about",
+            label: i18n.topTabname4,
+            iconType: "siyuan",
+            icon: "iconInfo",
+        },
     ];
     let activeTabKey = "search";
 
@@ -210,6 +232,24 @@ import AboutTab from "./tabs/AboutTab.svelte";
         }
     }
 
+    async function openLocalBookShelf() {
+        if (!avID) {
+            showMessage(i18n.localBookShelfDatabaseMissing || "请先设置并验证本地书籍数据库");
+            return;
+        }
+
+        try {
+            const books = await loadLocalBookShelfBooks(avID);
+            if (!books.length) {
+                showMessage(i18n.localBookShelfEmpty || "本地书架暂无书籍");
+                return;
+            }
+            createLocalBookShelfDialog(plugin, books)();
+        } catch (error) {
+            showMessage(i18n.localBookShelfLoadFailed || "本地书架加载失败");
+        }
+    }
+
     // 打开模板编辑器弹窗
     function openTemplateEditor() {
         originalTemplate = noteTemplate;
@@ -326,11 +366,19 @@ import AboutTab from "./tabs/AboutTab.svelte";
                     on:click={() => (activeTabKey = tab.key)}
                 >
                     {#if tab.iconType === "siyuan"}
-                        <svg class="plugin-settings-nav-icon" aria-hidden="true">
+                        <svg
+                            class="plugin-settings-nav-icon"
+                            aria-hidden="true"
+                        >
                             <use href={`#${tab.icon}`}></use>
                         </svg>
                     {:else if tab.iconType === "image"}
-                        <img class="plugin-settings-nav-icon plugin-settings-nav-icon--image" src={tab.icon} alt="" aria-hidden="true" />
+                        <img
+                            class="plugin-settings-nav-icon plugin-settings-nav-icon--image"
+                            src={tab.icon}
+                            alt=""
+                            aria-hidden="true"
+                        />
                     {/if}
                     <span>{tab.label}</span>
                 </button>
@@ -354,6 +402,7 @@ import AboutTab from "./tabs/AboutTab.svelte";
                     bind:readingStatusIndex
                     on:fetchBookData={fetchBookData}
                     on:addBook={handleAddBook}
+                    on:openLocalBookShelf={openLocalBookShelf}
                     {databaseStatus}
                 />
             {:else if activeTabKey === "settings"}
@@ -378,5 +427,3 @@ import AboutTab from "./tabs/AboutTab.svelte";
         </div>
     </div>
 </div>
-
-

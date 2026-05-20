@@ -4,20 +4,9 @@ import firstPage from "./components/common/firstDialog.svelte";
 import setPage from "./components/index.svelte";
 
 import { svelteDialog } from "./libs/dialog";
-import { syncWereadNotes, buildTemporaryNotebookList } from "./utils/weread/syncWereadNotes";
-import { loadPluginData, DEFAULT_WEREAD_SETTINGS, DEFAULT_WEREAD_COOKIE } from "./utils/core/configDefaults";
-import {
-    createWereadQRCodeDialog,
-    checkWrVid,
-    verifyCookie,
-} from "@/utils/weread/loginWeread";
-import type { WereadBookDetail } from "./utils/weread/types";
-
-async function handleVerifiedCookieSync(plugin: PluginDouban, cookies: string, bookCache: Map<string, Promise<WereadBookDetail>>) {
-    const notebooksList = await buildTemporaryNotebookList(plugin, cookies, bookCache);
-    await plugin.saveData("temporary_weread_notebooksList", notebooksList);
-    await syncWereadNotes(plugin, cookies, true, bookCache);
-}
+import { loadPluginData, DEFAULT_WEREAD_SETTINGS, DEFAULT_WEREAD_AUTH_SETTINGS } from "./utils/core/configDefaults";
+import { autoSyncWereadApi } from "./utils/weread/api/autoSyncWereadApi";
+import { formatWereadApiAutoSyncResultSummary } from "./utils/weread/api/formatWereadApiSyncResult";
 
 const STORAGE_NAME = "menu-config";
 
@@ -59,73 +48,29 @@ export default class PluginDouban extends Plugin {
         this.registerCommand();
     }
 
-    // 基于 cookie 字符串校验并返回状态
-    private async verifyCookieStatus(cookies: string): Promise<{ userVid: string; success: boolean; loginDue: boolean }> {
-        const result = checkWrVid(cookies);
-        const userVid = result.userVid;
-        if (!userVid) {
-            return { userVid: "", success: false, loginDue: false };
-        }
-        const verifyResult = await verifyCookie(this, cookies, userVid);
-        return { userVid, success: verifyResult.success, loginDue: verifyResult.loginDue };
-    }
-
-    // 二维码刷新后保存 cookie 并从本地重读
-    private async saveAndReloadCookies(refreshedCookies: string): Promise<string> {
-        const savedata = { cookies: refreshedCookies, isQRCode: true };
-        await this.saveData("weread_cookie", savedata);
-        const reloaded = await loadPluginData(this, "weread_cookie", DEFAULT_WEREAD_COOKIE);
-        return reloaded.cookies;
-    }
-
     async onLayoutReady() {
         const wereadSetting = await loadPluginData(this, "weread_settings", DEFAULT_WEREAD_SETTINGS);
         const autoSync = wereadSetting.autoSync;
-        const savedCookie = await loadPluginData(this, "weread_cookie", DEFAULT_WEREAD_COOKIE);
-        const cookies = savedCookie.cookies;
 
-        if (autoSync) {
-            if (!cookies || cookies.length === 0) {
-                showMessage(this.i18n.showMessage22);
-                return;
-            }
-
-            const initialStatus = await this.verifyCookieStatus(cookies);
-
-            if (!initialStatus.userVid && !savedCookie.isQRCode) {
-                showMessage(this.i18n.showMessage17);
-                return;
-            }
-
-            if (initialStatus.userVid) {
-                if (initialStatus.loginDue) {
-                    if (!window.navigator.userAgent.includes("Electron") || typeof window.require !== "function") {
-                        return;
-                    }
-
-                    showMessage(this.i18n.showMessage19)
-                    try {
-                        const refreshedCookies = await createWereadQRCodeDialog(this.i18n, false);
-                        const reloadedCookies = await this.saveAndReloadCookies(refreshedCookies);
-                        const reloadedStatus = await this.verifyCookieStatus(reloadedCookies);
-
-                        if (reloadedStatus.success) {
-                            showMessage(this.i18n.showMessage20);
-                            const bookCache = new Map<string, Promise<WereadBookDetail>>();
-                            await handleVerifiedCookieSync(this, reloadedCookies, bookCache);
-                        } else {
-                            showMessage(this.i18n.showMessage18);
-                        }
-                    } catch (error) {
-                        showMessage(this.i18n.showMessage18);
-                    }
-                } else if (initialStatus.success) {
-                    showMessage(this.i18n.showMessage21);
-                    const bookCache = new Map<string, Promise<WereadBookDetail>>();
-                    await handleVerifiedCookieSync(this, cookies, bookCache);
-                }
-            }
+        if (!autoSync) {
+            return;
         }
+
+        const auth = await loadPluginData(this, "weread_auth_settings", DEFAULT_WEREAD_AUTH_SETTINGS);
+
+        if (auth.verified && auth.apiKey) {
+            try {
+                showMessage(this.i18n.wereadApiAutoSyncStart || "微信读书自动同步开始");
+                const result = await autoSyncWereadApi(this);
+                const summary = formatWereadApiAutoSyncResultSummary(result, { maxTitles: 3 });
+                showMessage(summary || (this.i18n.wereadApiAutoSyncSuccess || "微信读书自动同步完成"));
+            } catch (error: any) {
+                showMessage(`${this.i18n.wereadApiAutoSyncFailed || "微信读书自动同步失败"}：${error?.message || ""}`);
+            }
+            return;
+        }
+
+        showMessage("请先验证微信读书 API Key");
     }
 
     private showFirstDialog() {
@@ -157,7 +102,7 @@ export default class PluginDouban extends Plugin {
     }
 
     private showSetDialog() {
-        const { dialog } = svelteDialog({
+        const dialogRef = svelteDialog({
             title: "",
             width: "900px",
             height: "720px",
@@ -171,8 +116,18 @@ export default class PluginDouban extends Plugin {
                 });
             }
         });
-        dialog.element.classList.add("siyuan-douban-settings-dialog");
-        this.lockSettingsDialogOuterScroll(dialog.element);
+        dialogRef.dialog.element.classList.add("siyuan-douban-settings-dialog");
+        this.lockSettingsDialogOuterScroll(dialogRef.dialog.element);
+        (this as any).closeSettingsDialog = () => {
+            dialogRef?.close?.();
+        };
+        const originalClose = dialogRef.close?.bind(dialogRef);
+        dialogRef.close = () => {
+            originalClose?.();
+            if ((this as any).closeSettingsDialog) {
+                (this as any).closeSettingsDialog = null;
+            }
+        };
     }
 
     private lockSettingsDialogOuterScroll(dialogElement: HTMLElement) {

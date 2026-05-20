@@ -3,23 +3,33 @@
     import { sql, getAttributeView, removeAttributeViewBlocks } from "@/api";
     import { onMount } from "svelte";
     import { svelteDialog } from "@/libs/dialog";
-    import PromiseLimitPool from "@/libs/promise-pool";
     import {
-        createWereadDialog,
-        createWereadQRCodeDialog,
         createNotebooksDialog,
         createBookShelfDialog,
         createWereadNotesTemplateDialog,
-        checkWrVid,
-        verifyCookie,
-    } from "@/utils/weread/loginWeread";
+        createWereadReadingStatsDialog,
+    } from "@/utils/weread/wereadDialogs";
     import {
-        getNotebooks,
-        getBook,
-        getBookShelf,
-    } from "@/utils/weread/wereadInterface";
-    import { syncWereadNotes, buildTemporaryNotebookList } from "@/utils/weread/syncWereadNotes";
-    import { loadPluginData, DEFAULT_WEREAD_COOKIE, DEFAULT_WEREAD_SETTINGS, normalizeWereadPositionMark } from "@/utils/core/configDefaults";
+        loadPluginData,
+        DEFAULT_WEREAD_SETTINGS,
+        DEFAULT_WEREAD_AUTH_SETTINGS,
+        normalizeWereadPositionMark,
+    } from "@/utils/core/configDefaults";
+    import {
+        maskWereadApiKey,
+        validateWereadApiKey,
+    } from "@/utils/weread/api/wereadApiAuth";
+    import { syncWereadApiNormalBooks } from "@/utils/weread/api/syncWereadApiNormalBooks";
+    import { syncWereadApiMpAccounts } from "@/utils/weread/api/syncWereadApiMpAccounts";
+    import { WEREAD_API_PROTOCOL_VERSION } from "@/utils/weread/api/constants";
+    import { ensureWereadApiModeState } from "@/utils/weread/api/wereadApiModeState";
+    import { showWereadApiNewSourcesDialogAndSync } from "@/utils/weread/api/handleWereadApiNewSources";
+    import { buildApiBookShelf } from "@/utils/weread/api/buildApiBookShelf";
+    import { attachWereadApiLocalNoteDocs } from "@/utils/weread/api/findWereadApiBookTargetDoc";
+    import { buildWereadApiNotebookCache } from "@/utils/weread/api/buildWereadApiNotebookCache";
+    import { buildWereadApiReadingStats } from "@/utils/weread/api/buildWereadApiReadingStats";
+    import { formatReadingDuration } from "@/utils/weread/api/formatWereadReadingStats";
+    import type { WereadReadingDashboard } from "@/utils/weread/api/buildWereadApiReadingStats";
 
     import wereadManageISBN from "@/components/common/wereadManageISBN.svelte";
     import wereadIgnoredBooksDialog from "@/components/common/wereadIgnoredBooksDialog.svelte";
@@ -100,7 +110,19 @@
 
     export let i18n: I18N;
     export let plugin: any;
-    export let cookies = "";
+
+    function i18nText(key: string, fallback = ""): string {
+        const value = i18n?.[key];
+        return typeof value === "string" ? value : fallback;
+    }
+
+    function i18nReplace(key: string, fallback: string, replacements: Record<string, string>): string {
+        let text = i18nText(key, fallback);
+        for (const [from, to] of Object.entries(replacements)) {
+            text = text.replace(from, to);
+        }
+        return text;
+    }
 
     export let wereadTemplates = "";
     export let wereadMpTemplates = "";
@@ -111,47 +133,108 @@
     let autoSync = false;
     let skipNewBookCheck = false;
     let isSyncing = false;
-    let userVid = "";
-    let checkMessage = "";
-    let notebookdata: any = "";
 
-    let latestSyncTime = "";
     let notebooksInfo = "";
     let notebooksList = [];
     let loadingBookShelf = false;
+
+    let readingStats: WereadReadingDashboard | null = null;
+    let isLoadingReadingStats = false;
+    let readingStatsError = "";
 
     // 微信读书书籍列表预加载状态
     let isNotebookListLoading = false;
     let isNotebookListReady = false;
 
-    // 保存二维码 cookie 后重新从本地读取
-    async function saveAndReloadQRCodeCookies(autoCookies: string): Promise<string> {
-        const savedata = { cookies: autoCookies, isQRCode: true };
-        await plugin.saveData("weread_cookie", savedata);
-        const reloaded = await loadPluginData(plugin, "weread_cookie", DEFAULT_WEREAD_COOKIE);
-        return reloaded.cookies;
+    // API Key 设置状态
+    let wereadApiKeyInput = "";
+    let wereadApiKeyVerified = false;
+    let wereadApiKeyVerifiedAt = 0;
+    let wereadApiKeyLastError = "";
+    let isVerifyingWereadApiKey = false;
+
+    let isPreparingWereadApiSync = false;
+    let wereadApiSyncPreparingMessage = "";
+
+    let wereadApiModeState: any = null;
+
+    async function runWereadApiManualSync(mode: "all" | "update", options?: { manageLoading?: boolean; forceBookIDs?: string[]; forceMpBookIDs?: string[] }) {
+        const template = (await plugin.loadData("weread_templates") || "").trim();
+        if (!template) {
+            showMessage(i18n.wereadApiManualSyncNeedTemplate || "请先配置微信读书笔记模板");
+            return;
+        }
+        const apiKey = wereadApiKeyInput.trim();
+        const manageLoading = options?.manageLoading !== false;
+        if (manageLoading) {
+            isSyncing = true;
+        }
+        try {
+            const normalResult = await syncWereadApiNormalBooks(plugin, apiKey, template, { mode, forceBookIDs: options?.forceBookIDs || [] });
+
+            const mpTemplate = (await plugin.loadData("weread_mp_templates") || "").trim();
+            let mpResult: any = null;
+            if (mpTemplate) {
+                mpResult = await syncWereadApiMpAccounts(plugin, apiKey, mpTemplate, { mode, forceBookIDs: options?.forceMpBookIDs || [] });
+            }
+
+            const totalPlanned = normalResult.planned + (mpResult?.planned || 0);
+            const totalFailed = normalResult.failed + (mpResult?.failed || 0);
+
+            if (totalPlanned === 0) {
+                showMessage(i18n.wereadSyncNoWork || "没有需要同步的内容");
+            } else if (totalFailed > 0 && totalPlanned === totalFailed) {
+                showMessage(i18n.wereadSyncFinishedWithError || "微信读书同步完成，部分内容失败");
+            } else {
+                showMessage(i18n.wereadSyncFinished || "微信读书同步完成");
+            }
+        } catch (error) {
+            showMessage(`${i18n.wereadApiManualSyncFailed || "同步失败"}：${error?.message || ""}`);
+        } finally {
+            if (manageLoading) {
+                isSyncing = false;
+            }
+        }
     }
 
-    // 基于 cookie 字符串执行校验并更新状态，返回校验结果
-    async function verifyAndUpdateStatus(cookieStr: string): Promise<{ success: boolean; userVid: string; loginDue: boolean }> {
-        const result = checkWrVid(cookieStr);
-        const vid = result.userVid;
-        userVid = vid;
-
-        if (vid) {
-            const verifyResult = await verifyCookie(plugin, cookieStr, vid);
-            checkMessage = verifyResult.message;
-            return { success: verifyResult.success, userVid: vid, loginDue: verifyResult.loginDue };
-        } else {
-            checkMessage = i18n.checkMessage6;
-            showMessage(i18n.checkMessage6);
-            return { success: false, userVid: "", loginDue: false };
+    async function handleWereadApiManualSyncWithNewSourceDialog(mode: "all" | "update") {
+        if (isSyncing || isPreparingWereadApiSync) return;
+        if (!isNotebookListReady) {
+            showMessage(i18n.showMessage15);
+            return;
+        }
+        const template = (await plugin.loadData("weread_templates") || "").trim();
+        if (!template) {
+            showMessage(i18n.wereadApiManualSyncNeedTemplate || "请先配置微信读书笔记模板");
+            return;
+        }
+        const apiKey = wereadApiKeyInput.trim();
+        isPreparingWereadApiSync = true;
+        isSyncing = true;
+        wereadApiSyncPreparingMessage = i18n.wereadApiCheckingNewSources || "正在检查微信读书新来源，请稍候...";
+        showMessage(wereadApiSyncPreparingMessage);
+        try {
+            const result = await showWereadApiNewSourcesDialogAndSync(
+                plugin,
+                apiKey,
+                mode,
+                (forceOptions?) => runWereadApiManualSync(mode, { manageLoading: false, ...forceOptions })
+            );
+            if (result === "cancelled") {
+                showMessage(i18n.wereadSyncCancelled || "同步已取消");
+            }
+        } catch (error) {
+            const message = error?.message || "同步失败";
+            showMessage(`${i18n.wereadApiManualSyncFailed || "同步失败"}：${message}`);
+        } finally {
+            isPreparingWereadApiSync = false;
+            wereadApiSyncPreparingMessage = "";
+            isSyncing = false;
         }
     }
 
     onMount(async () => {
         // 加载本地配置
-        const savedcookies = await loadPluginData(plugin, "weread_cookie", DEFAULT_WEREAD_COOKIE);
         const savedPositionMark = await plugin.loadData("weread_position_mark");
         wereadPositionMark = normalizeWereadPositionMark(savedPositionMark);
         const wereadSetting = await loadPluginData(plugin, "weread_settings", DEFAULT_WEREAD_SETTINGS);
@@ -166,120 +249,155 @@
             wereadMpTemplates = savedMpTemplates;
         }
 
-        // 检查并更新登录信息
-        cookies = savedcookies.cookies;
-        let shouldLoadNotebooks = false;
+        await loadWereadAuthSettings();
 
-        if (cookies) {
-            // 从 cookie 中获取用户ID
-            const result = checkWrVid(cookies);
-            userVid = result.userVid;
+        if (wereadApiKeyVerified && wereadApiKeyInput.trim()) {
+            const cached = await plugin.loadData("temporary_weread_notebooksList");
+            if (Array.isArray(cached) && cached.length > 0) {
+                notebooksList = cached;
+                applyNotebookListState(cached);
+            }
 
-            // 判断是否从 cookie 中获取用户ID成功
-            if (userVid) {
-                if (savedcookies.isQRCode) {
-                    // 扫码登录：使用 Electron 隐藏窗口校验
-                    const verifyResult = await verifyAndUpdateStatus(cookies);
+            await loadCachedReadingStats();
 
-                    // 判断是否需要重新登录
-                    if (verifyResult.loginDue) {
-                        checkMessage = i18n.checkMessage1;
-                        try {
-                            // 创建不可见的登陆窗口用于刷新登录信息
-                            const refreshedCookies = await createWereadQRCodeDialog(
-                                i18n,
-                                false,
-                            );
+            try {
+                await getNotebooksList({ preserveCacheOnFail: true });
+            } catch {
+            }
 
-                            cookies = await saveAndReloadQRCodeCookies(refreshedCookies);
-                            const reloadedVerify = await verifyAndUpdateStatus(cookies);
-
-                            if (reloadedVerify.success) {
-                                shouldLoadNotebooks = true;
-                            } else if (!reloadedVerify.userVid) {
-                                return;
-                            }
-                        } catch (error) {
-                            checkMessage = i18n.checkMessage6;
-                            showMessage(i18n.checkMessage6);
-                            return;
-                        }
-                    } else if (verifyResult.success) {
-                        // 登录有效，标记需要加载书单
-                        shouldLoadNotebooks = true;
-                    }
-                } else {
-                    // 手动 Cookie 登录：使用 forwardProxy 校验
-                    const verifyResult = await verifyAndUpdateStatus(cookies);
-                    if (verifyResult.success) {
-                        shouldLoadNotebooks = true;
-                    }
-                }
-
-                // 统一加载书单（最多一次）
-                if (shouldLoadNotebooks) {
-                    await getNotebooksList();
-                }
-            } else {
-                showMessage(i18n.showMessage16);
+            try {
+                await refreshReadingStats({ silent: true });
+            } catch {
             }
         } else {
-            checkMessage = i18n.checkMessage7;
+            await ensureWereadApiModeState(plugin);
+            wereadApiModeState = await plugin.loadData("weread_api_mode_state");
         }
     });
 
-    async function getNotebooksList() {
-        // 开始加载：重置状态，清理旧 ready 标记
+    function applyNotebookListState(list: any[]) {
+        notebooksList = list;
+        isNotebookListReady = true;
+
+        const totalNoteCount = list.reduce(
+            (sum, book) => sum + (book.totalNoteCount ?? book.noteCount + book.reviewCount + book.bookmarkCount),
+            0,
+        );
+
+        const now = new Date();
+        const latestSyncTime = `${now.toLocaleDateString()} ${now.toLocaleTimeString()}`;
+
+        notebooksInfo = `
+            <div class="summary-info">
+                ${i18nReplace("syncTime", "截止同步时间：{time}", {
+                    "{time}": `<span class="time">${latestSyncTime}</span>`
+                })}
+            </div>
+            <div class="summary-info">
+                ${i18nReplace("notebooksSummary", "你在<span class=\"count\">{bookCount}</span>本书中做了<span class=\"count\">{noteCount}</span>条笔记~", {
+                    "{bookCount}": `<span class="count">${list.length}</span>`,
+                    "{noteCount}": `<span class="count">${totalNoteCount}</span>`,
+                })}
+            </div>
+        `;
+    }
+
+    async function getNotebooksList(options?: { preserveCacheOnFail?: boolean }) {
         isNotebookListLoading = true;
-        isNotebookListReady = false;
-        await plugin.saveData("weread_notebooksList_readyAt", null);
+        if (!options?.preserveCacheOnFail) {
+            isNotebookListReady = false;
+            await plugin.saveData("weread_notebooksList_readyAt", null);
+        }
 
         try {
-            notebookdata = await getNotebooks(plugin, cookies);
+            const trimmedKey = wereadApiKeyInput.trim();
+            if (wereadApiKeyVerified && trimmedKey) {
+                notebooksList = await buildWereadApiNotebookCache(trimmedKey);
 
-            const syncDate = new Date(notebookdata.synckey * 1000);
-            latestSyncTime = `${syncDate.toLocaleDateString()} ${syncDate.toLocaleTimeString()}`;
+                await plugin.saveData("temporary_weread_notebooksList", notebooksList);
+                await plugin.saveData("weread_notebooksList_readyAt", Date.now());
 
-            // 使用共用的 helper 构建列表，确保字段结构统一
-            notebooksList = await buildTemporaryNotebookList(plugin, cookies);
+                isNotebookListReady = true;
 
-            // 保存缓存和 ready 标记（必须在设置 ready 状态之前完成）
-            await plugin.saveData("temporary_weread_notebooksList", notebooksList);
-            await plugin.saveData("weread_notebooksList_readyAt", Date.now());
+                const now = new Date();
+                const latestSyncTime = `${now.toLocaleDateString()} ${now.toLocaleTimeString()}`;
 
-            // 缓存保存成功后，才设置 ready 状态并更新界面
-            isNotebookListReady = true;
+                const totalNoteCount = notebooksList.reduce(
+                    (sum, book) => sum + (book.totalNoteCount ?? book.noteCount + book.reviewCount + book.bookmarkCount),
+                    0,
+                );
 
-            const totalNotes = notebooksList.reduce(
-                (sum, book) => sum + book.noteCount,
-                0,
-            );
-
-            notebooksInfo = `
-                <div class="summary-info">
-                    ${i18n.syncTime.replace("{time}", `<span class="time">${latestSyncTime}</span>`)}
-                </div>
-                <div class="summary-info">
-                    ${i18n.notebooksSummary
-                        .replace(
-                            "{bookCount}",
-                            `<span class="count">${notebookdata.totalBookCount}</span>`,
-                        )
-                        .replace(
-                            "{noteCount}",
-                            `<span class="count">${totalNotes}</span>`,
-                        )}
-                </div>
-            `;
+                notebooksInfo = `
+                    <div class="summary-info">
+                        ${i18nReplace("syncTime", "截止同步时间：{time}", {
+                            "{time}": `<span class="time">${latestSyncTime}</span>`
+                        })}
+                    </div>
+                    <div class="summary-info">
+                        ${i18nReplace("notebooksSummary", "你在<span class=\"count\">{bookCount}</span>本书中做了<span class=\"count\">{noteCount}</span>条笔记~", {
+                            "{bookCount}": `<span class="count">${notebooksList.length}</span>`,
+                            "{noteCount}": `<span class="count">${totalNoteCount}</span>`,
+                        })}
+                    </div>
+                `;
+            }
         } catch (error) {
-            // 加载失败：确保状态为未就绪，并清理旧缓存避免误导后续手动同步
-            isNotebookListReady = false;
-            await plugin.saveData("temporary_weread_notebooksList", null);
+            if (options?.preserveCacheOnFail) {
+                if (!notebooksList || notebooksList.length === 0) {
+                    isNotebookListReady = false;
+                }
+            } else {
+                isNotebookListReady = false;
+                await plugin.saveData("temporary_weread_notebooksList", null);
+                await plugin.saveData("weread_notebooksList_readyAt", null);
+            }
             console.error("[微信读书] 获取书籍列表失败:", error);
             throw error;
         } finally {
             isNotebookListLoading = false;
         }
+    }
+
+    async function loadCachedReadingStats() {
+        try {
+            const cached = await plugin.loadData("weread_reading_stats_cache");
+            if (cached && cached.weekly && cached.monthly) {
+                readingStats = cached;
+            }
+        } catch (e) {
+            console.warn("[微信读书] 加载阅读统计缓存失败");
+        }
+    }
+
+    async function refreshReadingStats(options?: { silent?: boolean }) {
+        const apiKey = wereadApiKeyInput.trim();
+        if (!wereadApiKeyVerified || !apiKey) return;
+
+        isLoadingReadingStats = true;
+        try {
+            const result = await buildWereadApiReadingStats(apiKey);
+            readingStats = result;
+            readingStatsError = "";
+            await plugin.saveData("weread_reading_stats_cache", result);
+        } catch (error: any) {
+            readingStatsError = error?.message || i18nText("wereadReadingStatsLoadFailed", "阅读统计加载失败");
+            if (!options?.silent) {
+                showMessage(readingStatsError);
+            }
+        } finally {
+            isLoadingReadingStats = false;
+        }
+    }
+
+    async function openReadingStatsDialog() {
+        if (!readingStats) {
+            await refreshReadingStats({ silent: false });
+        }
+        if (!readingStats) {
+            showMessage(i18nText("wereadReadingStatsEmpty", "暂无阅读统计数据"));
+            return;
+        }
+        createWereadReadingStatsDialog(plugin, readingStats)();
     }
 
     async function openCachedNotebooksDialog() {
@@ -299,75 +417,31 @@
             cachedNotebooks = [];
         }
 
-        const showDialog = createNotebooksDialog(plugin, cachedNotebooks);
+        let enhancedBooks = cachedNotebooks;
+        try {
+            enhancedBooks = await attachWereadApiLocalNoteDocs(plugin, cachedNotebooks);
+        } catch {
+        }
+
+        const showDialog = createNotebooksDialog(plugin, enhancedBooks);
         showDialog();
     }
 
     async function openBookShelf() {
+        const apiKey = wereadApiKeyInput.trim();
+        if (!wereadApiKeyVerified || !apiKey) {
+            showMessage("请先验证微信读书 API Key");
+            return;
+        }
         loadingBookShelf = true;
         try {
-            const bookShelfInfo = await getBookShelf(plugin, cookies, userVid);
-            const basicshelf = bookShelfInfo.books;
-
-            // 使用并发池限制批量请求（并发数：5）
-            const shelfPool = new PromiseLimitPool<{
-                noteCount: number;
-                reviewCount: number;
-                bookID: string;
-                title: string;
-                author: string;
-                cover: string;
-                format: string;
-                price: number;
-                introduction: string;
-                publishTime: string;
-                category: string;
-                isbn: string;
-                publisher: string;
-                totalWords: number;
-                star: number;
-                ratingCount: number;
-                AISummary: string;
-            }>(5);
-
-            basicshelf.forEach((b: any) => {
-                shelfPool.add(async () => {
-                    try {
-                        const details = await getBook(plugin, cookies, b.bookId);
-                        return {
-                            noteCount:
-                                notebooksList.find(
-                                    (n) => n.bookID === details.bookId,
-                                )?.noteCount || 0,
-                            reviewCount:
-                                notebooksList.find(
-                                    (n) => n.bookID === details.bookId,
-                                )?.reviewCount || 0,
-                            bookID: details.bookId,
-                            title: details.title,
-                            author: details.author,
-                            cover: details.cover,
-                            format: details.format,
-                            price: details.price,
-                            introduction: details.intro,
-                            publishTime: details.publishTime,
-                            category: details.category,
-                            isbn: details.isbn,
-                            publisher: details.publisher,
-                            totalWords: details.totalWords,
-                            star: details.newRating,
-                            ratingCount: details.ratingCount,
-                            AISummary: details.AISummary,
-                        };
-                    } catch {
-                        return null;
-                    }
-                });
-            });
-
-            const shelfList = (await shelfPool.awaitAll()).filter((item) => item !== null);
-
-            const showDialog = createBookShelfDialog(plugin, shelfList);
+            const shelfList = await buildApiBookShelf(apiKey, notebooksList);
+            let enhancedBooks = shelfList;
+            try {
+                enhancedBooks = await attachWereadApiLocalNoteDocs(plugin, shelfList);
+            } catch {
+            }
+            const showDialog = createBookShelfDialog(plugin, enhancedBooks);
             showDialog();
         } catch (error) {
             console.error("Failed to obtain bookshelf information", error);
@@ -407,6 +481,114 @@
                 });
             },
         });
+    }
+
+    async function loadWereadAuthSettings() {
+        const authSettings = await loadPluginData(plugin, "weread_auth_settings", DEFAULT_WEREAD_AUTH_SETTINGS);
+        wereadApiKeyInput = authSettings.apiKey || "";
+        wereadApiKeyVerified = authSettings.verified || false;
+        wereadApiKeyVerifiedAt = authSettings.verifiedAt || 0;
+        wereadApiKeyLastError = authSettings.lastError || "";
+    }
+
+    async function verifyWereadApiKey() {
+        const trimmed = wereadApiKeyInput.trim();
+        if (!trimmed) {
+            showMessage(i18n.showMessageWereadApiKeyRequired);
+            return;
+        }
+
+        isVerifyingWereadApiKey = true;
+        try {
+            const result = await validateWereadApiKey(trimmed);
+
+            if (result.success) {
+                wereadApiKeyVerified = true;
+                wereadApiKeyVerifiedAt = result.verifiedAt || Date.now();
+                wereadApiKeyLastError = "";
+
+                await plugin.saveData("weread_auth_settings", {
+                    provider: "apiKey",
+                    apiKey: trimmed,
+                    verified: true,
+                    verifiedAt: wereadApiKeyVerifiedAt,
+                    apiProtocolVersion: WEREAD_API_PROTOCOL_VERSION,
+                    lastError: "",
+                });
+
+                showMessage(i18n.showMessageWereadApiKeyVerified);
+
+                try {
+                    await getNotebooksList();
+                } catch {
+                }
+
+                try {
+                    await refreshReadingStats({ silent: true });
+                } catch {
+                }
+            } else {
+                wereadApiKeyVerified = false;
+                wereadApiKeyVerifiedAt = 0;
+                wereadApiKeyLastError = result.message;
+
+                await plugin.saveData("weread_auth_settings", {
+                    provider: "apiKey",
+                    apiKey: trimmed,
+                    verified: false,
+                    verifiedAt: 0,
+                    apiProtocolVersion: WEREAD_API_PROTOCOL_VERSION,
+                    lastError: result.message,
+                });
+
+                showMessage(i18n.showMessageWereadApiKeyInvalid);
+            }
+        } catch (error: any) {
+            const errorMsg = error?.message || "验证失败";
+            wereadApiKeyVerified = false;
+            wereadApiKeyVerifiedAt = 0;
+            wereadApiKeyLastError = errorMsg;
+
+            await plugin.saveData("weread_auth_settings", {
+                provider: "apiKey",
+                apiKey: trimmed,
+                verified: false,
+                verifiedAt: 0,
+                apiProtocolVersion: WEREAD_API_PROTOCOL_VERSION,
+                lastError: errorMsg,
+            });
+
+            showMessage(i18n.showMessageWereadApiKeyInvalid);
+        } finally {
+            isVerifyingWereadApiKey = false;
+        }
+    }
+
+    async function clearWereadApiKey() {
+        wereadApiKeyInput = "";
+        wereadApiKeyVerified = false;
+        wereadApiKeyVerifiedAt = 0;
+        wereadApiKeyLastError = "";
+        notebooksList = [];
+        notebooksInfo = "";
+        isNotebookListReady = false;
+        readingStats = null;
+        readingStatsError = "";
+
+        await plugin.saveData("weread_auth_settings", {
+            provider: "apiKey",
+            apiKey: "",
+            verified: false,
+            verifiedAt: 0,
+            apiProtocolVersion: WEREAD_API_PROTOCOL_VERSION,
+            lastError: "",
+        });
+
+        await plugin.saveData("temporary_weread_notebooksList", null);
+        await plugin.saveData("weread_notebooksList_readyAt", null);
+        await plugin.saveData("weread_reading_stats_cache", null);
+
+        showMessage(i18n.showMessageWereadApiKeyCleared);
     }
 
     async function createIgnoredBooksDialog() {
@@ -491,73 +673,82 @@
         </div>
 
         <div class="weread-section">
-            <div class="weread-section-title">{i18n.wereadSectionLogin}</div>
+            <div class="weread-section-title">{i18n.wereadSectionApiKey}</div>
             <div class="weread-settings-row">
                 <div class="weread-row-info">
-                    <div class="weread-row-title">{i18n.scanQRCodeLogin}</div>
-                    <div class="weread-row-desc">{i18n.scanQRCodeLoginDesc}</div>
+                    <div class="weread-row-title">{i18n.wereadApiKeyTitle}</div>
+                    <div class="weread-row-desc">{i18n.wereadApiKeyDesc}</div>
+                    <div class="weread-api-key-help">
+                        {i18nText("wereadApiKeyApplyTip", "还没有 API Key？")}
+                        <a
+                            href="https://weread.qq.com/r/weread-skills"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                        >
+                            {i18nText("wereadApiKeyApplyLink", "前往微信读书申请")}
+                        </a>
+                    </div>
                 </div>
                 <div class="weread-row-control">
-                    <button
-                        class="b3-button b3-button--outline"
-                        on:click={async () => {
-                            try {
-                                const autoCookies = await createWereadQRCodeDialog(
-                                    i18n,
-                                    true,
-                                );
-
-                                cookies = await saveAndReloadQRCodeCookies(autoCookies);
-                                const verifyResult = await verifyAndUpdateStatus(cookies);
-
-                                if (verifyResult.success) {
-                                    await getNotebooksList();
-                                }
-                            } catch (error) {
-                                if (error === "__CANCELLED__") {
-                                    return;
-                                }
-                                checkMessage = i18n.checkMessage6;
-                                showMessage(i18n.checkMessage6);
-                            }
-                        }}>{i18n.scanQRCodeLogin}</button>
+                    <input
+                        type="password"
+                        class="b3-text-field"
+                        placeholder={i18n.wereadApiKeyPlaceholder}
+                        bind:value={wereadApiKeyInput}
+                        style="width: 100%; max-width: 400px;"
+                    />
                 </div>
             </div>
             <div class="weread-settings-row">
                 <div class="weread-row-info">
-                    <div class="weread-row-title">{i18n.fillCookie}</div>
-                    <div class="weread-row-desc">{i18n.fillCookieDesc}</div>
+                    <div class="weread-row-title">{i18n.wereadApiKeyStatus}</div>
+                    <div class="weread-row-desc">
+                        {#if isVerifyingWereadApiKey}
+                            <span class="weread-status-validating">{i18n.wereadApiKeyStatusValidating}</span>
+                        {:else if wereadApiKeyVerified}
+                            <span class="weread-status-verified">✅ {i18n.wereadApiKeyStatusVerified}：{maskWereadApiKey(wereadApiKeyInput)}</span>
+                            {#if wereadApiKeyVerifiedAt > 0}
+                                <span class="weread-verified-time">
+                                    {i18n.wereadApiKeyLastVerifiedAt}: {new Date(wereadApiKeyVerifiedAt).toLocaleString()}
+                                </span>
+                            {/if}
+                        {:else if wereadApiKeyLastError}
+                            <span class="weread-status-invalid">❌ {i18n.wereadApiKeyStatusInvalid}: {wereadApiKeyLastError}</span>
+                        {:else if !wereadApiKeyInput}
+                            <span class="weread-status-unconfigured">{i18n.wereadApiKeyStatusUnconfigured}</span>
+                        {/if}
+                    </div>
                 </div>
                 <div class="weread-row-control">
                     <button
                         class="b3-button b3-button--outline"
-                        on:click={createWereadDialog(plugin, cookies, async (newCookies) => {
-                            cookies = newCookies;
-                            const savedata = {
-                                cookies: newCookies,
-                                isQRCode: false,
-                            };
-                            await plugin.saveData("weread_cookie", savedata);
-
-                            const verifyResult = await verifyAndUpdateStatus(newCookies);
-                            if (verifyResult.success) {
-                                await getNotebooksList();
-                            }
-                        })}>{i18n.fillCookie}</button>
+                        disabled={isVerifyingWereadApiKey}
+                        on:click={verifyWereadApiKey}>{i18n.wereadApiKeyVerify}</button>
+                    <button
+                        class="b3-button b3-button--outline"
+                        disabled={isVerifyingWereadApiKey}
+                        on:click={clearWereadApiKey}>{i18n.wereadApiKeyClear}</button>
                 </div>
             </div>
-            <div class="weread-status-panel">
-                <span>{checkMessage}</span>
-            </div>
+            {#if wereadApiModeState}
+                <div class="weread-settings-row">
+                    <div class="weread-row-info">
+                        <div class="weread-row-title">{i18n.wereadApiModeStatusTitle}</div>
+                        <div class="weread-row-desc">
+                            <div>{i18n.wereadApiModeStatusDesc}</div>
+                            <div>{i18n.wereadApiModeProvider}</div>
+                            <div>{i18n.wereadApiModeOrdinaryBookEnabled}</div>
+                            <div>{i18n.wereadApiModeMpEnabled}</div>
+                        </div>
+                    </div>
+                </div>
+            {/if}
         </div>
 
         <div class="weread-section">
             <div class="weread-section-title">{i18n.wereadSectionOverview}</div>
-            {#if checkMessage.includes("✅")}
+            {#if wereadApiKeyVerified}
                 {#if notebooksInfo}
-                    <div class="weread-summary-panel">
-                        {@html notebooksInfo}
-                    </div>
                     <div class="weread-settings-row">
                         <div class="weread-row-info">
                             <div class="weread-row-title">{i18n.hasNotesBooks}</div>
@@ -587,6 +778,112 @@
                             </div>
                         </div>
                     {/if}
+
+                    {#if readingStatsError}
+                        <div class="weread-reading-stats-error">{readingStatsError}</div>
+                    {/if}
+
+                    <div class="weread-dashboard-grid">
+                        <div class="weread-dashboard-card">
+                            <span class="weread-dashboard-label">{i18nText("wereadDashboardNotebooks", "有笔记书籍")}</span>
+                            <span class="weread-dashboard-value">
+                                {#if notebooksList.length > 0}
+                                    {notebooksList.length}
+                                {:else}
+                                    --
+                                {/if}
+                            </span>
+                        </div>
+                        <div class="weread-dashboard-card">
+                            <span class="weread-dashboard-label">{i18nText("wereadDashboardNotes", "笔记数量")}</span>
+                            <span class="weread-dashboard-value">
+                                {#if notebooksList.length > 0}
+                                    {notebooksList.reduce((sum, book) => sum + (book.totalNoteCount ?? book.noteCount + book.reviewCount + book.bookmarkCount), 0)}
+                                {:else}
+                                    --
+                                {/if}
+                            </span>
+                        </div>
+                        <div class="weread-dashboard-card">
+                            <span class="weread-dashboard-label">{i18nText("wereadDashboardShelf", "书架条目")}</span>
+                            <span class="weread-dashboard-value">
+                                {#if isLoadingReadingStats}
+                                    {i18nText("wereadReadingStatsLoading", "正在加载...")}
+                                {:else if readingStats?.shelf}
+                                    {readingStats.shelf.total}
+                                {:else}
+                                    --
+                                {/if}
+                            </span>
+                        </div>
+                        <div class="weread-dashboard-card">
+                            <span class="weread-dashboard-label">{i18nText("wereadDashboardMonthlyDays", "本月天数")}</span>
+                            <span class="weread-dashboard-value">
+                                {#if isLoadingReadingStats}
+                                    {i18nText("wereadReadingStatsLoading", "正在加载...")}
+                                {:else if readingStats}
+                                    {readingStats.monthly.readDays}
+                                {:else}
+                                    --
+                                {/if}
+                            </span>
+                        </div>
+                        <div class="weread-dashboard-card">
+                            <span class="weread-dashboard-label">{i18nText("wereadDashboardWeeklyRead", "本周阅读")}</span>
+                            <span class="weread-dashboard-value">
+                                {#if isLoadingReadingStats}
+                                    {i18nText("wereadReadingStatsLoading", "正在加载...")}
+                                {:else if readingStats}
+                                    {formatReadingDuration(readingStats.weekly.totalReadTime)}
+                                {:else}
+                                    --
+                                {/if}
+                            </span>
+                        </div>
+                        <div class="weread-dashboard-card">
+                            <span class="weread-dashboard-label">{i18nText("wereadDashboardMonthlyRead", "本月阅读")}</span>
+                            <span class="weread-dashboard-value">
+                                {#if isLoadingReadingStats}
+                                    {i18nText("wereadReadingStatsLoading", "正在加载...")}
+                                {:else if readingStats}
+                                    {formatReadingDuration(readingStats.monthly.totalReadTime)}
+                                {:else}
+                                    --
+                                {/if}
+                            </span>
+                        </div>
+                        <div class="weread-dashboard-card">
+                            <span class="weread-dashboard-label">{i18nText("wereadDashboardAnnualRead", "本年阅读")}</span>
+                            <span class="weread-dashboard-value">
+                                {#if isLoadingReadingStats}
+                                    {i18nText("wereadReadingStatsLoading", "正在加载...")}
+                                {:else if readingStats}
+                                    {formatReadingDuration(readingStats.annually.totalReadTime)}
+                                {:else}
+                                    --
+                                {/if}
+                            </span>
+                        </div>
+                        <div class="weread-dashboard-card">
+                            <span class="weread-dashboard-label">{i18nText("wereadDashboardOverallRead", "总阅读")}</span>
+                            <span class="weread-dashboard-value">
+                                {#if isLoadingReadingStats}
+                                    {i18nText("wereadReadingStatsLoading", "正在加载...")}
+                                {:else if readingStats}
+                                    {formatReadingDuration(readingStats.overall.totalReadTime)}
+                                {:else}
+                                    --
+                                {/if}
+                            </span>
+                        </div>
+                    </div>
+
+                    <div class="weread-reading-actions">
+                        <button
+                            class="b3-button b3-button--outline"
+                            disabled={isLoadingReadingStats}
+                            on:click={openReadingStatsDialog}>{i18nText("wereadReadingStatsButton", "查看阅读统计")}</button>
+                    </div>
                 {:else}
                     <div class="weread-settings-row">
                         <div class="weread-row-info"></div>
@@ -600,7 +897,7 @@
                 <div class="weread-settings-row">
                     <div class="weread-row-info"></div>
                     <div class="weread-row-control">
-                        <div class="weread-cookie-warning">{i18n.pleaseFillCookie}</div>
+                        <div class="weread-api-warning">{i18n.wereadApiKeyStatusUnconfigured}</div>
                     </div>
                 </div>
             {/if}
@@ -704,6 +1001,11 @@
 
         <div class="weread-section">
             <div class="weread-section-title">{i18n.wereadSectionSync}</div>
+            {#if isPreparingWereadApiSync}
+                <div class="weread-row-info" style="color: var(--b3-theme-primary);">
+                    {i18n.wereadApiCheckingNewSourcesDesc || "正在补全书籍 ISBN 和检测数据库匹配，期间请不要重复点击同步按钮"}
+                </div>
+            {/if}
             <div class="weread-settings-row">
                 <div class="weread-row-info">
                     <div class="weread-row-title">{i18n.syncAll}</div>
@@ -712,20 +1014,10 @@
                 <div class="weread-row-control">
                     <button
                         class="b3-button b3-button--outline"
-                        disabled={!checkMessage.includes("✅") || isNotebookListLoading || !isNotebookListReady || isSyncing}
+                        disabled={isNotebookListLoading || !isNotebookListReady || isSyncing || isPreparingWereadApiSync}
                         on:click={async () => {
-                            if (isSyncing) return;
-                            if (!checkMessage.includes("✅")) {
-                                showMessage(i18n.showMessage15);
-                                return;
-                            }
-                            isSyncing = true;
-                            try {
-                                const notebooksSnapshot = notebooksList.map(item => ({ ...item }));
-                                await syncWereadNotes(plugin, cookies, false, undefined, "ui-cache-only", notebooksSnapshot);
-                            } finally {
-                                isSyncing = false;
-                            }
+                            if (isSyncing || isPreparingWereadApiSync) return;
+                            await handleWereadApiManualSyncWithNewSourceDialog("all");
                         }}>{i18n.syncAll}</button>
                 </div>
             </div>
@@ -737,20 +1029,10 @@
                 <div class="weread-row-control">
                     <button
                         class="b3-button b3-button--outline"
-                        disabled={!checkMessage.includes("✅") || isNotebookListLoading || !isNotebookListReady || isSyncing}
+                        disabled={isNotebookListLoading || !isNotebookListReady || isSyncing || isPreparingWereadApiSync}
                         on:click={async () => {
-                            if (isSyncing) return;
-                            if (!checkMessage.includes("✅")) {
-                                showMessage(i18n.showMessage15);
-                                return;
-                            }
-                            isSyncing = true;
-                            try {
-                                const notebooksSnapshot = notebooksList.map(item => ({ ...item }));
-                                await syncWereadNotes(plugin, cookies, true, undefined, "ui-cache-only", notebooksSnapshot);
-                            } finally {
-                                isSyncing = false;
-                            }
+                            if (isSyncing || isPreparingWereadApiSync) return;
+                            await handleWereadApiManualSyncWithNewSourceDialog("update");
                         }}>{i18n.updateSync}</button>
                 </div>
             </div>

@@ -10,6 +10,7 @@
 
 <div class="template-weread-dialog">
     <div class="template-tip">{i18n.templateEditorTip}</div>
+    <div class="weread-api-notice">{i18n.wereadTemplateApiNotice}</div>
     <textarea class="weread-template" bind:value={newWereadTemplates} placeholder={i18n.templateEditorPlaceholder}
     ></textarea>
     <div class="template-weread-btn">
@@ -38,6 +39,20 @@
             color: var(--b3-theme-on-surface);
             opacity: 0.7;
             margin-bottom: 4px;
+        }
+
+        .weread-api-notice {
+            font-size: 12px;
+            color: var(--b3-theme-warning);
+            opacity: 0.85;
+            margin-bottom: 8px;
+            padding: 6px 10px;
+            border: 1px solid var(--b3-theme-warning);
+            border-radius: 6px;
+            background: color-mix(in srgb, var(--b3-theme-warning) 6%, var(--b3-theme-background));
+            max-width: 420px;
+            text-align: center;
+            line-height: 1.5;
         }
 
         .weread-template {
