@@ -140,6 +140,7 @@
                         <div
                             class="weread-bookshelf-item"
                             class:has-local-doc={canOpenBook(book)}
+                            class:not-openable={!canOpenBook(book)}
                             on:mouseenter={(event) => showTooltip(book, event)}
                             on:mousemove={moveTooltip}
                             on:mouseleave={hideTooltip}
@@ -148,7 +149,8 @@
                                 <div
                                     class="weread-bookshelf-cover"
                                     role="button"
-                                    tabindex="0"
+                                    aria-disabled={!canOpenBook(book)}
+                                    tabindex={canOpenBook(book) ? 0 : -1}
                                     on:click={() => handleOpenBook(book)}
                                     on:keydown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); handleOpenBook(book); } }}
                                 >

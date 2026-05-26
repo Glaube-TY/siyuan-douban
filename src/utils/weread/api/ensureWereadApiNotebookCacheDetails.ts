@@ -7,6 +7,17 @@ interface WereadPluginLike {
   saveData: (key: string, value: any) => Promise<void>;
 }
 
+function getStoredBookID(record: any): string {
+  return String(record?.bookID ?? record?.bookId ?? record?.syncID ?? "").trim();
+}
+
+function normalizeISBN(value: any): string {
+  return String(value ?? "")
+    .replace(/[\s\-\u2014\u2013_]/g, "")
+    .replace(/[０-９Ｘｘ]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) - 0xfee0))
+    .trim();
+}
+
 export async function ensureWereadApiNotebookCacheDetails(
   plugin: WereadPluginLike,
   apiKey: string,
@@ -18,6 +29,24 @@ export async function ensureWereadApiNotebookCacheDetails(
   const limit = options?.limit ?? 100;
 
   const updatedCache = cache.map((item: any) => ({ ...item }));
+
+  const customISBNBooks = await plugin.loadData("weread_customBooksISBN") || [];
+  const customISBNByBookID = new Map<string, string>();
+  for (const item of customISBNBooks) {
+    const bookID = getStoredBookID(item);
+    const isbn = normalizeISBN(item?.customISBN ?? item?.isbn ?? "");
+    if (bookID && isbn) {
+      customISBNByBookID.set(bookID, isbn);
+    }
+  }
+
+  for (const item of updatedCache) {
+    const bookID = getStoredBookID(item);
+    const customISBN = customISBNByBookID.get(bookID);
+    if (customISBN && !item.isbn) {
+      item.isbn = customISBN;
+    }
+  }
 
   // 先筛选候选：缺 isbn 的普通书
   const candidates: { index: number; bookID: string }[] = [];

@@ -38,6 +38,10 @@ function normalizeISBN(value: any): string {
     .trim();
 }
 
+function getStoredBookID(record: any): string {
+  return String(record?.bookID ?? record?.bookId ?? record?.syncID ?? "").trim();
+}
+
 export async function detectWereadApiNewSources(
   plugin: WereadPluginLike,
   apiKey?: string
@@ -105,6 +109,21 @@ export async function detectWereadApiNewSources(
       .map((isbn: string) => normalizeISBN(isbn).toUpperCase())
   );
 
+  const customISBNBooks = await plugin.loadData("weread_customBooksISBN") || [];
+  const customISBNByBookID = new Map<string, string>();
+  for (const item of customISBNBooks) {
+    const bookID = getStoredBookID(item);
+    const isbn = normalizeISBN(item?.customISBN ?? item?.isbn ?? "").toUpperCase();
+    if (bookID && isbn) {
+      customISBNByBookID.set(bookID, isbn);
+    }
+  }
+
+  const useBookIDBooks = await plugin.loadData("weread_useBookIDBooks") || [];
+  const useBookIDBookIDs = new Set<string>(
+    useBookIDBooks.map(getStoredBookID).filter(Boolean)
+  );
+
   const candidates = notebooksList
     .map((item: any) => {
       const bookID = item?.bookID || item?.bookId || "";
@@ -128,7 +147,8 @@ export async function detectWereadApiNewSources(
 
   for (const item of candidates) {
     const bookID = item.bookID;
-    const isbn = item.isbn;
+    const storedCustomISBN = customISBNByBookID.get(bookID) || "";
+    const isbn = item.isbn || storedCustomISBN;
     const isMpAccount = item.sourceType === "weread_mp_account" || bookID.startsWith("MP_WXS_");
 
     if (isMpAccount) {
@@ -146,9 +166,11 @@ export async function detectWereadApiNewSources(
         sourceType: "weread_mp_account",
       });
     } else {
-      const normalizedIsbn = normalizeISBN(item.isbn).toUpperCase();
+      const normalizedIsbn = normalizeISBN(isbn).toUpperCase();
       if (ignoredBookIDs.has(bookID)) continue;
       if (normalizedIsbn && ignoredISBNs.has(normalizedIsbn)) continue;
+      if (customISBNByBookID.has(bookID)) continue;
+      if (useBookIDBookIDs.has(bookID)) continue;
       if (bookID && validBookIDsInDB.has(bookID)) continue;
       if (normalizedIsbn && validISBNsInDB.has(normalizedIsbn)) continue;
       normalBooks.push({

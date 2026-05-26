@@ -1,4 +1,4 @@
-import { getAttributeView } from "@/api";
+import { getAttributeView, sql } from "@/api";
 
 function getTextValue(v: any): string {
     if (!v) return "";
@@ -48,6 +48,28 @@ function getSelectValue(v: any): string {
     return "";
 }
 
+function getDocCandidateID(v: any): string {
+    return String(v?.block?.id ?? v?.blockID ?? "").trim();
+}
+
+async function loadValidDocIDs(ids: string[]): Promise<Set<string>> {
+    const uniqueIDs = Array.from(new Set(ids.filter(Boolean)));
+    if (uniqueIDs.length === 0) return new Set();
+
+    try {
+        const escapedIDs = uniqueIDs.map((id) => `"${id.replace(/"/g, '""')}"`).join(",");
+        const blocks = await sql(`SELECT id, type FROM blocks WHERE id IN (${escapedIDs})`);
+        return new Set(
+            (blocks || [])
+                .filter((block: any) => block?.type === "d")
+                .map((block: any) => block.id)
+                .filter(Boolean)
+        );
+    } catch {
+        return new Set();
+    }
+}
+
 export async function loadLocalBookShelfBooks(avID: string) {
     const db = await getAttributeView(avID);
     const keyValues = db?.av?.keyValues || [];
@@ -71,14 +93,19 @@ export async function loadLocalBookShelfBooks(avID: string) {
 
     const rowMap = new Map<string, any>();
 
+    const docCandidateIDs: string[] = [];
+
     for (const tv of titleValues) {
         const blockID = tv.blockID || "";
         if (!blockID) continue;
         const title = getTextValue(tv);
         if (!title) continue;
+        const docCandidateID = getDocCandidateID(tv);
+        if (docCandidateID) docCandidateIDs.push(docCandidateID);
 
         rowMap.set(blockID, {
             blockID,
+            docCandidateID,
             title,
             cover: "",
             author: "",
@@ -130,6 +157,8 @@ export async function loadLocalBookShelfBooks(avID: string) {
     fillColumn(categoryKey, getSelectValue);
     fillColumn(readingStatusKey, getSelectValue);
 
+    const validDocIDs = await loadValidDocIDs(docCandidateIDs);
+
     return Array.from(rowMap.values()).map((row) => ({
         title: row.title,
         cover: row.cover,
@@ -143,7 +172,7 @@ export async function loadLocalBookShelfBooks(avID: string) {
         ratingCount: row.ratingCount,
         category: row.category,
         readingStatus: row.readingStatus,
-        localDocBlockID: row.blockID,
+        localDocBlockID: validDocIDs.has(row.docCandidateID) ? row.docCandidateID : "",
         blockID: row.blockID,
         sourceType: "local_book",
     }));

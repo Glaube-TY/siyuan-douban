@@ -744,7 +744,7 @@
     width: 78px;
     height: 114px;
     perspective: 600px;
-    cursor: pointer;
+    cursor: default;
     transition: transform 0.25s cubic-bezier(0.25, 0.46, 0.45, 0.94);
 
     /* 底部阴影 */
@@ -809,6 +809,10 @@
 
 .weread-bookshelf-item.has-local-doc .weread-bookshelf-book {
     cursor: pointer;
+}
+
+.weread-bookshelf-item.not-openable .weread-bookshelf-cover {
+    cursor: default;
 }
 
 .weread-bookshelf-local-doc-badge {
