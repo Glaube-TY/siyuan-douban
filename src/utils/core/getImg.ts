@@ -50,6 +50,14 @@ export async function getImage(url: string) {
                 }
             });
 
+            const session = imgWindow.webContents.session;
+            const onWillDownload = (event: any) => {
+                event.preventDefault();
+                try { imgWindow.destroy(); } catch {}
+                reject(new Error("图片地址触发下载，已取消"));
+            };
+            session.once("will-download", onWillDownload);
+
             imgWindow.webContents.session.webRequest.onBeforeSendHeaders((details, callback) => {
                 details.requestHeaders['accept'] = 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8';
                 details.requestHeaders['accept-encoding'] = 'gzip, deflate, br, zstd';
@@ -83,6 +91,7 @@ export async function getImage(url: string) {
                         img.src = location.href;
                     });
                 `).then((dataUrl) => {
+                    session.removeListener("will-download", onWillDownload);
                     imgWindow.destroy();
                     if (dataUrl) {
                         resolve(dataUrl);
@@ -90,10 +99,12 @@ export async function getImage(url: string) {
                         reject(new Error('Failed to convert image'));
                     }
                 }).catch((error) => {
+                    session.removeListener("will-download", onWillDownload);
                     imgWindow.destroy();
                     reject(error);
                 });
             }).catch((error) => {
+                session.removeListener("will-download", onWillDownload);
                 imgWindow.destroy();
                 reject(error);
             });

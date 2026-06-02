@@ -1,6 +1,6 @@
 import { parseDateToTimestamp } from '../core/formatOp';
 import { sql, getConf, render, updateBlock, getAttributeView, removeAttributeViewBlocks, createDocWithMd } from "@/api";
-import { getImage, downloadCover } from "@/utils/core/getImg";
+import { downloadWereadCoverSafely } from './downloadWereadCover';
 import { ensureAttributeViewKeys, appendBookToAttributeView } from '../bookHandling/ensureAttributeViewKeys';
 import { bindBookToNote } from '../bookHandling/bindBookToNote';
 
@@ -64,8 +64,9 @@ export async function addUseBookIDsToDatabase(plugin: any, avID: string, bookDet
     const databaseKeys = await ensureAttributeViewKeys(avID, requiredBookAttributes, getAttributeType);
 
     // 下载封面
-    const coverBase64Data = await getImage(bookDetail.cover) as string; // 下载封面图片的 Base64 数据
-    bookDetail.cover = await downloadCover(coverBase64Data, bookDetail.title); // 下载封面图片并保存到本地
+    const originalCover = bookDetail.cover || "";
+    const localCover = await downloadWereadCoverSafely(originalCover, bookDetail.title || bookDetail.bookId || "weread_cover");
+    bookDetail.cover = localCover || "";
 
     // 添加书籍数据到数据库并回查 blockID
     const { blockID, matchingValue } = await appendBookToAttributeView(

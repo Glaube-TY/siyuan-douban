@@ -288,7 +288,7 @@ async function handleNewSourcesConfirm(
           }
         }
       } catch (e) {
-        showMessage(`bookID 导入失败: ${bookItem.title || bookItem.bookID}`);
+        showMessage(`bookID 导入失败: ${bookItem.title || bookItem.bookID}：${e?.message || "未知错误"}`);
       }
     }
   }
