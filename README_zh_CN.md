@@ -1,164 +1,83 @@
-<div class="sy__outline" style="max-width: 800px; margin: 0 auto;">
-    <div style="text-align: center; padding: 2em; background: linear-gradient(135deg, #2d8cf0, #1e6bff); border-radius: 12px;">
-        <h1 style="color: white; margin: 0; font-size: 2.2em;">📚 读书笔记插件</h1>
-        <div style="color: rgba(255,255,255,0.9); margin-top: 0.5em;">让书籍管理更智能、更高效</div>
-    </div>
-    <div style="margin-top: 1.5em; padding: 1.5em; background: white; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.05);">
-        <h2 style="color: #2d8cf0; margin: 0 0 1em;">🚀 核心功能</h2>
-        <ul style="margin: 0; padding-left: 1.2em;">
-            <li style="margin: 0.5em 0; padding: 8px 12px; background: #f8fafc; border-radius: 6px;">🔍 ISBN 或关键词（书名）快速查询</li>
-            <li style="margin: 0.5em 0; padding: 8px 12px; background: #f8fafc; border-radius: 6px;">📥 自动填充书籍元数据到数据库</li>
-            <li style="margin: 0.5em 0; padding: 8px 12px; background: #f8fafc; border-radius: 6px;">📝 基于模板生成读书笔记</li>
-            <li style="margin: 0.5em 0; padding: 8px 12px; background: #f8fafc; border-radius: 6px;">📗 自动同步微信读书笔记（v2.0.0支持）</li>
-        </ul>
-        <div style="margin: 1.5em 0; border-top: 1px solid #eee;"></div>
-        <a href="https://blog.glaube-ty.top/du-shu-bi-ji-cha-jian" 
-           style="display: inline-flex; 
-                  align-items: center; 
-                  padding: 10px 20px; 
-                  background: #2d8cf0; 
-                  color: white; 
-                  border-radius: 6px; 
-                  text-decoration: none;
-                  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-                  transform: translateY(0);
-                  box-shadow: 0 4px 6px rgba(45,140,240,0.1);
-                  border: 1px solid rgba(45,140,240,0.2);"
-           onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 12px rgba(45,140,240,0.2)'"
-           onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 6px rgba(45,140,240,0.1)'"
-           onmousedown="this.style.transform='translateY(1px)'"
-           onmouseup="this.style.transform='translateY(-2px)'">
-            📖 详细使用教程
-        </a>
-    </div>
-    <div style="margin: 1.5em 0; padding: 1.5em; background: #fff9f2; border-left: 4px solid #ffc107; border-radius: 8px;">
-        <h2 style="color: #ff9f00; margin: 0 0 1em;">🌹 支持开发</h2>
-        <p style="margin: 0.5em 0;">如果这个插件对你有帮助，欢迎给作者点个赞或打赏一杯咖啡，这将鼓励作者更新制作更多有用的插件：</p>
-        <div style="margin: 1em 0; text-align: center;">
-            <img src="https://glaube-ty.oss-cn-chengdu.aliyuncs.com/img/ReQR.png"
-                 alt="TCQR"
-                 style="width: 600px; border-radius: 8px; margin-bottom: 1em;">
-        </div>
-        <div style="text-align: center;">
-            <a href="https://blog.glaube-ty.top/da-shang" 
-                style="display: inline-flex; 
-                        align-items: center; 
-                        padding: 12px 24px; 
-                        background: linear-gradient(135deg, #ff9f00, #ffc107); 
-                        color: white; 
-                        border-radius: 6px; 
-                        text-decoration: none;
-                        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-                        transform: translateY(0);
-                        box-shadow: 0 4px 6px rgba(255,159,0,0.1);
-                        border: 1px solid rgba(255,159,0,0.2);"
-                onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 12px rgba(255,159,0,0.2)'"
-                onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 6px rgba(255,159,0,0.1)'"
-                onmousedown="this.style.transform='translateY(1px)'"
-                onmouseup="this.style.transform='translateY(-2px)'">
-                💖 特别鸣谢
-            </a>
-        </div>
-    </div>
-    <div style="margin: 1.5em 0; padding: 1.5em; background: white; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.05);">
-        <h2 style="color: #2d8cf0; margin: 0 0 1em;">📅 更新日志</h2>
-        <p style="margin: 0.5em 0;">此处将不再显示更新日志，请点击下方👇按钮查看完整的更新日志。</p>
-        <div style="text-align: center;">
-        <a href="https://blog.glaube-ty.top/archives/019d1eb8-849f-707f-91c8-d32b7094af98" 
-           style="display: inline-flex;
-                  align-items: center;
-                  padding: 12px 24px;
-                  background: linear-gradient(135deg, #2d8cf0 30%, #1e6bff 70%);
-                  color: white;
-                  border-radius: 6px;
-                  text-decoration: none;
-                  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-                  transform: translateY(0);
-                  box-shadow: 0 4px 8px rgba(45,140,240,0.15);
-                  border: 1px solid rgba(255,255,255,0.2);
-                  margin-top: 1.2em;
-                  gap: 8px;">
-            <span style="font-size: 1.1em; filter: drop-shadow(0 1px 1px rgba(0,0,0,0.1));">📄</span>
-            <span style="font-weight: 500; letter-spacing: 0.5px;">完整更新日志</span>
-        </a>
-        </div>
-    </div>
-    <div style="margin: 1.5em 0; padding: 1.5em; background: #f0f9ff; border-left: 4px solid #2d8cf0; border-radius: 8px;">
-        <h2 style="color: #2d8cf0; margin: 0 0 1em;">💬 加入讨论</h2>
-        <p style="margin: 0.5em 0;">目前我在开发的插件有主页、读书笔记、空文档清理、彩色图标，所以统一用一个频道了，方便查看管理~</p>
-        <div style="margin: 1em 0; text-align: center;">
-            <img src="https://glaube-ty.oss-cn-chengdu.aliyuncs.com/img/TCQR.jpg"
-                 alt="TCQR"
-                 style="width: 200px; border-radius: 8px; margin-bottom: 1em;">
-        </div>
-        <div style="text-align: center;">
-            <a href="https://pd.qq.com/s/2ks4079x0"
-                style="display: inline-flex;
-                        align-items: center;
-                        padding: 12px 24px;
-                        background: linear-gradient(135deg, #2d8cf0 30%, #1e6bff 70%);
-                        color: white;
-                        border-radius: 6px;
-                        text-decoration: none;
-                        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-                        transform: translateY(0);
-                        box-shadow: 0 4px 8px rgba(45,140,240,0.15);
-                        border: 1px solid rgba(255,255,255,0.2);
-                        margin: 0 auto;
-                        gap: 8px;"
-                onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 12px rgba(45,140,240,0.2)'"
-                onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 6px rgba(45,140,240,0.1)'"
-                onmousedown="this.style.transform='translateY(1px)'"
-                onmouseup="this.style.transform='translateY(-2px)'">
-                <span style="font-size: 1.1em; filter: drop-shadow(0 1px 1px rgba(0,0,0,0.1));">👥</span>
-                <span style="font-weight: 500; letter-spacing: 0.5px;">加入腾讯讨论频道</span>
-            </a>
-        </div>
-    </div>
-    <div style="margin: 1.5em 0; padding: 1.5em; background: #f8f5ff; border-left: 4px solid #8a3ffc; border-radius: 8px;">
-        <h2 style="color: #8a3ffc; margin: 0 0 1em;">🔮 参考项目</h2>
-        <p style="margin: 0.5em 0; color: black;">本插件部分功能参考了以下优秀项目：</p>
-        <ul style="margin: 0; padding-left: 1.2em;">
-            <li style="margin: 0.5em 0; padding: 12px; background: #f3f0ff; border-radius: 6px;">
-                <a href="https://github.com/zhaohongxuan/obsidian-weread-plugin" 
-                   style="color: #8a3ffc; 
-                          text-decoration: none;
-                          font-weight: 500;
-                          display: block;
-                          margin-bottom: 4px;"
-                   onmouseover="this.style.textDecoration='underline'"
-                   onmouseout="this.style.textDecoration='none'">
-                    obsidian-weread-plugin
-                </a>
-                <span style="color: #666; display: block; line-height: 1.5;">
-                    微信读书笔记同步功能参考了其微信官方 API 接口。
-                </span>
-            </li>
-            <li style="margin: 0.5em 0; padding: 12px; background: #f3f0ff; border-radius: 6px;">
-                <a href="https://getquicker.net/sharedaction?code=c9154e53-d422-43de-4832-08dc59347e50" 
-                   style="color: #8a3ffc; 
-                          text-decoration: none;
-                          font-weight: 500;
-                          display: block;
-                          margin-bottom: 4px;"
-                   onmouseover="this.style.textDecoration='underline'"
-                   onmouseout="this.style.textDecoration='none'">
-                    Quicker - 读书笔记
-                </a>
-                <span style="color: #666; display: block; line-height: 1.5;">
-                    本插件来源于我在 Quicker 中为 Obsidian 等开发的读书笔记动作。
-                </span>
-            </li>
-        </ul>
-    </div>
-    <div style="margin: 1.5em 0; padding: 1.5em; background: #fff5f5; border-left: 4px solid #ff4d4f; border-radius: 8px;">
-        <h2 style="color: #ff4d4f; margin: 0 0 1em;">⚠️ 免责声明</h2>
-        <ul style="margin: 0.5em 0; padding-left: 1.2em; color: #666;">
-            <li style="margin: 0.5em 0;">本插件数据来源于豆瓣公开数据，开发者不保证数据的准确性和完整性</li>
-            <li style="margin: 0.5em 0;">使用者应遵守豆瓣网的相关使用条款</li>
-            <li style="margin: 0.5em 0;">对于微信读书笔记同步需要基于 Cookie 远程获取个人信息，但都是在本地进行，如果介意慎用</li>
-            <li style="margin: 0.5em 0;">本插件数据仅用于个人书籍数据管理，禁止用于商业用途等违规行为</li>
-            <li style="margin: 0.5em 0;">开发者对使用本插件造成的任何损失不承担责任</li>
-        </ul>
-    </div>
+<div class="sy__outline" style="max-width:860px;margin:0 auto;line-height:1.78;color:#3f3426;font-family:serif;">
+<div style="margin-top:1.4em;padding:.8em;background:linear-gradient(135deg,#fbf6e8,#f1e3bf);border:1px solid #cfb27a;border-radius:18px;box-shadow:0 10px 28px rgba(78,52,25,.1);">
+<img src="https://glaube-ty.oss-cn-chengdu.aliyuncs.com/img/%E8%AF%BB%E4%B9%A6%E7%AC%94%E8%AE%B0%E6%8F%92%E4%BB%B6.webp" alt="读书笔记插件功能介绍图" style="display:block;width:100%;border-radius:14px;filter:saturate(.92) sepia(.08);">
+</div>
+<div style="margin-top:1.4em;padding:1.35em 1.5em;background:#fffaf0;border:1px solid #d8c49a;border-radius:14px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.45);">
+<h2 style="margin:0 0 .7em;color:#6b3f1d;">✨ 它能帮你做什么？</h2>
+<p style="margin:0;color:#5b4a35;">如果你习惯在思源里管理书籍、整理摘录、写读书笔记，这个插件可以帮你把“找书、建库、建文档、同步笔记”这些重复流程串起来。</p>
+</div>
+<div style="margin-top:1.3em;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;">
+<div style="padding:1.15em;background:#fffaf0;border:1px solid #dfc998;border-radius:14px;box-shadow:0 5px 16px rgba(91,58,30,.06);">
+<h3 style="margin:0 0 .45em;color:#7a3f18;">🔍 快速查书</h3>
+<p style="margin:0;color:#665640;">支持 ISBN、书名关键词查询，快速获取书籍元数据。</p>
+</div>
+<div style="padding:1.15em;background:#fffaf0;border:1px solid #dfc998;border-radius:14px;box-shadow:0 5px 16px rgba(91,58,30,.06);">
+<h3 style="margin:0 0 .45em;color:#7a3f18;">📥 自动入库</h3>
+<p style="margin:0;color:#665640;">自动填充书名、作者、出版社、ISBN、封面等信息到数据库。</p>
+</div>
+<div style="padding:1.15em;background:#fffaf0;border:1px solid #dfc998;border-radius:14px;box-shadow:0 5px 16px rgba(91,58,30,.06);">
+<h3 style="margin:0 0 .45em;color:#7a3f18;">📝 笔记模板</h3>
+<p style="margin:0;color:#665640;">基于自定义模板生成读书笔记，保持统一的笔记结构。</p>
+</div>
+<div style="padding:1.15em;background:#fffaf0;border:1px solid #dfc998;border-radius:14px;box-shadow:0 5px 16px rgba(91,58,30,.06);">
+<h3 style="margin:0 0 .45em;color:#7a3f18;">📗 微信读书同步</h3>
+<p style="margin:0;color:#665640;">通过 API Key 同步划线、想法、书评、热门划线、公众号文章与阅读统计。</p>
+</div>
+</div>
+<div style="margin-top:1.4em;padding:1.45em;background:#fbf3dc;border-left:5px solid #9a3412;border-radius:14px;box-shadow:0 6px 18px rgba(122,63,24,.06);">
+<h2 style="margin:0 0 .8em;color:#8a2e12;">🚀 新版微信读书同步</h2>
+<ul style="margin:0;padding-left:1.25em;color:#5b4a35;">
+<li>使用 API Key / 官方接口模式，不再依赖旧的登录态同步方式。</li>
+<li>支持普通书、公众号账号、公众号文章同步。</li>
+<li>支持有笔记书籍、新书确认、书架视图、本地文档匹配。</li>
+<li>支持阅读统计仪表盘，查看本周、本月、本年和总计阅读数据。</li>
+</ul>
+</div>
+<div style="margin-top:1.4em;padding:1.45em;background:#fffaf0;border:1px solid #d8c49a;border-radius:14px;">
+<h2 style="margin:0 0 1em;color:#6b3f1d;">🧭 使用入口</h2>
+<div style="display:flex;flex-wrap:wrap;gap:10px;">
+<a href="https://blog.glaube-ty.top/du-shu-bi-ji-cha-jian" style="display:inline-block;padding:10px 18px;background:#5b3a1e;color:#fff8e7;border-radius:9px;text-decoration:none;font-weight:600;">📖 使用教程</a>
+<a href="https://blog.glaube-ty.top/archives/019d1eb8-849f-707f-91c8-d32b7094af98" style="display:inline-block;padding:10px 18px;background:#31572c;color:#f7f1df;border-radius:9px;text-decoration:none;font-weight:600;">📅 更新日志</a>
+<a href="https://pd.qq.com/s/2ks4079x0" style="display:inline-block;padding:10px 18px;background:#334155;color:#f7f1df;border-radius:9px;text-decoration:none;font-weight:600;">💬 讨论频道</a>
+<a href="https://blog.glaube-ty.top/da-shang" style="display:inline-block;padding:10px 18px;background:#a16207;color:#fff8e7;border-radius:9px;text-decoration:none;font-weight:600;">💖 支持开发</a>
+</div>
+</div>
+<div style="margin-top:1.4em;padding:1.45em;background:#f3f8ed;border-left:5px solid #4d7c0f;border-radius:14px;">
+<h2 style="margin:0 0 .8em;color:#365314;">💬 加入讨论</h2>
+<p style="margin:.5em 0;color:#53633d;">目前我在开发多个思源插件，为了方便统一交流和管理，使用同一个腾讯频道。</p>
+<div style="margin:1em 0;text-align:center;">
+<img src="https://glaube-ty.oss-cn-chengdu.aliyuncs.com/img/TCQR.jpg" alt="腾讯讨论频道二维码" style="width:210px;border-radius:12px;border:1px solid #c9d9b6;box-shadow:0 8px 22px rgba(77,124,15,.14);">
+</div>
+<div style="text-align:center;">
+<a href="https://pd.qq.com/s/2ks4079x0" style="display:inline-block;padding:10px 20px;background:#4d7c0f;color:white;border-radius:9px;text-decoration:none;font-weight:600;">👥 加入腾讯讨论频道</a>
+</div>
+</div>
+<div style="margin-top:1.4em;padding:1.45em;background:#fff7ed;border-left:5px solid #b45309;border-radius:14px;">
+<h2 style="margin:0 0 .8em;color:#92400e;">🌹 支持开发</h2>
+<p style="margin:.5em 0;color:#5b4a35;">如果这个插件对你有帮助，欢迎给作者点个赞或打赏一杯咖啡，这会鼓励我继续维护和开发更多实用插件。</p>
+<div style="margin:1em 0;text-align:center;">
+<img src="https://glaube-ty.oss-cn-chengdu.aliyuncs.com/img/ReQR.png" alt="支持开发二维码" style="max-width:100%;width:560px;border-radius:12px;border:1px solid #e5c88b;box-shadow:0 8px 22px rgba(180,83,9,.12);">
+</div>
+<div style="text-align:center;">
+<a href="https://blog.glaube-ty.top/da-shang" style="display:inline-block;padding:10px 20px;background:#a16207;color:#fff8e7;border-radius:9px;text-decoration:none;font-weight:600;">💖 特别鸣谢</a>
+</div>
+</div>
+<div style="margin-top:1.4em;padding:1.45em;background:#f8f3e7;border-left:5px solid #7c2d12;border-radius:14px;">
+<h2 style="margin:0 0 .8em;color:#7c2d12;">🔮 参考项目</h2>
+<p style="margin:.5em 0;color:#5b4a35;">本插件部分功能参考了以下优秀项目和工具：</p>
+<ul style="margin:0;padding-left:1.2em;color:#5b4a35;">
+<li style="margin:.6em 0;"><a href="https://github.com/Tencent/WeChatReading" style="color:#7c2d12;font-weight:700;text-decoration:none;">Tencent/WeChatReading</a><div style="color:#665640;">微信读书官方API，用于同步微信读书阅读情况。</div></li>
+<li style="margin:.6em 0;"><a href="https://getquicker.net/sharedaction?code=c9154e53-d422-43de-4832-08dc59347e50" style="color:#7c2d12;font-weight:700;text-decoration:none;">Quicker - 读书笔记</a><div style="color:#665640;">本插件来源于我早期在 Quicker 中为 Obsidian 等工具开发的读书笔记动作。</div></li>
+</ul>
+</div>
+<div style="margin-top:1.4em;padding:1.45em;background:#fff5f2;border-left:5px solid #991b1b;border-radius:14px;">
+<h2 style="margin:0 0 .8em;color:#991b1b;">⚠️ 免责声明</h2>
+<ul style="margin:.5em 0;padding-left:1.2em;color:#5b4a35;">
+<li>本插件主要用于个人书籍数据管理和读书笔记整理。</li>
+<li>书籍信息来自公开数据源或用户自行授权的接口数据，开发者不保证数据的准确性和完整性。</li>
+<li>微信读书同步功能需要用户自行提供 API Key，请妥善保管个人凭证。</li>
+<li>使用者应遵守相关平台的使用条款，不得用于商业用途或其他违规行为。</li>
+<li>开发者对使用本插件造成的任何直接或间接损失不承担责任。</li>
+</ul>
+</div>
 </div>
