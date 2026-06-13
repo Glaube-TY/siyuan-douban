@@ -6,6 +6,8 @@ import { renderWereadMpAccountTemplate } from "../wereadTemplateRender";
 import { findWereadApiBookTargetDoc } from "./findWereadApiBookTargetDoc";
 import { preflightWereadApiMpSync } from "./preflightWereadApiMpSync";
 import PromiseLimitPool from "@/libs/promise-pool";
+import { recordMpAccountInboxDiff } from "../../storage/readingInboxDiff";
+import type { MpArticleSyncUnit } from "../mpArticleSync";
 
 interface WereadPluginLike {
     loadData: (key: string) => Promise<any>;
@@ -41,6 +43,8 @@ export interface WereadApiMpAccountsSyncResult {
         markdownLength?: number;
         articleCount?: number;
         noteCount?: number;
+        newBookmarkCount?: number;
+        newReviewCount?: number;
         message: string;
     }>;
 }
@@ -154,6 +158,8 @@ export async function syncWereadApiMpAccounts(
         markdownLength?: number;
         articleCount?: number;
         noteCount?: number;
+        newBookmarkCount?: number;
+        newReviewCount?: number;
         message: string;
     }> = [];
 
@@ -238,7 +244,17 @@ export async function syncWereadApiMpAccounts(
 
     // 阶段 1：并发准备数据（并发数 2）
     type PreparedMpSyncItem =
-      | { ok: true; bookID: string; title: string; markdown: string; targetBlockID: string; markdownLength: number; articleCount: number; noteCount: number }
+      | {
+          ok: true;
+          bookID: string;
+          title: string;
+          markdown: string;
+          targetBlockID: string;
+          markdownLength: number;
+          articleCount: number;
+          noteCount: number;
+          articleUnits: MpArticleSyncUnit[];
+        }
       | { ok: false; bookID: string; title: string; message: string };
 
     const pool = new PromiseLimitPool<PreparedMpSyncItem>(2);
@@ -274,7 +290,17 @@ export async function syncWereadApiMpAccounts(
             return { ok: false, bookID, title, message: "渲染后的 Markdown 内容为空" };
           }
 
-          return { ok: true, bookID, title, markdown, targetBlockID: targetResult.blockID, markdownLength: markdown.length, articleCount: syncData.articleCount, noteCount: syncData.noteCount };
+          return {
+            ok: true,
+            bookID,
+            title,
+            markdown,
+            targetBlockID: targetResult.blockID,
+            markdownLength: markdown.length,
+            articleCount: syncData.articleCount,
+            noteCount: syncData.noteCount,
+            articleUnits: syncData.articleUnits,
+          };
         } catch (error: any) {
           return { ok: false, bookID, title, message: error?.message || "同步过程中发生未知错误" };
         }
@@ -310,6 +336,21 @@ export async function syncWereadApiMpAccounts(
       try {
         await updateEndBlocks(plugin, prepared.targetBlockID, wereadPositionMark, prepared.markdown);
 
+        let newBookmarkCount = 0;
+        let newReviewCount = 0;
+        try {
+          const diff = await recordMpAccountInboxDiff(plugin, {
+            bookID: prepared.bookID,
+            title: prepared.title,
+            noteDocId: prepared.targetBlockID,
+            articleUnits: prepared.articleUnits,
+          });
+          newBookmarkCount = diff.newBookmarkCount;
+          newReviewCount = diff.newReviewCount;
+        } catch (error) {
+          console.warn("[weread] record mp inbox diff failed:", error);
+        }
+
         success++;
         successBookIDs.push(prepared.bookID);
         items.push({
@@ -320,6 +361,8 @@ export async function syncWereadApiMpAccounts(
           markdownLength: prepared.markdownLength,
           articleCount: prepared.articleCount,
           noteCount: prepared.noteCount,
+          newBookmarkCount,
+          newReviewCount,
           message: "同步成功",
         });
       } catch (error: any) {

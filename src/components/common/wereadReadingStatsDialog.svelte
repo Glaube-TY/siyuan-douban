@@ -64,9 +64,10 @@
         return `${d.getMonth() + 1}月${d.getDate()}日`;
     }
 
-    function formatBookMeta(author: string, category: string): string {
-        const a = author || i18nText("wereadReadingStatsUnknownAuthor", "未知作者");
+    function formatBookMeta(author: string, category: string, isAudio?: boolean): string {
+        const a = author || (isAudio ? "" : i18nText("wereadReadingStatsUnknownAuthor", "未知作者"));
         const c = category || "";
+        if (isAudio && !a) return c || "听书";
         return c ? `${a} · ${c}` : a;
     }
 
@@ -207,10 +208,22 @@
                             <div class="weread-reading-book-item">
                                 {#if book.cover}
                                     <img class="weread-reading-cover" src={book.cover} alt="" />
+                                {:else}
+                                    <div class="weread-reading-cover-placeholder" aria-hidden="true" />
                                 {/if}
                                 <div class="weread-reading-book-info">
-                                    <span class="weread-reading-book-title">{book.title || i18nText("unnamedBook", "未命名书籍")}</span>
-                                    <span class="weread-reading-book-meta">{formatBookMeta(book.author, book.category)}</span>
+                                    <span class="weread-reading-book-title">
+                                        {book.title || i18nText("unnamedBook", "未命名书籍")}
+                                        {#if book.isAudio}
+                                            <span class="weread-reading-audio-badge">听书</span>
+                                        {/if}
+                                    </span>
+                                    <span class="weread-reading-book-meta">
+                                        {formatBookMeta(book.author, book.category, book.isAudio)}
+                                        {#if book.tags && book.tags.length > 0}
+                                            <span class="weread-reading-book-tag">{book.tags[0]}</span>
+                                        {/if}
+                                    </span>
                                 </div>
                                 <span class="weread-reading-book-time">{formatReadingDuration(book.readTime)}</span>
                             </div>

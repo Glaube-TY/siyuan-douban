@@ -3,6 +3,7 @@ import { syncWereadApiMpAccounts, WereadApiMpAccountsSyncResult } from "./syncWe
 import { buildWereadApiNotebookCache } from "./buildWereadApiNotebookCache";
 import { showWereadApiNewSourcesDialogAndSync } from "./handleWereadApiNewSources";
 import { DEFAULT_WEREAD_AUTH_SETTINGS } from "../../core/configDefaults";
+import { buildWereadSyncReport, saveWereadSyncReportAndApplyStatus } from "../../storage/syncReportBuilder";
 
 interface WereadPluginLike {
   loadData: (key: string) => Promise<any>;
@@ -21,18 +22,8 @@ export interface WereadApiAutoSyncResult {
 }
 
 export async function autoSyncWereadApi(plugin: WereadPluginLike): Promise<WereadApiAutoSyncResult> {
+  const startedAt = Date.now();
   const auth = await plugin.loadData("weread_auth_settings") || DEFAULT_WEREAD_AUTH_SETTINGS;
-
-  if (!auth.verified || !auth.apiKey) {
-    throw new Error("API Key 未验证");
-  }
-
-  const bookTemplate = (await plugin.loadData("weread_templates") || "").trim();
-  if (!bookTemplate) {
-    throw new Error("请先设置书籍模板");
-  }
-
-  const notebooksList = await buildWereadApiNotebookCache(auth.apiKey);
 
   const emptyNormalResult: WereadApiNormalBooksSyncResult = {
     total: 0,
@@ -45,6 +36,31 @@ export async function autoSyncWereadApi(plugin: WereadPluginLike): Promise<Werea
     items: [],
   };
 
+  if (!auth.verified || !auth.apiKey) {
+    await saveWereadSyncReportAndApplyStatus(plugin, buildWereadSyncReport({
+      startedAt,
+      endedAt: Date.now(),
+      trigger: "auto",
+      normalResult: emptyNormalResult,
+      errors: ["API Key 未验证"],
+    }));
+    throw new Error("API Key 未验证");
+  }
+
+  const bookTemplate = (await plugin.loadData("weread_templates") || "").trim();
+  if (!bookTemplate) {
+    await saveWereadSyncReportAndApplyStatus(plugin, buildWereadSyncReport({
+      startedAt,
+      endedAt: Date.now(),
+      trigger: "auto",
+      normalResult: emptyNormalResult,
+      errors: ["请先设置书籍模板"],
+    }));
+    throw new Error("请先设置书籍模板");
+  }
+
+  const notebooksList = await buildWereadApiNotebookCache(auth.apiKey);
+
   if (!Array.isArray(notebooksList) || notebooksList.length === 0) {
     const emptyResult: WereadApiAutoSyncResult = {
       syncedAt: Date.now(),
@@ -54,6 +70,14 @@ export async function autoSyncWereadApi(plugin: WereadPluginLike): Promise<Werea
       totalSuccess: 0,
       totalFailed: 0,
     };
+    await saveWereadSyncReportAndApplyStatus(plugin, buildWereadSyncReport({
+      startedAt,
+      endedAt: Date.now(),
+      trigger: "auto",
+      normalResult: emptyNormalResult,
+      mpResult: undefined,
+      warnings: ["有笔记书籍列表为空，本次自动同步没有可处理来源"],
+    }));
     await plugin.saveData("weread_api_last_auto_sync_result", emptyResult);
     return emptyResult;
   }
@@ -109,6 +133,15 @@ export async function autoSyncWereadApi(plugin: WereadPluginLike): Promise<Werea
         totalFailed: 0,
         message: "自动同步已取消",
       };
+      await saveWereadSyncReportAndApplyStatus(plugin, buildWereadSyncReport({
+        startedAt,
+        endedAt: Date.now(),
+        trigger: "auto",
+        normalResult,
+        mpResult,
+        cancelled: true,
+        warnings: ["自动同步已取消"],
+      }));
       await plugin.saveData("weread_api_last_auto_sync_result", cancelledResult);
       return cancelledResult;
     }
@@ -122,6 +155,14 @@ export async function autoSyncWereadApi(plugin: WereadPluginLike): Promise<Werea
       totalFailed: 0,
       message: e?.message || "自动同步异常",
     };
+    await saveWereadSyncReportAndApplyStatus(plugin, buildWereadSyncReport({
+      startedAt,
+      endedAt: Date.now(),
+      trigger: "auto",
+      normalResult,
+      mpResult,
+      errors: [e?.message || "自动同步异常"],
+    }));
     await plugin.saveData("weread_api_last_auto_sync_result", failedResult);
     return failedResult;
   }
@@ -138,6 +179,14 @@ export async function autoSyncWereadApi(plugin: WereadPluginLike): Promise<Werea
     totalSuccess,
     totalFailed,
   };
+
+  await saveWereadSyncReportAndApplyStatus(plugin, buildWereadSyncReport({
+    startedAt,
+    endedAt: Date.now(),
+    trigger: "auto",
+    normalResult,
+    mpResult,
+  }));
 
   await plugin.saveData("weread_api_last_auto_sync_result", result);
 

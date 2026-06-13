@@ -6,6 +6,7 @@ import { findWereadApiBookTargetDoc } from "./findWereadApiBookTargetDoc";
 import { preflightWereadApiBooksSync } from "./preflightWereadApiBooksSync";
 import { ensureWereadApiNotebookCacheDetails } from "./ensureWereadApiNotebookCacheDetails";
 import PromiseLimitPool from "@/libs/promise-pool";
+import { recordNormalBookInboxDiff } from "../../storage/readingInboxDiff";
 
 interface WereadPluginLike {
   loadData: (key: string) => Promise<any>;
@@ -26,7 +27,18 @@ interface OldRecord {
 }
 
 type PreparedNormalSyncItem =
-  | { ok: true; bookID: string; title: string; isbn: string; markdown: string; targetBlockID: string; markdownLength: number; cacheUpdatedTime?: number }
+  | {
+      ok: true;
+      bookID: string;
+      title: string;
+      isbn: string;
+      markdown: string;
+      targetBlockID: string;
+      markdownLength: number;
+      cacheUpdatedTime?: number;
+      bookmarks: Array<any>;
+      reviews: Array<any>;
+    }
   | { ok: false; bookID: string; title: string; message: string };
 
 export interface WereadApiNormalBooksSyncResult {
@@ -43,6 +55,8 @@ export interface WereadApiNormalBooksSyncResult {
     status: "success" | "failed" | "skipped_mp" | "skipped_not_ready" | "skipped_unchanged";
     blockID?: string;
     markdownLength?: number;
+    newBookmarkCount?: number;
+    newReviewCount?: number;
     message: string;
   }>;
 }
@@ -155,6 +169,8 @@ export async function syncWereadApiNormalBooks(
     status: "success" | "failed" | "skipped_mp" | "skipped_not_ready" | "skipped_unchanged";
     blockID?: string;
     markdownLength?: number;
+    newBookmarkCount?: number;
+    newReviewCount?: number;
     message: string;
   }> = [];
 
@@ -266,7 +282,18 @@ export async function syncWereadApiNormalBooks(
           return { ok: false, bookID, title, message: "渲染后的 Markdown 内容为空" };
         }
 
-        return { ok: true, bookID, title, isbn, markdown, targetBlockID: targetResult.blockID, markdownLength: markdown.length, cacheUpdatedTime: planned.cacheUpdatedTime };
+        return {
+          ok: true,
+          bookID,
+          title,
+          isbn,
+          markdown,
+          targetBlockID: targetResult.blockID,
+          markdownLength: markdown.length,
+          cacheUpdatedTime: planned.cacheUpdatedTime,
+          bookmarks: enhanced.highlights?.updated || [],
+          reviews: (enhanced.comments?.reviews || []).map((item: any) => item?.review).filter(Boolean),
+        };
       } catch (error: any) {
         return { ok: false, bookID, title, message: error?.message || "同步过程中发生未知错误" };
       }
@@ -302,6 +329,22 @@ export async function syncWereadApiNormalBooks(
     try {
       await updateEndBlocks(plugin, prepared.targetBlockID, wereadPositionMark, prepared.markdown);
 
+      let newBookmarkCount = 0;
+      let newReviewCount = 0;
+      try {
+        const diff = await recordNormalBookInboxDiff(plugin, {
+          bookID: prepared.bookID,
+          title: prepared.title,
+          noteDocId: prepared.targetBlockID,
+          bookmarks: prepared.bookmarks,
+          reviews: prepared.reviews,
+        });
+        newBookmarkCount = diff.newBookmarkCount;
+        newReviewCount = diff.newReviewCount;
+      } catch (error) {
+        console.warn("[weread] record normal book inbox diff failed:", error);
+      }
+
       success++;
       successBookIDs.push(prepared.bookID);
       items.push({
@@ -310,6 +353,8 @@ export async function syncWereadApiNormalBooks(
         status: "success",
         blockID: prepared.targetBlockID,
         markdownLength: prepared.markdownLength,
+        newBookmarkCount,
+        newReviewCount,
         message: "同步成功",
       });
     } catch (error: any) {

@@ -12,6 +12,8 @@ export interface WereadReadingLongestItem {
     publishTime: string;
     readTime: number;
     tags: string[];
+    sourceType?: "book" | "audio" | "unknown";
+    isAudio?: boolean;
 }
 
 export interface WereadReadingCategoryItem {
@@ -78,17 +80,58 @@ function normalizePeriod(mode: WereadReadingStatsMode, raw: any): WereadReadingS
 
     const readLongest: WereadReadingLongestItem[] = Array.isArray(data.readLongest)
         ? data.readLongest.map((item: any) => {
-            const book = item.book || {};
+            const hasBook = item.book && typeof item.book === "object" && Object.keys(item.book).length > 0;
+            const hasAlbumInfo = item.albumInfo !== undefined && item.albumInfo !== null;
+            const hasNonEmptyAlbumInfo = hasAlbumInfo && typeof item.albumInfo === "object" && Object.keys(item.albumInfo).length > 0;
+
+            if (hasBook) {
+                const book = item.book;
+                return {
+                    bookId: String(book.bookId || ""),
+                    title: String(book.title || ""),
+                    author: String(book.author || ""),
+                    cover: String(book.cover || ""),
+                    intro: String(book.intro || ""),
+                    category: String(book.category || ""),
+                    publishTime: String(book.publishTime || ""),
+                    readTime: Number(item.readTime || 0),
+                    tags: Array.isArray(item.tags) ? item.tags : [],
+                    sourceType: "book" as const,
+                    isAudio: false,
+                };
+            }
+
+            if (hasAlbumInfo) {
+                const album = hasNonEmptyAlbumInfo ? item.albumInfo : {};
+                const tags = Array.isArray(item.tags) ? [...item.tags] : [];
+                if (!tags.includes("听书")) tags.push("听书");
+                return {
+                    bookId: String(album.albumId || album.id || ""),
+                    title: hasNonEmptyAlbumInfo ? String(album.name || album.title || "未命名听书") : "未命名听书",
+                    author: hasNonEmptyAlbumInfo ? String(album.authorName || album.author || album.anchorName || "") : "",
+                    cover: hasNonEmptyAlbumInfo ? String(album.cover || album.coverBox || "") : "",
+                    intro: hasNonEmptyAlbumInfo ? String(album.intro || album.description || "") : "",
+                    category: "听书",
+                    publishTime: hasNonEmptyAlbumInfo ? String(album.updateTime || "") : "",
+                    readTime: Number(item.readTime || 0),
+                    tags,
+                    sourceType: "audio" as const,
+                    isAudio: true,
+                };
+            }
+
             return {
-                bookId: String(book.bookId || ""),
-                title: String(book.title || ""),
-                author: String(book.author || ""),
-                cover: String(book.cover || ""),
-                intro: String(book.intro || ""),
-                category: String(book.category || ""),
-                publishTime: String(book.publishTime || ""),
+                bookId: "",
+                title: "未命名书籍",
+                author: "",
+                cover: "",
+                intro: "",
+                category: "",
+                publishTime: "",
                 readTime: Number(item.readTime || 0),
                 tags: Array.isArray(item.tags) ? item.tags : [],
+                sourceType: undefined,
+                isAudio: false,
             };
         })
         : [];

@@ -14,9 +14,13 @@
     import WereadTab from "./tabs/WereadTab.svelte";
     import AboutTab from "./tabs/AboutTab.svelte";
     import { createLocalBookShelfDialog } from "../utils/weread/wereadDialogs";
+    import SiYuanIcon from "./common/SiYuanIcon.svelte";
 
     export let i18n: I18N;
     export let plugin: any;
+    export let embeddedMode: boolean = false;
+    export let hideSidebar: boolean = false;
+    export let initialTabKey: string = "search";
 
     let inputVales = "";
     let bookInfo: BookInfo | null = null;
@@ -79,7 +83,8 @@
             icon: "iconInfo",
         },
     ];
-    let activeTabKey = "search";
+    let activeTabKey = initialTabKey;
+    let lastInitialTabKey = initialTabKey;
 
     interface BookInfo {
         title: string;
@@ -353,38 +358,35 @@
             }
         });
     });
+
+    $: if (initialTabKey !== lastInitialTabKey) {
+        activeTabKey = initialTabKey;
+        lastInitialTabKey = initialTabKey;
+    }
 </script>
 
-<div class="plugin-settings-layout">
-    <div class="plugin-settings-sidebar">
-        <div class="plugin-settings-sidebar-title">{i18n.sidebarTitle}</div>
-        <nav class="plugin-settings-nav">
-            {#each tabs as tab}
-                <button
-                    class:active={tab.key === activeTabKey}
-                    role="tab"
-                    on:click={() => (activeTabKey = tab.key)}
-                >
-                    {#if tab.iconType === "siyuan"}
-                        <svg
-                            class="plugin-settings-nav-icon"
-                            aria-hidden="true"
-                        >
-                            <use href={`#${tab.icon}`}></use>
-                        </svg>
-                    {:else if tab.iconType === "image"}
-                        <img
-                            class="plugin-settings-nav-icon plugin-settings-nav-icon--image"
-                            src={tab.icon}
-                            alt=""
-                            aria-hidden="true"
-                        />
-                    {/if}
-                    <span>{tab.label}</span>
-                </button>
-            {/each}
-        </nav>
-    </div>
+<div class="plugin-settings-layout" class:plugin-settings-layout-embedded={embeddedMode || hideSidebar}>
+    {#if !hideSidebar}
+        <div class="plugin-settings-sidebar">
+            <div class="plugin-settings-sidebar-title">{i18n.sidebarTitle}</div>
+            <nav class="plugin-settings-nav">
+                {#each tabs as tab}
+                    <button
+                        class:active={tab.key === activeTabKey}
+                        role="tab"
+                        on:click={() => (activeTabKey = tab.key)}
+                    >
+                        {#if tab.iconType === "siyuan"}
+                            <SiYuanIcon name={tab.icon} size={16} className="plugin-settings-nav-icon" />
+                        {:else if tab.iconType === "image"}
+                            <SiYuanIcon name="weread" pluginName={plugin.name} imageSrc={tab.icon} size={16} className="plugin-settings-nav-icon plugin-settings-nav-icon--image" />
+                        {/if}
+                        <span>{tab.label}</span>
+                    </button>
+                {/each}
+            </nav>
+        </div>
+    {/if}
 
     <div class="plugin-settings-main">
         <div class="plugin-settings-content">

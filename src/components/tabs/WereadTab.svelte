@@ -29,6 +29,7 @@
     import { buildWereadApiNotebookCache } from "@/utils/weread/api/buildWereadApiNotebookCache";
     import { buildWereadApiReadingStats } from "@/utils/weread/api/buildWereadApiReadingStats";
     import { formatReadingDuration } from "@/utils/weread/api/formatWereadReadingStats";
+    import { buildWereadSyncReport, saveWereadSyncReportAndApplyStatus } from "@/utils/storage/syncReportBuilder";
     import type { WereadReadingDashboard } from "@/utils/weread/api/buildWereadApiReadingStats";
 
     import wereadManageISBN from "@/components/common/wereadManageISBN.svelte";
@@ -159,24 +160,53 @@
     let wereadApiModeState: any = null;
 
     async function runWereadApiManualSync(mode: "all" | "update", options?: { manageLoading?: boolean; forceBookIDs?: string[]; forceMpBookIDs?: string[] }) {
+        const startedAt = Date.now();
+        let normalResult: any = null;
+        let mpResult: any = null;
         const template = (await plugin.loadData("weread_templates") || "").trim();
         if (!template) {
+            const report = buildWereadSyncReport({
+                startedAt,
+                endedAt: Date.now(),
+                trigger: "manual",
+                errors: ["请先配置微信读书笔记模板"],
+            });
+            await saveWereadSyncReportAndApplyStatus(plugin, report);
             showMessage(i18n.wereadApiManualSyncNeedTemplate || "请先配置微信读书笔记模板");
             return;
         }
         const apiKey = wereadApiKeyInput.trim();
+        if (!wereadApiKeyVerified || !apiKey) {
+            const report = buildWereadSyncReport({
+                startedAt,
+                endedAt: Date.now(),
+                trigger: "manual",
+                errors: ["API Key 未验证"],
+            });
+            await saveWereadSyncReportAndApplyStatus(plugin, report);
+            showMessage("请先验证微信读书 API Key");
+            return;
+        }
         const manageLoading = options?.manageLoading !== false;
         if (manageLoading) {
             isSyncing = true;
         }
         try {
-            const normalResult = await syncWereadApiNormalBooks(plugin, apiKey, template, { mode, forceBookIDs: options?.forceBookIDs || [] });
+            normalResult = await syncWereadApiNormalBooks(plugin, apiKey, template, { mode, forceBookIDs: options?.forceBookIDs || [] });
 
             const mpTemplate = (await plugin.loadData("weread_mp_templates") || "").trim();
-            let mpResult: any = null;
             if (mpTemplate) {
                 mpResult = await syncWereadApiMpAccounts(plugin, apiKey, mpTemplate, { mode, forceBookIDs: options?.forceMpBookIDs || [] });
             }
+
+            const report = buildWereadSyncReport({
+                startedAt,
+                endedAt: Date.now(),
+                trigger: "manual",
+                normalResult,
+                mpResult,
+            });
+            await saveWereadSyncReportAndApplyStatus(plugin, report);
 
             const totalPlanned = normalResult.planned + (mpResult?.planned || 0);
             const totalFailed = normalResult.failed + (mpResult?.failed || 0);
@@ -189,6 +219,15 @@
                 showMessage(i18n.wereadSyncFinished || "微信读书同步完成");
             }
         } catch (error) {
+            const report = buildWereadSyncReport({
+                startedAt,
+                endedAt: Date.now(),
+                trigger: "manual",
+                normalResult,
+                mpResult,
+                errors: [error?.message || "手动同步异常"],
+            });
+            await saveWereadSyncReportAndApplyStatus(plugin, report);
             showMessage(`${i18n.wereadApiManualSyncFailed || "同步失败"}：${error?.message || ""}`);
         } finally {
             if (manageLoading) {

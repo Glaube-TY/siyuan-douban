@@ -497,6 +497,14 @@
     flex-shrink: 0;
 }
 
+.weread-reading-cover-placeholder {
+    width: 40px;
+    height: 56px;
+    border-radius: 4px;
+    flex-shrink: 0;
+    background: color-mix(in srgb, var(--b3-theme-on-background) 6%, transparent);
+}
+
 .weread-reading-book-info {
     flex: 1;
     min-width: 0;
@@ -514,6 +522,19 @@
     white-space: nowrap;
 }
 
+.weread-reading-audio-badge {
+    display: inline-block;
+    font-size: 10px;
+    font-weight: 600;
+    padding: 1px 5px;
+    border-radius: 3px;
+    background: color-mix(in srgb, var(--b3-theme-primary) 12%, transparent);
+    color: var(--b3-theme-primary);
+    vertical-align: middle;
+    margin-left: 4px;
+    line-height: 1.4;
+}
+
 .weread-reading-book-meta {
     font-size: 11px;
     color: var(--b3-theme-on-surface);
@@ -527,6 +548,18 @@
     flex-shrink: 0;
     white-space: nowrap;
     opacity: 0.85;
+}
+
+.weread-reading-book-tag {
+    display: inline-block;
+    font-size: 10px;
+    padding: 0 4px;
+    border-radius: 2px;
+    background: color-mix(in srgb, var(--b3-theme-on-background) 6%, transparent);
+    color: var(--b3-theme-on-surface-light);
+    margin-left: 4px;
+    vertical-align: middle;
+    line-height: 1.5;
 }
 
 .weread-reading-empty {
