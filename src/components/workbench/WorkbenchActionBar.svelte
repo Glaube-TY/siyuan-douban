@@ -33,7 +33,7 @@
         flex-wrap: wrap;
         gap: 8px;
         padding: 12px;
-        border: 1px solid var(--b3-theme-border);
+        border: 1px solid var(--b3-border-color);
         border-radius: 8px;
         background: var(--b3-theme-surface);
     }
@@ -44,7 +44,7 @@
         gap: 6px;
         height: 30px;
         padding: 0 10px;
-        border: 1px solid var(--b3-theme-border);
+        border: 1px solid var(--b3-border-color);
         border-radius: 7px;
         background: var(--b3-theme-background);
         color: var(--b3-theme-on-background);

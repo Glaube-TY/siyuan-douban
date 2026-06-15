@@ -99,7 +99,7 @@
         display: grid;
         gap: 14px;
         padding: 16px;
-        border: 1px solid var(--b3-theme-border);
+        border: 1px solid var(--b3-border-color);
         border-radius: 8px;
         background: var(--b3-theme-surface);
     }
@@ -127,7 +127,7 @@
     .workbench-panel-link,
     .workbench-weread-footer button,
     .workbench-metric {
-        border: 1px solid var(--b3-theme-border);
+        border: 1px solid var(--b3-border-color);
         border-radius: 7px;
         background: var(--b3-theme-background);
         color: var(--b3-theme-on-background);
@@ -208,6 +208,6 @@
     .workbench-weread-footer button.primary {
         border-color: var(--b3-theme-primary);
         background: var(--b3-theme-primary);
-        color: var(--b3-theme-on-primary, #fff);
+        color: #fff;
     }
 </style>

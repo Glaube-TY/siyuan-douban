@@ -45,6 +45,12 @@ export function buildWereadSyncReport(input: BuildSyncReportInput): WereadSyncRe
             newReviewCount: item.newReviewCount || 0,
             suggestion: getReasonSuggestion(reasonCode),
             endedAt,
+            addedItemCount: item.addedItemCount,
+            changedItemCount: item.changedItemCount,
+            deletedItemCount: item.deletedItemCount,
+            unchangedItemCount: item.unchangedItemCount,
+            blockOperationCount: item.blockOperationCount,
+            rebuilt: item.rebuilt,
         };
     });
 
@@ -66,6 +72,12 @@ export function buildWereadSyncReport(input: BuildSyncReportInput): WereadSyncRe
             newReviewCount: item.newReviewCount || 0,
             suggestion: getReasonSuggestion(reasonCode),
             endedAt,
+            addedItemCount: item.addedItemCount,
+            changedItemCount: item.changedItemCount,
+            deletedItemCount: item.deletedItemCount,
+            unchangedItemCount: item.unchangedItemCount,
+            blockOperationCount: item.blockOperationCount,
+            rebuilt: item.rebuilt,
         };
     });
 
@@ -223,7 +235,7 @@ function inferReasonCode(message = "", rawStatus = ""): WereadSyncReportReasonCo
     if (/ISBN|isbn/.test(text) && /失败|找不到|未匹配/.test(text)) return "ISBN_MATCH_FAILED";
     if (/目标文档|本地文档|找不到|未找到/.test(text)) return "TARGET_DOC_NOT_FOUND";
     if (/未准备|not_ready|skipped_not_ready|匹配失败/.test(text)) return "TARGET_DOC_NOT_READY";
-    if (/写入|updateEndBlocks|文档失败/.test(text)) return "WRITE_BLOCK_FAILED";
+    if (/写入|块级同步|文档失败/.test(text)) return "WRITE_BLOCK_FAILED";
     if (/公众号|标题/.test(text) && /失败/.test(text)) return "MP_TITLE_RESOLVE_FAILED";
     if (/跳过|skipped/.test(text)) return "BOOK_SKIPPED_BY_USER";
     if (/新来源|未导入/.test(text)) return "NEW_SOURCE_NOT_IMPORTED";

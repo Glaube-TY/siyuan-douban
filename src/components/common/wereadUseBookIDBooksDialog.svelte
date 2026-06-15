@@ -160,7 +160,7 @@
             }
 
             th {
-                background-color: var(--b3-theme-background-light);
+                background-color: var(--b3-theme-surface-light);
                 position: sticky;
                 top: 0;
                 z-index: 1;
@@ -237,7 +237,7 @@
             border: 1px solid var(--b3-border-color);
             border-radius: 4px;
             font-size: 12px;
-            color: var(--b3-theme-text);
+            color: var(--b3-theme-on-background);
             margin-bottom: 8px;
         }
 

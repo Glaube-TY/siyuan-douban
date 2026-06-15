@@ -95,7 +95,7 @@
         gap: 12px;
         align-items: flex-start;
         padding-bottom: 14px;
-        border-bottom: 1px solid var(--b3-theme-border);
+        border-bottom: 1px solid var(--b3-border-color);
         flex-shrink: 0;
     }
     .settings-dialog-icon {
@@ -117,7 +117,7 @@
         justify-content: flex-end;
         gap: 8px;
         padding-top: 14px;
-        border-top: 1px solid var(--b3-theme-border);
+        border-top: 1px solid var(--b3-border-color);
         flex-shrink: 0;
     }
 </style>

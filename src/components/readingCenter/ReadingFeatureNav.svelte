@@ -49,7 +49,7 @@
         gap: 6px;
         padding: 8px 14px;
         background: var(--b3-theme-surface, #fff);
-        border: 1px solid var(--b3-theme-border, #e0e0e0);
+        border: 1px solid var(--b3-border-color, #e0e0e0);
         border-radius: 8px;
         cursor: pointer;
         font-size: 13px;

@@ -12,16 +12,18 @@
     import {
         loadPluginData,
         DEFAULT_WEREAD_SETTINGS,
-        DEFAULT_WEREAD_AUTH_SETTINGS,
         normalizeWereadPositionMark,
     } from "@/utils/core/configDefaults";
     import {
+        loadWereadAuthState as loadWereadAuthStateFromService,
+        verifyAndSaveWereadApiKey as verifyAndSaveWereadApiKeyFromService,
+        clearWereadApiKey as clearWereadApiKeyFromService,
+    } from "@/utils/settings/wereadSettingsService";
+    import {
         maskWereadApiKey,
-        validateWereadApiKey,
     } from "@/utils/weread/api/wereadApiAuth";
     import { syncWereadApiNormalBooks } from "@/utils/weread/api/syncWereadApiNormalBooks";
     import { syncWereadApiMpAccounts } from "@/utils/weread/api/syncWereadApiMpAccounts";
-    import { WEREAD_API_PROTOCOL_VERSION } from "@/utils/weread/api/constants";
     import { ensureWereadApiModeState } from "@/utils/weread/api/wereadApiModeState";
     import { showWereadApiNewSourcesDialogAndSync } from "@/utils/weread/api/handleWereadApiNewSources";
     import { buildApiBookShelf } from "@/utils/weread/api/buildApiBookShelf";
@@ -523,11 +525,11 @@
     }
 
     async function loadWereadAuthSettings() {
-        const authSettings = await loadPluginData(plugin, "weread_auth_settings", DEFAULT_WEREAD_AUTH_SETTINGS);
-        wereadApiKeyInput = authSettings.apiKey || "";
-        wereadApiKeyVerified = authSettings.verified || false;
-        wereadApiKeyVerifiedAt = authSettings.verifiedAt || 0;
-        wereadApiKeyLastError = authSettings.lastError || "";
+        const state = await loadWereadAuthStateFromService(plugin);
+        wereadApiKeyInput = state.apiKey || "";
+        wereadApiKeyVerified = state.verified || false;
+        wereadApiKeyVerifiedAt = state.verifiedAt || 0;
+        wereadApiKeyLastError = state.lastError || "";
     }
 
     async function verifyWereadApiKey() {
@@ -539,64 +541,26 @@
 
         isVerifyingWereadApiKey = true;
         try {
-            const result = await validateWereadApiKey(trimmed);
+            const state = await verifyAndSaveWereadApiKeyFromService(plugin, trimmed);
+            wereadApiKeyInput = state.apiKey;
+            wereadApiKeyVerified = state.verified;
+            wereadApiKeyVerifiedAt = state.verifiedAt;
+            wereadApiKeyLastError = state.lastError;
 
-            if (result.success) {
-                wereadApiKeyVerified = true;
-                wereadApiKeyVerifiedAt = result.verifiedAt || Date.now();
-                wereadApiKeyLastError = "";
+            showMessage(state.verified ? (i18n.showMessageWereadApiKeyVerified) : (i18n.showMessageWereadApiKeyInvalid));
 
-                await plugin.saveData("weread_auth_settings", {
-                    provider: "apiKey",
-                    apiKey: trimmed,
-                    verified: true,
-                    verifiedAt: wereadApiKeyVerifiedAt,
-                    apiProtocolVersion: WEREAD_API_PROTOCOL_VERSION,
-                    lastError: "",
-                });
-
-                showMessage(i18n.showMessageWereadApiKeyVerified);
-
+            if (state.verified) {
                 try {
                     await getNotebooksList();
-                } catch {
-                }
-
+                } catch {}
                 try {
                     await refreshReadingStats({ silent: true });
-                } catch {
-                }
-            } else {
-                wereadApiKeyVerified = false;
-                wereadApiKeyVerifiedAt = 0;
-                wereadApiKeyLastError = result.message;
-
-                await plugin.saveData("weread_auth_settings", {
-                    provider: "apiKey",
-                    apiKey: trimmed,
-                    verified: false,
-                    verifiedAt: 0,
-                    apiProtocolVersion: WEREAD_API_PROTOCOL_VERSION,
-                    lastError: result.message,
-                });
-
-                showMessage(i18n.showMessageWereadApiKeyInvalid);
+                } catch {}
             }
         } catch (error: any) {
-            const errorMsg = error?.message || "验证失败";
             wereadApiKeyVerified = false;
             wereadApiKeyVerifiedAt = 0;
-            wereadApiKeyLastError = errorMsg;
-
-            await plugin.saveData("weread_auth_settings", {
-                provider: "apiKey",
-                apiKey: trimmed,
-                verified: false,
-                verifiedAt: 0,
-                apiProtocolVersion: WEREAD_API_PROTOCOL_VERSION,
-                lastError: errorMsg,
-            });
-
+            wereadApiKeyLastError = error?.message || "验证失败";
             showMessage(i18n.showMessageWereadApiKeyInvalid);
         } finally {
             isVerifyingWereadApiKey = false;
@@ -614,18 +578,7 @@
         readingStats = null;
         readingStatsError = "";
 
-        await plugin.saveData("weread_auth_settings", {
-            provider: "apiKey",
-            apiKey: "",
-            verified: false,
-            verifiedAt: 0,
-            apiProtocolVersion: WEREAD_API_PROTOCOL_VERSION,
-            lastError: "",
-        });
-
-        await plugin.saveData("temporary_weread_notebooksList", null);
-        await plugin.saveData("weread_notebooksList_readyAt", null);
-        await plugin.saveData("weread_reading_stats_cache", null);
+        await clearWereadApiKeyFromService(plugin);
 
         showMessage(i18n.showMessageWereadApiKeyCleared);
     }

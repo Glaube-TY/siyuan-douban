@@ -62,10 +62,10 @@
         font-family: monospace;
         font-size: 14px;
         line-height: 1.6;
-        border: 1px solid var(--b3-theme-divider);
+        border: 1px solid var(--b3-border-color);
         border-radius: 4px;
         background-color: var(--b3-theme-background);
-        color: var(--b3-theme-text);
+        color: var(--b3-theme-on-background);
         box-sizing: border-box;
         resize: none;
         outline: none;
@@ -77,21 +77,21 @@
         justify-content: center;
         gap: 12px;
         padding-top: 8px;
-        border-top: 1px solid var(--b3-theme-divider);
+        border-top: 1px solid var(--b3-border-color);
     }
 
     .cancel-btn {
         padding: 8px 20px;
-        border: 1px solid var(--b3-theme-divider);
+        border: 1px solid var(--b3-border-color);
         border-radius: 4px;
         background-color: var(--b3-theme-background);
-        color: var(--b3-theme-text);
+        color: var(--b3-theme-on-background);
         cursor: pointer;
         transition: all 0.2s ease;
     }
 
     .cancel-btn:hover {
-        border-color: var(--b3-theme-text);
+        border-color: var(--b3-theme-on-background);
         background-color: var(--b3-theme-surface);
     }
 
@@ -100,7 +100,7 @@
         border: 1px solid var(--b3-theme-primary);
         border-radius: 4px;
         background-color: var(--b3-theme-primary);
-        color: var(--b3-theme-on-primary);
+        color: #fff;
         cursor: pointer;
         transition: all 0.2s ease;
     }

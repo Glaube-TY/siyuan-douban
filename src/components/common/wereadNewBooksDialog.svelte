@@ -531,7 +531,7 @@
 
                 &.active {
                     background: var(--b3-theme-primary);
-                    color: var(--b3-theme-on-primary, #fff);
+                    color: #fff;
                     font-weight: 500;
                 }
 
@@ -560,7 +560,7 @@
             }
 
             th {
-                background-color: var(--b3-theme-background-light);
+                background-color: var(--b3-theme-surface-light);
                 font-weight: bold;
             }
 

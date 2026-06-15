@@ -25,6 +25,8 @@ export const DEFAULT_WEREAD_AUTH_SETTINGS: WereadAuthSettings = {
     verifiedAt: 0,
     apiProtocolVersion: WEREAD_API_PROTOCOL_VERSION,
     lastError: "",
+    apiKeyEncrypted: "",
+    apiKeyCryptoVersion: 1,
 };
 
 export const WEREAD_API_MODE_STATE_SCHEMA = 1;

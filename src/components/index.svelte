@@ -365,67 +365,69 @@
     }
 </script>
 
-<div class="plugin-settings-layout" class:plugin-settings-layout-embedded={embeddedMode || hideSidebar}>
-    {#if !hideSidebar}
-        <div class="plugin-settings-sidebar">
-            <div class="plugin-settings-sidebar-title">{i18n.sidebarTitle}</div>
-            <nav class="plugin-settings-nav">
-                {#each tabs as tab}
-                    <button
-                        class:active={tab.key === activeTabKey}
-                        role="tab"
-                        on:click={() => (activeTabKey = tab.key)}
-                    >
-                        {#if tab.iconType === "siyuan"}
-                            <SiYuanIcon name={tab.icon} size={16} className="plugin-settings-nav-icon" />
-                        {:else if tab.iconType === "image"}
-                            <SiYuanIcon name="weread" pluginName={plugin.name} imageSrc={tab.icon} size={16} className="plugin-settings-nav-icon plugin-settings-nav-icon--image" />
-                        {/if}
-                        <span>{tab.label}</span>
-                    </button>
-                {/each}
-            </nav>
-        </div>
-    {/if}
+<div class="siyuan-douban-plugin">
+    <div class="plugin-settings-layout" class:plugin-settings-layout-embedded={embeddedMode || hideSidebar}>
+        {#if !hideSidebar}
+            <div class="plugin-settings-sidebar">
+                <div class="plugin-settings-sidebar-title">{i18n.sidebarTitle}</div>
+                <nav class="plugin-settings-nav">
+                    {#each tabs as tab}
+                        <button
+                            class:active={tab.key === activeTabKey}
+                            role="tab"
+                            on:click={() => (activeTabKey = tab.key)}
+                        >
+                            {#if tab.iconType === "siyuan"}
+                                <SiYuanIcon name={tab.icon} size={16} className="plugin-settings-nav-icon" />
+                            {:else if tab.iconType === "image"}
+                                <SiYuanIcon name="weread" pluginName={plugin.name} imageSrc={tab.icon} size={16} className="plugin-settings-nav-icon plugin-settings-nav-icon--image" />
+                            {/if}
+                            <span>{tab.label}</span>
+                        </button>
+                    {/each}
+                </nav>
+            </div>
+        {/if}
 
-    <div class="plugin-settings-main">
-        <div class="plugin-settings-content">
-            {#if activeTabKey === "search"}
-                <BookSearchTab
-                    bind:inputVales
-                    bind:bookInfo
-                    bind:i18n
-                    {statusMessage}
-                    {customRatings}
-                    {customCategories}
-                    {customReadingStatuses}
-                    bind:myRatingIndex
-                    bind:bookCategoryIndex
-                    bind:readingStatusIndex
-                    on:fetchBookData={fetchBookData}
-                    on:addBook={handleAddBook}
-                    on:openLocalBookShelf={openLocalBookShelf}
-                    {databaseStatus}
-                />
-            {:else if activeTabKey === "settings"}
-                <UserSettingsTab
-                    bind:bookDatabassID
-                    bind:i18n
-                    bind:tempRatings
-                    bind:tempCategories
-                    bind:tempStatuses
-                    bind:addNotes1
-                    bind:isSYTemplateRender
-                    {databaseStatusMessage}
-                    on:validate={validateDatabaseID}
-                    on:save={handleSaveSettings}
-                    on:openTemplate={openTemplateEditor}
-                />
-            {:else if activeTabKey === "weread"}
-                <WereadTab bind:plugin bind:i18n {databaseStatus} />
-            {:else}
-                <AboutTab bind:i18n />
-            {/if}
+        <div class="plugin-settings-main">
+            <div class="plugin-settings-content">
+                {#if activeTabKey === "search"}
+                    <BookSearchTab
+                        bind:inputVales
+                        bind:bookInfo
+                        bind:i18n
+                        {statusMessage}
+                        {customRatings}
+                        {customCategories}
+                        {customReadingStatuses}
+                        bind:myRatingIndex
+                        bind:bookCategoryIndex
+                        bind:readingStatusIndex
+                        on:fetchBookData={fetchBookData}
+                        on:addBook={handleAddBook}
+                        on:openLocalBookShelf={openLocalBookShelf}
+                        {databaseStatus}
+                    />
+                {:else if activeTabKey === "settings"}
+                    <UserSettingsTab
+                        bind:bookDatabassID
+                        bind:i18n
+                        bind:tempRatings
+                        bind:tempCategories
+                        bind:tempStatuses
+                        bind:addNotes1
+                        bind:isSYTemplateRender
+                        {databaseStatusMessage}
+                        on:validate={validateDatabaseID}
+                        on:save={handleSaveSettings}
+                        on:openTemplate={openTemplateEditor}
+                    />
+                {:else if activeTabKey === "weread"}
+                    <WereadTab bind:plugin bind:i18n {databaseStatus} />
+                {:else}
+                    <AboutTab bind:i18n />
+                {/if}
+            </div>
         </div>
     </div>
 </div>

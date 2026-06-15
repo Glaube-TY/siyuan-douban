@@ -105,7 +105,7 @@
     </div>
 
     <div class="workbench-operations-grid">
-        <WorkbenchRecentNotes {plugin} {refreshKey} on:action={action} />
+        <WorkbenchRecentNotes {plugin} {refreshKey} on:action={action} on:refresh={refresh} />
         <WorkbenchReviewPanel {plugin} {refreshKey} on:action={action} />
     </div>
 
@@ -130,8 +130,9 @@
 
     .workbench-operations-grid {
         display: grid;
-        grid-template-columns: minmax(320px, 0.8fr) minmax(0, 1.2fr);
-        gap: clamp(14px, 1.7vw, 20px);
+        grid-template-columns: minmax(560px, 1.25fr) minmax(360px, 0.75fr);
+        gap: clamp(10px, 1.3vw, 16px);
+        align-items: stretch;
     }
 
     @media (max-width: 980px) {

@@ -66,7 +66,7 @@
     .reading-feature-header {
         flex-shrink: 0;
         background: var(--b3-theme-surface, #fff);
-        border-bottom: 1px solid var(--b3-theme-border, #e0e0e0);
+        border-bottom: 1px solid var(--b3-border-color, #e0e0e0);
     }
 
     .reading-feature-header-top {
@@ -74,7 +74,7 @@
         align-items: center;
         gap: 12px;
         padding: 12px clamp(16px, 2vw, 32px);
-        border-bottom: 1px solid var(--b3-theme-border, #e0e0e0);
+        border-bottom: 1px solid var(--b3-border-color, #e0e0e0);
     }
 
     .reading-feature-back {
@@ -83,7 +83,7 @@
         gap: 6px;
         padding: 6px 12px;
         background: var(--b3-theme-background, #f5f5f5);
-        border: 1px solid var(--b3-theme-border, #e0e0e0);
+        border: 1px solid var(--b3-border-color, #e0e0e0);
         border-radius: 8px;
         cursor: pointer;
         font-size: 13px;
@@ -111,7 +111,7 @@
     }
 
     .breadcrumb-separator {
-        color: var(--b3-theme-border, #ccc);
+        color: var(--b3-border-color, #ccc);
     }
 
     .breadcrumb-current {
@@ -157,7 +157,7 @@
     .reading-feature-content {
         height: 100%;
         background: var(--b3-theme-surface, #fff);
-        border: 1px solid var(--b3-theme-border, #e0e0e0);
+        border: 1px solid var(--b3-border-color, #e0e0e0);
         border-radius: 12px;
         overflow: hidden;
     }

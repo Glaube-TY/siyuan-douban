@@ -5,9 +5,10 @@ import setPage from "./components/index.svelte";
 import ReadingCenter from "./components/readingCenter/ReadingCenter.svelte";
 
 import { svelteDialog } from "./libs/dialog";
-import { loadPluginData, DEFAULT_WEREAD_SETTINGS, DEFAULT_WEREAD_AUTH_SETTINGS } from "./utils/core/configDefaults";
+import { loadPluginData, DEFAULT_WEREAD_SETTINGS } from "./utils/core/configDefaults";
 import { autoSyncWereadApi } from "./utils/weread/api/autoSyncWereadApi";
 import { formatWereadApiAutoSyncResultSummary } from "./utils/weread/api/formatWereadApiSyncResult";
+import { loadWereadAuthState } from "./utils/settings/wereadSettingsService";
 
 const STORAGE_NAME = "menu-config";
 
@@ -76,7 +77,7 @@ export default class PluginDouban extends Plugin {
             return;
         }
 
-        const auth = await loadPluginData(this, "weread_auth_settings", DEFAULT_WEREAD_AUTH_SETTINGS);
+        const auth = await loadWereadAuthState(this);
 
         if (auth.verified && auth.apiKey) {
             try {

@@ -2,7 +2,7 @@ import { syncWereadApiNormalBooks, WereadApiNormalBooksSyncResult } from "./sync
 import { syncWereadApiMpAccounts, WereadApiMpAccountsSyncResult } from "./syncWereadApiMpAccounts";
 import { buildWereadApiNotebookCache } from "./buildWereadApiNotebookCache";
 import { showWereadApiNewSourcesDialogAndSync } from "./handleWereadApiNewSources";
-import { DEFAULT_WEREAD_AUTH_SETTINGS } from "../../core/configDefaults";
+import { loadWereadAuthState } from "../../settings/wereadSettingsService";
 import { buildWereadSyncReport, saveWereadSyncReportAndApplyStatus } from "../../storage/syncReportBuilder";
 
 interface WereadPluginLike {
@@ -26,7 +26,7 @@ export async function runWorkbenchManualWereadApiSync(
   mode: "all" | "update"
 ): Promise<WereadApiWorkbenchManualSyncResult> {
   const startedAt = Date.now();
-  const auth = await plugin.loadData("weread_auth_settings") || DEFAULT_WEREAD_AUTH_SETTINGS;
+  const auth = await loadWereadAuthState(plugin);
 
   const emptyNormalResult: WereadApiNormalBooksSyncResult = {
     total: 0,

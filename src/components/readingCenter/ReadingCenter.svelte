@@ -22,6 +22,10 @@
     import ReadingTopics from "./ReadingTopics.svelte";
     import ReadingReview from "./ReadingReview.svelte";
     import ReadingDigestReports from "./ReadingDigestReports.svelte";
+    import SyncChangePanel from "../readingManagement/SyncChangePanel.svelte";
+    import UnboundBooksPanel from "../readingManagement/UnboundBooksPanel.svelte";
+    import BookHealthPanel from "../readingManagement/BookHealthPanel.svelte";
+    import DataMaintenancePanel from "../readingManagement/DataMaintenancePanel.svelte";
     import WereadTab from "../tabs/WereadTab.svelte";
     import OldSettingsPage from "../index.svelte";
     import DatabaseSettingsDialog from "../settings/DatabaseSettingsDialog.svelte";
@@ -39,7 +43,11 @@
         | "sync-panel"
         | "legacy-settings"
         | "sync-report"
+        | "sync-changes"
         | "inbox"
+        | "unbound-books"
+        | "book-health"
+        | "maintenance"
         | "book-status"
         | "topics"
         | "review"
@@ -232,6 +240,14 @@
             }
         } else if (action === "open-inbox") {
             switchToView("inbox");
+        } else if (action === "open-sync-changes") {
+            switchToView("sync-changes");
+        } else if (action === "open-unbound-books") {
+            switchToView("unbound-books");
+        } else if (action === "open-book-health") {
+            switchToView("book-health");
+        } else if (action === "open-maintenance") {
+            switchToView("maintenance");
         } else if (action === "open-diagnostics") {
             switchToView("sync-report");
         } else if (action === "open-database-settings") {
@@ -305,7 +321,9 @@
             activeTab=""
             on:back={switchToDashboard}
         >
-            <WereadTab bind:plugin bind:i18n {databaseStatus} />
+            <div class="siyuan-douban-plugin reading-center-legacy-plugin">
+                <WereadTab bind:plugin bind:i18n {databaseStatus} />
+            </div>
         </ReadingFeatureShell>
     {:else if currentView === "legacy-settings"}
         <ReadingFeatureShell
@@ -321,9 +339,17 @@
             {/key}
         </ReadingFeatureShell>
     {:else if currentView === "sync-report"}
-        <SyncReportCenter {plugin} on:back={switchToDashboard} on:retryFailed={handleRetryFailed} />
+        <SyncReportCenter {plugin} on:back={switchToDashboard} on:retryFailed={handleRetryFailed} on:maintenance={() => switchToView("maintenance")} />
+    {:else if currentView === "sync-changes"}
+        <SyncChangePanel {plugin} on:back={switchToDashboard} on:action={handleWorkbenchAction} />
     {:else if currentView === "inbox"}
         <ReadingInbox {plugin} on:back={switchToDashboard} on:addToTopic={handleAddInboxToTopic} />
+    {:else if currentView === "unbound-books"}
+        <UnboundBooksPanel {plugin} on:back={switchToDashboard} on:action={handleWorkbenchAction} />
+    {:else if currentView === "book-health"}
+        <BookHealthPanel {plugin} on:back={switchToDashboard} on:action={handleWorkbenchAction} />
+    {:else if currentView === "maintenance"}
+        <DataMaintenancePanel {plugin} on:back={switchToDashboard} />
     {:else if currentView === "book-status"}
         <ReadingBookStatusManager {plugin} on:back={switchToDashboard} />
     {:else if currentView === "topics"}
@@ -370,10 +396,17 @@
     .reading-center-spinner {
         width: 32px;
         height: 32px;
-        border: 3px solid var(--b3-theme-border);
+        border: 3px solid var(--b3-border-color);
         border-top-color: var(--b3-theme-primary);
         border-radius: 50%;
         animation: reading-center-spin 1s linear infinite;
+    }
+
+    .reading-center-legacy-plugin {
+        display: block;
+        width: 100%;
+        height: auto;
+        min-height: 0;
     }
 
     @keyframes reading-center-spin {

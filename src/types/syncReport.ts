@@ -41,6 +41,12 @@ export interface WereadSyncReportItem {
     suggestion?: string;
     startedAt?: number;
     endedAt?: number;
+    addedItemCount?: number;
+    changedItemCount?: number;
+    deletedItemCount?: number;
+    unchangedItemCount?: number;
+    blockOperationCount?: number;
+    rebuilt?: boolean;
 }
 
 /** 同步报告 */

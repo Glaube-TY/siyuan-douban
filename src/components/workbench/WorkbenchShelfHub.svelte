@@ -293,7 +293,7 @@
         display: grid;
         gap: 14px;
         padding: 16px;
-        border: 1px solid var(--b3-theme-border);
+        border: 1px solid var(--b3-border-color);
         border-radius: 8px;
         background: var(--b3-theme-surface);
     }
@@ -330,7 +330,7 @@
         gap: 5px;
         height: 28px;
         padding: 0 10px;
-        border: 1px solid var(--b3-theme-border);
+        border: 1px solid var(--b3-border-color);
         border-radius: 7px;
         background: var(--b3-theme-background);
         color: var(--b3-theme-on-background);
@@ -352,7 +352,7 @@
         display: inline-flex;
         gap: 4px;
         padding: 4px;
-        border: 1px solid var(--b3-theme-border);
+        border: 1px solid var(--b3-border-color);
         border-radius: 8px;
         background: var(--b3-theme-background);
     }
@@ -375,7 +375,7 @@
 
     .shelf-hub-tabs button.active {
         background: var(--b3-theme-surface);
-        border-color: var(--b3-theme-border);
+        border-color: var(--b3-border-color);
         color: var(--b3-theme-primary);
     }
 
@@ -408,7 +408,7 @@
         min-width: 0;
         padding: 0 10px;
         height: 30px;
-        border: 1px solid var(--b3-theme-border);
+        border: 1px solid var(--b3-border-color);
         border-radius: 7px;
         background: var(--b3-theme-background);
     }
@@ -454,7 +454,7 @@
         gap: 10px;
         align-items: start;
         padding: 10px;
-        border: 1px solid var(--b3-theme-border);
+        border: 1px solid var(--b3-border-color);
         border-radius: 8px;
         background: var(--b3-theme-background);
         color: var(--b3-theme-on-background);
@@ -541,7 +541,7 @@
         align-items: center;
         height: 22px;
         padding: 0 8px;
-        border: 1px solid var(--b3-theme-border);
+        border: 1px solid var(--b3-border-color);
         border-radius: 4px;
         background: var(--b3-theme-surface);
         color: var(--b3-theme-primary);

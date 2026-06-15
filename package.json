@@ -1,6 +1,6 @@
 {
   "name": "siyuan-douban",
-  "version": "4.0.0",
+  "version": "4.1.0",
   "type": "module",
   "description": "Search books from Douban, generate reading notes, and sync WeRead highlights, thoughts, book reviews, and reading statistics to SiYuan (https://github.com/Glaube-TY/siyuan-douban)",
   "repository": "https://github.com/Glaube-TY/siyuan-douban",

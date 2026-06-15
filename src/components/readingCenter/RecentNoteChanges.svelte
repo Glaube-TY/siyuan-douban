@@ -49,7 +49,7 @@
     .info-panel {
         background: var(--b3-theme-surface, #fff);
         border-radius: 12px;
-        border: 1px solid var(--b3-theme-border, #e0e0e0);
+        border: 1px solid var(--b3-border-color, #e0e0e0);
         overflow: hidden;
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
     }
@@ -60,7 +60,7 @@
         gap: 10px;
         padding: 14px 16px;
         background: var(--b3-theme-surface-light, #f8f9fa);
-        border-bottom: 1px solid var(--b3-theme-border, #e0e0e0);
+        border-bottom: 1px solid var(--b3-border-color, #e0e0e0);
     }
 
     .panel-icon {
@@ -115,7 +115,7 @@
         align-items: center;
         gap: 10px;
         width: 100%;
-        border: 1px solid var(--b3-theme-border, #e0e0e0);
+        border: 1px solid var(--b3-border-color, #e0e0e0);
         background: var(--b3-theme-background, #f5f5f5);
         border-radius: 6px;
         padding: 8px 10px;

@@ -51,7 +51,7 @@
         border-radius: 12px;
         padding: 32px;
         margin-bottom: 24px;
-        border: 1px solid var(--b3-theme-border, #e0e0e0);
+        border: 1px solid var(--b3-border-color, #e0e0e0);
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
     }
 
@@ -76,7 +76,7 @@
 
     .hero-subtitle {
         font-size: 15px;
-        color: var(--b3-theme-on-background-light, #666);
+        color: var(--b3-theme-on-surface-light, #666);
         margin: 0;
         line-height: 1.5;
     }
@@ -132,7 +132,7 @@
     .hero-btn--ghost {
         background: transparent;
         color: var(--b3-theme-on-surface-light, #666);
-        border: 1px solid var(--b3-theme-border, #e0e0e0);
+        border: 1px solid var(--b3-border-color, #e0e0e0);
     }
 
     .hero-btn--ghost:hover {
@@ -151,7 +151,7 @@
     .decoration-line {
         flex: 1;
         height: 1px;
-        background: linear-gradient(90deg, transparent, var(--b3-theme-border, #e0e0e0), transparent);
+        background: linear-gradient(90deg, transparent, var(--b3-border-color, #e0e0e0), transparent);
     }
 
     .decoration-dot {

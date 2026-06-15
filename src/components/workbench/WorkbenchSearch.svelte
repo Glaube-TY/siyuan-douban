@@ -207,7 +207,7 @@
         display: grid;
         gap: 14px;
         padding: clamp(16px, 2vw, 22px);
-        border: 1px solid var(--b3-theme-border);
+        border: 1px solid var(--b3-border-color);
         border-radius: 8px;
         background: var(--b3-theme-surface);
     }
@@ -236,7 +236,7 @@
         display: inline-flex;
         gap: 4px;
         padding: 4px;
-        border: 1px solid var(--b3-theme-border);
+        border: 1px solid var(--b3-border-color);
         border-radius: 8px;
         background: var(--b3-theme-background);
     }
@@ -264,7 +264,7 @@
 
     .workbench-search-source button.active {
         background: var(--b3-theme-surface);
-        border-color: var(--b3-theme-border);
+        border-color: var(--b3-border-color);
         color: var(--b3-theme-primary);
     }
 
@@ -280,7 +280,7 @@
         gap: 8px;
         min-width: 0;
         padding: 0 10px;
-        border: 1px solid var(--b3-theme-border);
+        border: 1px solid var(--b3-border-color);
         border-radius: 7px;
         background: var(--b3-theme-background);
         cursor: text;
@@ -307,7 +307,7 @@
         gap: 7px;
         height: 34px;
         padding: 0 12px;
-        border-color: var(--b3-theme-border);
+        border-color: var(--b3-border-color);
         background: var(--b3-theme-background);
         color: var(--b3-theme-on-background);
         font-size: 13px;
@@ -322,7 +322,7 @@
     .workbench-button-primary {
         border-color: var(--b3-theme-primary);
         background: var(--b3-theme-primary);
-        color: var(--b3-theme-on-primary, #fff);
+        color: #fff;
     }
 
     .workbench-search-status {
@@ -355,7 +355,7 @@
         align-items: center;
         min-width: 0;
         padding: 9px;
-        border: 1px solid var(--b3-theme-border);
+        border: 1px solid var(--b3-border-color);
         border-radius: 8px;
         background: var(--b3-theme-background);
         color: var(--b3-theme-on-background);

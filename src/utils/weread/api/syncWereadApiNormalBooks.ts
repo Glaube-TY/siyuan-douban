@@ -1,12 +1,17 @@
-import { updateEndBlocks } from "../updateWereadBlocks";
 import { normalizeWereadPositionMark } from "../../core/configDefaults";
 import { buildWereadApiEnhancedNotebook } from "./buildWereadApiEnhancedNotebook";
-import { renderWereadBookMarkdown } from "../wereadTemplateRender";
 import { findWereadApiBookTargetDoc } from "./findWereadApiBookTargetDoc";
 import { preflightWereadApiBooksSync } from "./preflightWereadApiBooksSync";
 import { ensureWereadApiNotebookCacheDetails } from "./ensureWereadApiNotebookCacheDetails";
 import PromiseLimitPool from "@/libs/promise-pool";
 import { recordNormalBookInboxDiff } from "../../storage/readingInboxDiff";
+import { buildWereadBookRenderModel } from "../incremental/buildBookRenderModel";
+import { renderModelToMarkdown } from "../incremental/buildBookRenderModel";
+import { syncWereadBookIncremental } from "../incremental/syncBookIncremental";
+import { loadWereadNoteUnitBlockIndex } from "../incremental/blockIndexStorage";
+import { hasUsableWereadSourceIndexForDoc } from "../incremental/indexValidation";
+import { hashText } from "../incremental/hash";
+import type { WereadIncrementalSyncStats, WereadRenderModel } from "../incremental/types";
 
 interface WereadPluginLike {
   loadData: (key: string) => Promise<any>;
@@ -24,6 +29,23 @@ interface OldRecord {
   sourceType?: string;
   syncID?: string;
   rawBookID?: string;
+  noteCount?: number;
+  reviewCount?: number;
+  bookmarkCount?: number;
+  totalNoteCount?: number;
+}
+
+function toNumber(value: any): number {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function getNotebookCountSignature(record: any): string {
+  const noteCount = toNumber(record?.noteCount);
+  const reviewCount = toNumber(record?.reviewCount);
+  const bookmarkCount = toNumber(record?.bookmarkCount);
+  const total = toNumber(record?.totalNoteCount ?? (noteCount + reviewCount + bookmarkCount));
+  return `${noteCount}:${reviewCount}:${bookmarkCount}:${total}`;
 }
 
 type PreparedNormalSyncItem =
@@ -32,9 +54,13 @@ type PreparedNormalSyncItem =
       bookID: string;
       title: string;
       isbn: string;
-      markdown: string;
+      model: WereadRenderModel;
       targetBlockID: string;
       markdownLength: number;
+      incrementalStatsPreview: {
+        itemCount: number;
+        noteCount: number;
+      };
       cacheUpdatedTime?: number;
       bookmarks: Array<any>;
       reviews: Array<any>;
@@ -55,6 +81,12 @@ export interface WereadApiNormalBooksSyncResult {
     status: "success" | "failed" | "skipped_mp" | "skipped_not_ready" | "skipped_unchanged";
     blockID?: string;
     markdownLength?: number;
+    addedItemCount?: number;
+    changedItemCount?: number;
+    deletedItemCount?: number;
+    unchangedItemCount?: number;
+    blockOperationCount?: number;
+    rebuilt?: boolean;
     newBookmarkCount?: number;
     newReviewCount?: number;
     message: string;
@@ -156,6 +188,7 @@ export async function syncWereadApiNormalBooks(
   const finalReadyItems = Array.from(readyMap.values());
 
   const oldNotebooks: OldRecord[] = await plugin.loadData("weread_notebooks") || [];
+  const noteUnitIndex = await loadWereadNoteUnitBlockIndex(plugin);
   const oldMap = new Map<string, OldRecord>();
   for (const old of oldNotebooks) {
     if (old?.bookID) {
@@ -169,6 +202,12 @@ export async function syncWereadApiNormalBooks(
     status: "success" | "failed" | "skipped_mp" | "skipped_not_ready" | "skipped_unchanged";
     blockID?: string;
     markdownLength?: number;
+    addedItemCount?: number;
+    changedItemCount?: number;
+    deletedItemCount?: number;
+    unchangedItemCount?: number;
+    blockOperationCount?: number;
+    rebuilt?: boolean;
     newBookmarkCount?: number;
     newReviewCount?: number;
     message: string;
@@ -184,6 +223,8 @@ export async function syncWereadApiNormalBooks(
     blockID?: string;
     message: string;
   }> = [];
+
+  const currentTemplateHash = hashText(template);
 
   for (const ready of finalReadyItems) {
     const bookID = ready.bookID;
@@ -206,6 +247,24 @@ export async function syncWereadApiNormalBooks(
         continue;
       }
       if (old.updatedTime !== currentUpdatedTime) {
+        plannedMap.set(bookID, { bookID, title, isbn, cacheUpdatedTime: currentUpdatedTime });
+        continue;
+      }
+      const sourceIndex = noteUnitIndex.sources[`book:${bookID}`];
+      if (!sourceIndex || sourceIndex.templateHash !== currentTemplateHash) {
+        plannedMap.set(bookID, { bookID, title, isbn, cacheUpdatedTime: currentUpdatedTime });
+        continue;
+      }
+      const hasUsableIndex = await hasUsableWereadSourceIndexForDoc(sourceIndex, ready.blockID);
+      if (!hasUsableIndex) {
+        plannedMap.set(bookID, { bookID, title, isbn, cacheUpdatedTime: currentUpdatedTime });
+        continue;
+      }
+      // updatedTime 不能覆盖删除场景，因此 update 模式必须同时比较数量签名
+      const currentCountSignature = getNotebookCountSignature(cacheRecord);
+      const oldCountSignature = getNotebookCountSignature(old);
+      const hasOldCountSignature = old.noteCount !== undefined || old.reviewCount !== undefined || old.bookmarkCount !== undefined || old.totalNoteCount !== undefined;
+      if (!hasOldCountSignature || oldCountSignature !== currentCountSignature) {
         plannedMap.set(bookID, { bookID, title, isbn, cacheUpdatedTime: currentUpdatedTime });
         continue;
       }
@@ -265,7 +324,13 @@ export async function syncWereadApiNormalBooks(
     pool.add(async () => {
       try {
         const enhanced = await buildWereadApiEnhancedNotebook(apiKey, { bookID, title });
-        const markdown = renderWereadBookMarkdown(template, enhanced);
+        const model = buildWereadBookRenderModel({
+          template,
+          notebook: enhanced,
+          bookID,
+          title: enhanced.title || title || bookID,
+        });
+        const markdown = renderModelToMarkdown(model);
         const targetIsbn = isbn || enhanced.bookDetails?.isbn || enhanced.isbn || "";
 
         const targetResult = await findWereadApiBookTargetDoc(
@@ -287,9 +352,13 @@ export async function syncWereadApiNormalBooks(
           bookID,
           title,
           isbn,
-          markdown,
+          model,
           targetBlockID: targetResult.blockID,
           markdownLength: markdown.length,
+          incrementalStatsPreview: {
+            itemCount: model.items.length,
+            noteCount: model.stats.noteCount,
+          },
           cacheUpdatedTime: planned.cacheUpdatedTime,
           bookmarks: enhanced.highlights?.updated || [],
           reviews: (enhanced.comments?.reviews || []).map((item: any) => item?.review).filter(Boolean),
@@ -327,7 +396,13 @@ export async function syncWereadApiNormalBooks(
     }
 
     try {
-      await updateEndBlocks(plugin, prepared.targetBlockID, wereadPositionMark, prepared.markdown);
+      const incremental = await syncWereadBookIncremental({
+        plugin,
+        docBlockID: prepared.targetBlockID,
+        wereadPositionMark,
+        model: prepared.model,
+      });
+      const stats: WereadIncrementalSyncStats = incremental.stats;
 
       let newBookmarkCount = 0;
       let newReviewCount = 0;
@@ -353,9 +428,15 @@ export async function syncWereadApiNormalBooks(
         status: "success",
         blockID: prepared.targetBlockID,
         markdownLength: prepared.markdownLength,
+        addedItemCount: stats.added,
+        changedItemCount: stats.changed,
+        deletedItemCount: stats.deleted,
+        unchangedItemCount: stats.unchanged,
+        blockOperationCount: stats.blockOperationCount,
+        rebuilt: stats.rebuilt,
         newBookmarkCount,
         newReviewCount,
-        message: "同步成功",
+        message: `同步成功：新增 ${stats.added} 条，更新 ${stats.changed} 条，删除 ${stats.deleted} 条，未变化 ${stats.unchanged} 条`,
       });
     } catch (error: any) {
       failed++;
@@ -388,6 +469,10 @@ export async function syncWereadApiNormalBooks(
       sourceType: cacheRecord?.sourceType || "",
       syncID: bookID,
       rawBookID: bookID,
+      noteCount: toNumber(cacheRecord?.noteCount),
+      reviewCount: toNumber(cacheRecord?.reviewCount),
+      bookmarkCount: toNumber(cacheRecord?.bookmarkCount),
+      totalNoteCount: toNumber(cacheRecord?.totalNoteCount),
     };
     mergedMap.set(bookID, merged);
   }

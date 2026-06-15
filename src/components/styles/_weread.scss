@@ -1,4 +1,5 @@
-.wereadSetting {
+.siyuan-douban-plugin {
+    .wereadSetting {
     width: 100%;
     max-width: none;
     padding: 0 16px;
@@ -162,7 +163,7 @@
         white-space: nowrap;
 
         &.configured {
-            background-color: var(--b3-theme-success-light);
+            background-color: var(--b3-card-success-background);
             color: var(--b3-theme-success);
             opacity: 1;
         }
@@ -284,6 +285,7 @@
         display: flex;
         justify-content: center;
         padding: 8px 0;
+    }
     }
 }
 

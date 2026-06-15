@@ -77,7 +77,7 @@
         flex-direction: column;
         align-items: center;
         padding: 2rem;
-        background: linear-gradient(135deg, var(--b3-theme-background) 0%, var(--b3-theme-background-light) 100%);
+        background: linear-gradient(135deg, var(--b3-theme-background) 0%, var(--b3-theme-surface-light) 100%);
         border-radius: 12px;
         box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
         max-width: 500px;
@@ -127,7 +127,7 @@
     }
 
     .first-dialog-tip {
-        background: var(--b3-theme-background-light);
+        background: var(--b3-theme-surface-light);
         padding: 1.5rem;
         border-radius: 8px;
         border-left: 4px solid var(--b3-theme-primary);
@@ -176,11 +176,11 @@
         transition: all 0.3s ease;
         padding: 0.25rem 0.5rem;
         border-radius: 4px;
-        background: rgba(var(--b3-theme-primary-rgb), 0.05);
+        background: color-mix(in srgb, var(--b3-theme-primary) 5%, transparent);
         
         &:hover {
             color: var(--b3-theme-secondary);
-            background: rgba(var(--b3-theme-primary-rgb), 0.1);
+            background: color-mix(in srgb, var(--b3-theme-primary) 10%, transparent);
             text-decoration: underline;
             transform: translateY(-1px);
         }
@@ -224,11 +224,11 @@
             &:first-child {
                 background: linear-gradient(45deg, var(--b3-theme-primary), var(--b3-theme-secondary));
                 color: white;
-                box-shadow: 0 4px 15px rgba(var(--b3-theme-primary-rgb), 0.3);
+                box-shadow: 0 4px 15px color-mix(in srgb, var(--b3-theme-primary) 30%, transparent);
                 
                 &:hover {
                     transform: translateY(-2px);
-                    box-shadow: 0 6px 20px rgba(var(--b3-theme-primary-rgb), 0.4);
+                    box-shadow: 0 6px 20px color-mix(in srgb, var(--b3-theme-primary) 40%, transparent);
                 }
             }
             
@@ -246,10 +246,10 @@
             &:last-child {
                 background: var(--b3-theme-background);
                 color: var(--b3-theme-on-background);
-                border: 1px solid var(--b3-theme-border);
+                border: 1px solid var(--b3-border-color);
                 
                 &:hover {
-                    background: var(--b3-theme-background-light);
+                    background: var(--b3-theme-surface-light);
                     border-color: var(--b3-theme-primary);
                 }
             }

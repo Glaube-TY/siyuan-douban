@@ -178,10 +178,10 @@
     h2, h3, p { margin: 0; }
     h2 { font-size: 20px; margin-bottom: 4px; }
     p { color: var(--b3-theme-on-surface-light, #666); font-size: 13px; line-height: 1.5; }
-    button, input, select, textarea { border: 1px solid var(--b3-theme-border, #e0e0e0); background: var(--b3-theme-surface, #fff); border-radius: 6px; padding: 6px 10px; font-size: 12px; }
+    button, input, select, textarea { border: 1px solid var(--b3-border-color, #e0e0e0); background: var(--b3-theme-surface, #fff); border-radius: 6px; padding: 6px 10px; font-size: 12px; }
     button { cursor: pointer; }
     .topic-layout { display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: 14px; }
-    .topic-sidebar, .topic-main, .topic-card, .empty, article { background: var(--b3-theme-surface, #fff); border: 1px solid var(--b3-theme-border, #e0e0e0); border-radius: 8px; }
+    .topic-sidebar, .topic-main, .topic-card, .empty, article { background: var(--b3-theme-surface, #fff); border: 1px solid var(--b3-border-color, #e0e0e0); border-radius: 8px; }
     .topic-sidebar { padding: 12px; }
     .topic-form { display: flex; flex-direction: column; gap: 8px; }
     .topic-form textarea { min-height: 68px; resize: vertical; }

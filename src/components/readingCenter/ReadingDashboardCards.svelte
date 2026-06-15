@@ -47,7 +47,7 @@
         border-radius: 12px;
         overflow: hidden;
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
-        border: 1px solid var(--b3-theme-border, #e0e0e0);
+        border: 1px solid var(--b3-border-color, #e0e0e0);
         transition: all 0.2s ease;
         position: relative;
     }

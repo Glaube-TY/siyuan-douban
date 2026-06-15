@@ -96,7 +96,7 @@
         gap: 12px;
         align-items: flex-start;
         padding-bottom: 14px;
-        border-bottom: 1px solid var(--b3-theme-border);
+        border-bottom: 1px solid var(--b3-border-color);
         flex-shrink: 0;
     }
 
@@ -144,7 +144,7 @@
         gap: 8px;
         padding: 10px 12px;
         border-radius: 8px;
-        border: 1px solid var(--b3-theme-border);
+        border: 1px solid var(--b3-border-color);
         font-size: 13px;
     }
 
@@ -169,7 +169,7 @@
         justify-content: flex-end;
         gap: 8px;
         padding-top: 14px;
-        border-top: 1px solid var(--b3-theme-border);
+        border-top: 1px solid var(--b3-border-color);
         flex-shrink: 0;
     }
 </style>

@@ -55,7 +55,7 @@
         gap: 8px;
         padding: 10px 16px;
         background: var(--b3-theme-surface, #fff);
-        border: 1px solid var(--b3-theme-border, #e0e0e0);
+        border: 1px solid var(--b3-border-color, #e0e0e0);
         border-radius: 20px;
         cursor: pointer;
         transition: all 0.2s ease;

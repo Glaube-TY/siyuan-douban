@@ -413,6 +413,7 @@ export function buildMpArticleGroups(
 
 /** 文章片段评论项（中间数据） */
 export interface MpArticleCommentItem {
+    reviewId?: string;
     content: string;
     createTime: number;
 }
@@ -426,6 +427,7 @@ export interface MpArticleNoteItem {
     highlightCreateTime: number;
     createTime: number;
     highlightComment: string;
+    bookmarkIds?: string[];
     comments: MpArticleCommentItem[];
     latestCommentCreateTime: number;
 }
@@ -486,6 +488,7 @@ export function buildMpArticleNotes(group: MpArticleGroup): MpArticleNoteItem[] 
 
         // 映射为 MpArticleCommentItem
         const comments: MpArticleCommentItem[] = sortedReviews.map(r => ({
+            reviewId: r.reviewId,
             content: r.content,
             createTime: r.createTime
         }));
@@ -515,6 +518,7 @@ export function buildMpArticleNotes(group: MpArticleGroup): MpArticleNoteItem[] 
                 highlightCreateTime: earliestBookmarkTime,
                 createTime: earliestBookmarkTime || earliestCommentTime || 0,
                 highlightComment,
+                bookmarkIds: rangeBookmarks.map(b => b.bookmarkId).filter(Boolean),
                 comments,
                 latestCommentCreateTime
             });
@@ -533,6 +537,7 @@ export function buildMpArticleNotes(group: MpArticleGroup): MpArticleNoteItem[] 
                 highlightCreateTime: 0,
                 createTime: earliestCommentTime,
                 highlightComment,
+                bookmarkIds: [],
                 comments,
                 latestCommentCreateTime
             });

@@ -24,4 +24,6 @@ export interface WereadAuthSettings {
   verifiedAt?: number;
   apiProtocolVersion: string;
   lastError?: string;
+  apiKeyEncrypted?: string;
+  apiKeyCryptoVersion?: number;
 }

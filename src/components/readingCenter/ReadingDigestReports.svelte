@@ -88,7 +88,7 @@
         height: auto;
         min-height: unset;
         overflow: visible;
-        border: 1px solid var(--b3-theme-border, #e0e0e0);
+        border: 1px solid var(--b3-border-color, #e0e0e0);
         border-radius: 10px;
         background: var(--b3-theme-surface, #fff);
         box-sizing: border-box;
@@ -110,7 +110,7 @@
         padding: 0 12px;
         border-radius: 999px;
         box-sizing: border-box;
-        border: 1px solid var(--b3-theme-border, #e0e0e0);
+        border: 1px solid var(--b3-border-color, #e0e0e0);
         background: var(--b3-theme-surface, #fff);
         color: var(--b3-theme-on-surface, #1a1a1a);
         cursor: pointer;
@@ -120,10 +120,10 @@
         transition: border-color 0.15s, color 0.15s, background 0.15s;
     }
     .subpage-toolbar-group button.active {
-        color: var(--b3-theme-on-primary, #fff);
+        color: #fff;
         background: var(--b3-theme-primary, #4CAF50);
         border-color: var(--b3-theme-primary, #4CAF50);
     }
-    pre { white-space: pre-wrap; line-height: 1.6; background: var(--b3-theme-surface, #fff); border: 1px solid var(--b3-theme-border, #e0e0e0); border-radius: 8px; padding: 16px; font-size: 13px; }
+    pre { white-space: pre-wrap; line-height: 1.6; background: var(--b3-theme-surface, #fff); border: 1px solid var(--b3-border-color, #e0e0e0); border-radius: 8px; padding: 16px; font-size: 13px; }
 </style>
 

@@ -131,6 +131,10 @@
         });
     }
 
+    function openMaintenance() {
+        dispatch("maintenance");
+    }
+
     $: filteredItems = latestReport
         ? filterStatus === "all"
             ? latestReport.items
@@ -226,6 +230,7 @@
                     </div>
                     <div class="sync-report-actions">
                         <button class="sync-report-action-btn" on:click={copyReport}>复制诊断报告</button>
+                        <button class="sync-report-action-btn" on:click={openMaintenance}>数据维护</button>
                         <button
                             class="sync-report-action-btn"
                             disabled={latestReport.failedCount === 0}
@@ -317,7 +322,7 @@
         gap: 12px;
         padding: 12px clamp(16px, 2vw, 32px);
         background: var(--b3-theme-surface, #fff);
-        border-bottom: 1px solid var(--b3-theme-border, #e0e0e0);
+        border-bottom: 1px solid var(--b3-border-color, #e0e0e0);
         flex-shrink: 0;
     }
 
@@ -327,7 +332,7 @@
         gap: 6px;
         padding: 6px 12px;
         background: var(--b3-theme-background, #f5f5f5);
-        border: 1px solid var(--b3-theme-border, #e0e0e0);
+        border: 1px solid var(--b3-border-color, #e0e0e0);
         border-radius: 8px;
         cursor: pointer;
         font-size: 13px;
@@ -354,7 +359,7 @@
     }
 
     .breadcrumb-separator {
-        color: var(--b3-theme-border, #ccc);
+        color: var(--b3-border-color, #ccc);
     }
 
     .breadcrumb-current {
@@ -371,7 +376,7 @@
 
     .sync-report-card {
         background: var(--b3-theme-surface, #fff);
-        border: 1px solid var(--b3-theme-border, #e0e0e0);
+        border: 1px solid var(--b3-border-color, #e0e0e0);
         border-radius: 12px;
         overflow: hidden;
     }
@@ -379,7 +384,7 @@
     .sync-report-card-header {
         padding: 16px clamp(16px, 2vw, 32px);
         background: var(--b3-theme-surface-light, #f8f9fa);
-        border-bottom: 1px solid var(--b3-theme-border, #e0e0e0);
+        border-bottom: 1px solid var(--b3-border-color, #e0e0e0);
     }
 
     .sync-report-title {
@@ -401,13 +406,13 @@
         align-items: center;
         justify-content: center;
         padding: 48px;
-        color: var(--b3-theme-on-background-light, #666);
+        color: var(--b3-theme-on-surface-light, #666);
     }
 
     .sync-report-spinner {
         width: 32px;
         height: 32px;
-        border: 3px solid var(--b3-theme-border, #e0e0e0);
+        border: 3px solid var(--b3-border-color, #e0e0e0);
         border-top-color: var(--b3-theme-primary, #4CAF50);
         border-radius: 50%;
         animation: spin 1s linear infinite;
@@ -451,7 +456,7 @@
 
     .sync-report-summary {
         padding: 16px clamp(16px, 2vw, 32px);
-        border-bottom: 1px solid var(--b3-theme-border, #e0e0e0);
+        border-bottom: 1px solid var(--b3-border-color, #e0e0e0);
     }
 
     .sync-report-summary-row {
@@ -500,7 +505,7 @@
     .sync-report-action-btn,
     .sync-report-item-btn {
         padding: 6px 12px;
-        border: 1px solid var(--b3-theme-border, #e0e0e0);
+        border: 1px solid var(--b3-border-color, #e0e0e0);
         border-radius: 6px;
         background: var(--b3-theme-surface, #fff);
         color: var(--b3-theme-on-surface, #1a1a1a);
@@ -551,7 +556,7 @@
         height: auto;
         min-height: unset;
         overflow: visible;
-        border: 1px solid var(--b3-theme-border, #e0e0e0);
+        border: 1px solid var(--b3-border-color, #e0e0e0);
         border-radius: 10px;
         background: var(--b3-theme-surface, #fff);
         box-sizing: border-box;
@@ -575,7 +580,7 @@
         padding: 0 12px;
         border-radius: 999px;
         box-sizing: border-box;
-        border: 1px solid var(--b3-theme-border, #e0e0e0);
+        border: 1px solid var(--b3-border-color, #e0e0e0);
         background: var(--b3-theme-surface, #fff);
         color: var(--b3-theme-on-surface, #1a1a1a);
         cursor: pointer;
@@ -590,7 +595,7 @@
     }
 
     .subpage-toolbar-group button.active {
-        color: var(--b3-theme-on-primary, #fff);
+        color: #fff;
         background: var(--b3-theme-primary, #4CAF50);
         border-color: var(--b3-theme-primary, #4CAF50);
     }
@@ -605,7 +610,7 @@
     .sync-report-list-item {
         padding: 12px 14px;
         background: var(--b3-theme-background, #f5f5f5);
-        border: 1px solid var(--b3-theme-border, #e0e0e0);
+        border: 1px solid var(--b3-border-color, #e0e0e0);
         border-radius: 8px;
     }
 

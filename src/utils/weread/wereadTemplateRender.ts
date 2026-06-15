@@ -7,8 +7,10 @@ import type { MpAccountTemplateVars } from "./mpArticleSync";
 
 // ========== 类型定义 ==========
 
-type NoteCommentItem = {
+export type NoteCommentItem = {
     content: string;
+    reviewId?: string;
+    createTime?: number;
     commentCreateTime1?: string;
     commentCreateTime2?: string;
     commentCreateTime3?: string;
@@ -21,7 +23,7 @@ type NoteCommentItem = {
     commentCreateTime10?: string;
 };
 
-type NoteContent = {
+export type NoteContent = {
     formattedNote: string;
     highlightText?: string;
     highlightComment?: string;
@@ -56,6 +58,14 @@ type NoteContent = {
     commentCreateTime9?: string;
     commentCreateTime10?: string;
     _order?: number;
+    noteType?: "highlight" | "comment_only";
+    chapterUid?: number;
+    range?: string;
+    rangeStart?: number;
+    bookmarkIds?: string[];
+    reviewIds?: string[];
+    highlightCreateTime?: number;
+    latestCommentCreateTime?: number;
     comments?: NoteCommentItem[];
 };
 
@@ -67,7 +77,7 @@ export type FlatChapterItem = {
     chapterTitle3: string;
     chapterTitle4: string;
     notes: NoteContent[];
-    chapterComments: { content: string; createTime1: string; createTime2: string; createTime3: string; createTime4: string; createTime5: string; createTime6: string; createTime7: string; createTime8: string; createTime9: string; createTime10: string }[];
+    chapterComments: { reviewId?: string; content: string; createTime?: number; createTime1: string; createTime2: string; createTime3: string; createTime4: string; createTime5: string; createTime6: string; createTime7: string; createTime8: string; createTime9: string; createTime10: string }[];
 };
 
 export type TemplateVariables = {
@@ -85,13 +95,13 @@ export type TemplateVariables = {
     updateTime9: string;
     updateTime10: string;
     chapters: FlatChapterItem[];
-    globalComments: { content: string; createTime1: string; createTime2: string; createTime3: string; createTime4: string; createTime5: string; createTime6: string; createTime7: string; createTime8: string; createTime9: string; createTime10: string }[];
+    globalComments: { reviewId?: string; content: string; createTime?: number; createTime1: string; createTime2: string; createTime3: string; createTime4: string; createTime5: string; createTime6: string; createTime7: string; createTime8: string; createTime9: string; createTime10: string }[];
     bookInfo: string;
     bestHighlights: string[];
 };
 
 /** 章节层级节点 */
-interface ChapterHierarchyNode {
+export interface ChapterHierarchyNode {
     chapterUid: number;
     chapterIdx: number;
     title: string;
@@ -101,7 +111,7 @@ interface ChapterHierarchyNode {
 }
 
 /** 章节层级结构 */
-interface ChapterHierarchy {
+export interface ChapterHierarchy {
     rootChapters: ChapterHierarchyNode[];
     nodeByUid: Map<number, ChapterHierarchyNode>;
     parentUidByUid: Map<number, number | null>;
@@ -224,7 +234,6 @@ export function renderNoteConditionalSections(
     }
     return result;
 }
-
 /**
  * 处理简单条件 section（非数组，单层字段）
  * 例如 {{#fieldName}}...{{/fieldName}}
@@ -245,7 +254,6 @@ export function renderSimpleConditionalSections(
     }
     return result;
 }
-
 // ========== 时间格式化 Helper（公众号与普通书模板共享） ==========
 
 interface TimeFormat {
@@ -318,7 +326,7 @@ export const formatTimestamp = formatWereadTimestamp;
 
 // ========== 章节层级重建 ==========
 
-function buildChapterHierarchy(chapterInfos: { updated?: Array<{ chapterUid: number; chapterIdx: number; title: string; level: number }> } | null): ChapterHierarchy {
+export function buildChapterHierarchy(chapterInfos: { updated?: Array<{ chapterUid: number; chapterIdx: number; title: string; level: number }> } | null): ChapterHierarchy {
     const emptyResult: ChapterHierarchy = {
         rootChapters: [],
         nodeByUid: new Map(),
@@ -375,7 +383,7 @@ function buildChapterHierarchy(chapterInfos: { updated?: Array<{ chapterUid: num
     };
 }
 
-function generateDedupedDisplayChapters(chapters: FlatChapterItem[]): FlatChapterItem[] {
+export function generateDedupedDisplayChapters(chapters: FlatChapterItem[]): FlatChapterItem[] {
     if (chapters.length === 0) return [];
 
     const result: FlatChapterItem[] = [];
@@ -455,7 +463,7 @@ function formatNote(notesTemplate: string, highlight: any, notebookTitle: string
         .replace(/\{\{notebookTitle\}\}/g, notebookTitle);
 }
 
-function renderNoteTemplateWithOptionalComment(
+export function renderNoteTemplateWithOptionalComment(
     notesTemplate: string,
     note: {
         highlightText?: string;
@@ -549,7 +557,7 @@ function renderNoteTemplateWithOptionalComment(
 
 // ========== 分组与分类 ==========
 
-function groupHighlightsByChapter(highlights: any): Map<number, any[]> {
+export function groupHighlightsByChapter(highlights: any): Map<number, any[]> {
     const highlightsByChapter = new Map();
     if (highlights?.updated && Array.isArray(highlights.updated)) {
         highlights.updated.forEach(h => {
@@ -563,7 +571,7 @@ function groupHighlightsByChapter(highlights: any): Map<number, any[]> {
     return highlightsByChapter;
 }
 
-function classifyComments(comments: any[]): {
+export function classifyComments(comments: any[]): {
     abstractComments: Map<string, any[]>;
     chapterComments: Map<number, any[]>;
 } {
@@ -595,7 +603,7 @@ function classifyComments(comments: any[]): {
 
 // ========== 普通书模板渲染 ==========
 
-function buildFlatChapters(
+export function buildFlatChapters(
     hierarchy: ChapterHierarchy,
     highlightsByChapter: Map<number, any[]>,
     chapterComments: Map<number, any[]>,
@@ -629,6 +637,14 @@ function buildFlatChapters(
                 formattedNote: formatNote(notesTemplate, { ...highlight, commentText, chapterTitle, latestCommentCreateTime: commentTime }, notebookTitle),
                 highlightText: highlight.markText || '',
                 highlightComment: commentText,
+                noteType: "highlight",
+                chapterUid: highlight.chapterUid,
+                range: highlight.range || "",
+                rangeStart: parseRangeStart(highlight.range),
+                bookmarkIds: [highlight.bookmarkId || highlight.bookmarkID || ""].filter(Boolean),
+                reviewIds: linkedComments.map((c: any) => c.reviewId).filter(Boolean),
+                highlightCreateTime: highlight.createTime || 0,
+                latestCommentCreateTime: commentTime,
                 _order: parseRangeStart(highlight.range),
                 createTime1: formatTimestamp(highlight.createTime, 'createTime1'),
                 createTime2: formatTimestamp(highlight.createTime, 'createTime2'),
@@ -662,6 +678,8 @@ function buildFlatChapters(
                 commentCreateTime10: formatTimestamp(commentTime, 'commentCreateTime10'),
                 comments: linkedComments.map((c: any) => ({
                     content: c.content || '',
+                    reviewId: c.reviewId || "",
+                    createTime: c.createTime || 0,
                     commentCreateTime1: formatTimestamp(c.createTime, 'commentCreateTime1'),
                     commentCreateTime2: formatTimestamp(c.createTime, 'commentCreateTime2'),
                     commentCreateTime3: formatTimestamp(c.createTime, 'commentCreateTime3'),
@@ -709,6 +727,14 @@ function buildFlatChapters(
                 formattedNote: formatNote(notesTemplate, syntheticHighlight, notebookTitle, commentTime),
                 highlightText: abstractText,
                 highlightComment: commentText,
+                noteType: "comment_only",
+                chapterUid,
+                range: rangePart,
+                rangeStart: orderFromComment,
+                bookmarkIds: [],
+                reviewIds: comments.map((c: any) => c.reviewId).filter(Boolean),
+                highlightCreateTime: 0,
+                latestCommentCreateTime: commentTime,
                 _order: orderFromComment,
                 createTime1: formatTimestamp(commentTime, 'createTime1'),
                 createTime2: formatTimestamp(commentTime, 'createTime2'),
@@ -742,6 +768,8 @@ function buildFlatChapters(
                 commentCreateTime10: formatTimestamp(commentTime, 'commentCreateTime10'),
                 comments: comments.map((c: any) => ({
                     content: c.content || '',
+                    reviewId: c.reviewId || "",
+                    createTime: c.createTime || 0,
                     commentCreateTime1: formatTimestamp(c.createTime, 'commentCreateTime1'),
                     commentCreateTime2: formatTimestamp(c.createTime, 'commentCreateTime2'),
                     commentCreateTime3: formatTimestamp(c.createTime, 'commentCreateTime3'),
@@ -770,7 +798,9 @@ function buildFlatChapters(
     function buildNodeComments(chapterUid: number) {
         const comments = chapterComments.get(chapterUid) || [];
         return comments.map(comment => ({
+            reviewId: comment.reviewId || "",
             content: comment.content || '',
+            createTime: comment.createTime || 0,
             createTime1: formatTimestamp(comment.createTime, 'createTime1'),
             createTime2: formatTimestamp(comment.createTime, 'createTime2'),
             createTime3: formatTimestamp(comment.createTime, 'createTime3'),
@@ -831,7 +861,7 @@ function buildFlatChapters(
     return result;
 }
 
-function renderWereadTemplate(template: string, variables: TemplateVariables): string {
+export function renderWereadTemplate(template: string, variables: TemplateVariables): string {
     return template
         .replace(/\{\{#chapters\}\}([\s\S]*?)\{\{\/chapters\}\}/g, (_, chapterTpl) => {
             if (!variables.chapters || variables.chapters.length === 0) return '';
@@ -911,7 +941,7 @@ function renderWereadTemplate(template: string, variables: TemplateVariables): s
         .replace(/\{\{(\w+)\}\}/g, (_, key) => (variables as any)[key] || '');
 }
 
-function buildTemplateVariables(
+export function buildTemplateVariables(
     notebook: any,
     comments: any[],
     chapters: FlatChapterItem[] = []
@@ -934,7 +964,9 @@ function buildTemplateVariables(
         globalComments: comments
             .filter(c => !c.review.abstract && !c.review.contextAbstract)
             .map(c => ({
+                reviewId: c.review.reviewId || "",
                 content: c.review.content,
+                createTime: c.review.createTime || 0,
                 createTime1: formatTimestamp(c.review.createTime, 'createTime1'),
                 createTime2: formatTimestamp(c.review.createTime, 'createTime2'),
                 createTime3: formatTimestamp(c.review.createTime, 'createTime3'),
@@ -951,48 +983,9 @@ function buildTemplateVariables(
     };
 }
 
-export function renderWereadBookMarkdown(
-    template: string,
-    notebook: {
-        title: string;
-        isbn: string;
-        updatedTime: number;
-        bookDetails?: { intro?: string };
-        bestHighlights?: { bestBookMarks?: { items?: Array<{ markText: string }> } };
-        highlights: any;
-        comments?: { reviews?: any[] };
-        chapterInfos: { updated?: Array<{ chapterUid: number; chapterIdx: number; title: string; level: number }> } | null;
-    }
-): string {
-    const highlights = notebook.highlights;
-    const comments = notebook.comments?.reviews || [];
-
-    const highlightsByChapter = groupHighlightsByChapter(highlights);
-    const { abstractComments, chapterComments } = classifyComments(comments);
-
-    const notesTemplateMatch = template.match(/\{\{#notes\}\}([\s\S]*?)\{\{\/notes\}\}/);
-    const notesTemplate = notesTemplateMatch ? notesTemplateMatch[1] : "";
-
-    const hierarchy = buildChapterHierarchy(notebook.chapterInfos);
-
-    const chapters = hierarchy.rootChapters.length > 0
-        ? buildFlatChapters(
-            hierarchy,
-            highlightsByChapter,
-            chapterComments,
-            abstractComments,
-            notesTemplate,
-            notebook.title
-        )
-        : [];
-
-    const variables = buildTemplateVariables(notebook, comments, chapters);
-    return renderWereadTemplate(template, variables);
-}
-
 // ========== 公众号账号模板渲染 ==========
 
-function renderMpAccountArticleTemplate(template: string, article: MpAccountTemplateVars['articles'][0]): string {
+export function renderMpAccountArticleTemplate(template: string, article: MpAccountTemplateVars['articles'][0]): string {
     let result = template;
 
     result = result.replace(/\{\{#notes\}\}([\s\S]*?)\{\{\/notes\}\}/g, (_, noteTpl) => {
@@ -1036,7 +1029,7 @@ function renderMpAccountArticleTemplate(template: string, article: MpAccountTemp
     return result;
 }
 
-function renderMpAccountNoteTemplate(template: string, note: MpAccountTemplateVars['articles'][0]['notes'][0]): string {
+export function renderMpAccountNoteTemplate(template: string, note: MpAccountTemplateVars['articles'][0]['notes'][0]): string {
     let result = template;
 
     result = result.replace(/\{\{#comments\}\}([\s\S]*?)\{\{\/comments\}\}/g, (_, commentTpl) => {
@@ -1078,75 +1071,6 @@ function renderMpAccountNoteTemplate(template: string, note: MpAccountTemplateVa
         .replace(/\{\{commentCreateTime8\}\}/g, note.commentCreateTime8 || '')
         .replace(/\{\{commentCreateTime9\}\}/g, note.commentCreateTime9 || '')
         .replace(/\{\{commentCreateTime10\}\}/g, note.commentCreateTime10 || '');
-
-    return result;
-}
-
-export function renderWereadMpAccountTemplate(template: string, variables: MpAccountTemplateVars): string {
-    const tpl = template?.trim() || "";
-
-    let result = tpl;
-
-    result = result.replace(/\{\{#articlesAsc\}\}([\s\S]*?)\{\{\/articlesAsc\}\}/g, (_, articleTpl) => {
-        if (!variables.articles || variables.articles.length === 0) return '';
-        const sortedArticles = [...variables.articles].sort((a, b) =>
-            (a.__sortUpdateTime || 0) - (b.__sortUpdateTime || 0)
-        );
-        return sortedArticles.map(article => renderMpAccountArticleTemplate(articleTpl, article)).join('\n');
-    });
-
-    result = result.replace(/\{\{#articlesDesc\}\}([\s\S]*?)\{\{\/articlesDesc\}\}/g, (_, articleTpl) => {
-        if (!variables.articles || variables.articles.length === 0) return '';
-        const sortedArticles = [...variables.articles].sort((a, b) =>
-            (b.__sortUpdateTime || 0) - (a.__sortUpdateTime || 0)
-        );
-        return sortedArticles.map(article => renderMpAccountArticleTemplate(articleTpl, article)).join('\n');
-    });
-
-    const topLevelConditionalFields = [
-        'accountTitle',
-        'accountIntro',
-        'accountCover',
-        'updateTime1', 'updateTime2', 'updateTime3', 'updateTime4', 'updateTime5',
-        'updateTime6', 'updateTime7', 'updateTime8', 'updateTime9', 'updateTime10',
-        'latestArticleTitle',
-        'latestArticleTime1', 'latestArticleTime2', 'latestArticleTime3', 'latestArticleTime4', 'latestArticleTime5',
-        'latestArticleTime6', 'latestArticleTime7', 'latestArticleTime8', 'latestArticleTime9', 'latestArticleTime10'
-    ];
-    result = renderSimpleConditionalSections(result, variables as any, topLevelConditionalFields);
-
-    result = result
-        .replace(/\{\{accountTitle\}\}/g, variables.accountTitle)
-        .replace(/\{\{accountIntro\}\}/g, variables.accountIntro)
-        .replace(/\{\{accountCover\}\}/g, variables.accountCover)
-        .replace(/\{\{updateTime1\}\}/g, variables.updateTime1 || '')
-        .replace(/\{\{updateTime2\}\}/g, variables.updateTime2 || '')
-        .replace(/\{\{updateTime3\}\}/g, variables.updateTime3 || '')
-        .replace(/\{\{updateTime4\}\}/g, variables.updateTime4 || '')
-        .replace(/\{\{updateTime5\}\}/g, variables.updateTime5 || '')
-        .replace(/\{\{updateTime6\}\}/g, variables.updateTime6 || '')
-        .replace(/\{\{updateTime7\}\}/g, variables.updateTime7 || '')
-        .replace(/\{\{updateTime8\}\}/g, variables.updateTime8 || '')
-        .replace(/\{\{updateTime9\}\}/g, variables.updateTime9 || '')
-        .replace(/\{\{updateTime10\}\}/g, variables.updateTime10 || '')
-        .replace(/\{\{articleCount\}\}/g, String(variables.articleCount))
-        .replace(/\{\{latestArticleTitle\}\}/g, variables.latestArticleTitle)
-        .replace(/\{\{latestArticleTime1\}\}/g, variables.latestArticleTime1 || '')
-        .replace(/\{\{latestArticleTime2\}\}/g, variables.latestArticleTime2 || '')
-        .replace(/\{\{latestArticleTime3\}\}/g, variables.latestArticleTime3 || '')
-        .replace(/\{\{latestArticleTime4\}\}/g, variables.latestArticleTime4 || '')
-        .replace(/\{\{latestArticleTime5\}\}/g, variables.latestArticleTime5 || '')
-        .replace(/\{\{latestArticleTime6\}\}/g, variables.latestArticleTime6 || '')
-        .replace(/\{\{latestArticleTime7\}\}/g, variables.latestArticleTime7 || '')
-        .replace(/\{\{latestArticleTime8\}\}/g, variables.latestArticleTime8 || '')
-        .replace(/\{\{latestArticleTime9\}\}/g, variables.latestArticleTime9 || '')
-        .replace(/\{\{latestArticleTime10\}\}/g, variables.latestArticleTime10 || '');
-
-    result = result
-        .replace(/\{\{#chapters\}\}[\s\S]*?\{\{\/chapters\}\}/g, '')
-        .replace(/\{\{#globalComments\}\}[\s\S]*?\{\{\/globalComments\}\}/g, '')
-        .replace(/\{\{#bookInfo\}\}[\s\S]*?\{\{\/bookInfo\}\}/g, '')
-        .replace(/\{\{#bestHighlights\}\}[\s\S]*?\{\{\/bestHighlights\}\}/g, '');
 
     return result;
 }

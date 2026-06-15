@@ -73,7 +73,7 @@
         border-radius: 12px;
         padding: 24px;
         margin-bottom: 24px;
-        border: 1px solid var(--b3-theme-border, #e0e0e0);
+        border: 1px solid var(--b3-border-color, #e0e0e0);
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
     }
 
@@ -96,7 +96,7 @@
         gap: 12px;
         padding: 16px;
         background: var(--b3-theme-background, #f5f5f5);
-        border: 1px solid var(--b3-theme-border, #e0e0e0);
+        border: 1px solid var(--b3-border-color, #e0e0e0);
         border-radius: 10px;
         cursor: pointer;
         transition: all 0.2s ease;
@@ -169,7 +169,7 @@
         transform: translateY(-50%);
         width: 24px;
         height: 24px;
-        color: var(--b3-theme-border, #e0e0e0);
+        color: var(--b3-border-color, #e0e0e0);
         z-index: 1;
     }
 

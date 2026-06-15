@@ -28,7 +28,7 @@
 
 <style>
     .workbench-hero {
-        border: 1px solid var(--b3-theme-border);
+        border: 1px solid var(--b3-border-color);
         border-radius: 8px;
         background:
             linear-gradient(135deg, color-mix(in srgb, var(--b3-theme-primary) 8%, transparent), transparent 42%),
@@ -81,7 +81,7 @@
         gap: 7px;
         height: 34px;
         padding: 0 12px;
-        border: 1px solid var(--b3-theme-border);
+        border: 1px solid var(--b3-border-color);
         border-radius: 7px;
         background: var(--b3-theme-background);
         color: var(--b3-theme-on-background);

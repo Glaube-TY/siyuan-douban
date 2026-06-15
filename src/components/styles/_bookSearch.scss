@@ -1,4 +1,5 @@
-.book-search-workspace {
+.siyuan-douban-plugin {
+    .book-search-workspace {
     width: 100%;
     padding: 16px;
     box-sizing: border-box;
@@ -226,47 +227,48 @@
 
     .error-message {
         padding: 12px;
-        background: var(--b3-theme-error-light, #fee);
+        background: var(--b3-card-error-background, #fee);
         color: var(--b3-theme-error);
         border: 1px solid var(--b3-theme-error);
         border-radius: 4px;
         font-size: 13px;
     }
-}
+    }
 
-@media (max-width: 600px) {
-    .book-search-workspace {
-        .search-bar {
-            flex-wrap: wrap;
-        }
+    @media (max-width: 600px) {
+        .book-search-workspace {
+            .search-bar {
+                flex-wrap: wrap;
+            }
 
-        .search-bar .b3-text-field {
-            flex-basis: 100%;
-        }
+            .search-bar .b3-text-field {
+                flex-basis: 100%;
+            }
 
-        .book-form {
-            .book-meta-card {
-                .book-meta-top {
-                    grid-template-columns: 1fr;
+            .book-form {
+                .book-meta-card {
+                    .book-meta-top {
+                        grid-template-columns: 1fr;
 
-                    .book-cover-panel {
-                        width: 100%;
-                        display: flex;
-                        justify-content: center;
+                        .book-cover-panel {
+                            width: 100%;
+                            display: flex;
+                            justify-content: center;
 
-                        .book-cover {
-                            width: 120px;
+                            .book-cover {
+                                width: 120px;
+                            }
                         }
                     }
                 }
-            }
 
-            .field {
-                &.field-half,
-                &.field-third,
-                &.field-quarter,
-                &.field-compact {
-                    grid-column: span 12;
+                .field {
+                    &.field-half,
+                    &.field-third,
+                    &.field-quarter,
+                    &.field-compact {
+                        grid-column: span 12;
+                    }
                 }
             }
         }

@@ -204,7 +204,7 @@
     .back-btn,
     .status-card select,
     .footer button {
-        border: 1px solid var(--b3-theme-border, #e0e0e0);
+        border: 1px solid var(--b3-border-color, #e0e0e0);
         background: var(--b3-theme-surface, #fff);
         border-radius: 6px;
         padding: 6px 10px;
@@ -226,7 +226,7 @@
         height: auto;
         min-height: unset;
         overflow: visible;
-        border: 1px solid var(--b3-theme-border, #e0e0e0);
+        border: 1px solid var(--b3-border-color, #e0e0e0);
         border-radius: 10px;
         background: var(--b3-theme-surface, #fff);
         box-sizing: border-box;
@@ -247,7 +247,7 @@
         min-width: 200px;
         flex: 1;
         padding: 0 10px;
-        border: 1px solid var(--b3-theme-border, #e0e0e0);
+        border: 1px solid var(--b3-border-color, #e0e0e0);
         background: var(--b3-theme-surface, #fff);
         border-radius: 6px;
         font-size: 12px;
@@ -264,7 +264,7 @@
         flex: 0 0 150px;
         height: 32px;
         box-sizing: border-box;
-        border: 1px solid var(--b3-theme-border, #e0e0e0);
+        border: 1px solid var(--b3-border-color, #e0e0e0);
         background: var(--b3-theme-surface, #fff);
         border-radius: 6px;
         padding: 0 10px;
@@ -289,7 +289,7 @@
 
     .status-card {
         background: var(--b3-theme-surface, #fff);
-        border: 1px solid var(--b3-theme-border, #e0e0e0);
+        border: 1px solid var(--b3-border-color, #e0e0e0);
         border-radius: 8px;
         padding: 14px;
         min-width: 0;

@@ -496,7 +496,7 @@
         gap: 8px;
         padding: 10px;
         background: var(--b3-theme-surface, #fff);
-        border-bottom: 1px solid var(--b3-theme-border, #e0e0e0);
+        border-bottom: 1px solid var(--b3-border-color, #e0e0e0);
     }
 
     .weread-bookshelf-toolbar input,
@@ -505,7 +505,7 @@
     .weread-bookshelf-list-row button,
     .weread-bookshelf-context-menu button,
     .weread-bookshelf-context-menu select {
-        border: 1px solid var(--b3-theme-border, #e0e0e0);
+        border: 1px solid var(--b3-border-color, #e0e0e0);
         border-radius: 6px;
         background: var(--b3-theme-surface, #fff);
         color: var(--b3-theme-on-surface, #1a1a1a);
@@ -546,7 +546,7 @@
         align-items: center;
         gap: 10px;
         padding: 8px 10px;
-        border: 1px solid var(--b3-theme-border, #e0e0e0);
+        border: 1px solid var(--b3-border-color, #e0e0e0);
         border-radius: 8px;
         background: var(--b3-theme-surface, #fff);
     }
@@ -629,7 +629,7 @@
         gap: 4px;
         padding: 8px;
         background: var(--b3-theme-surface, #fff);
-        border: 1px solid var(--b3-theme-border, #e0e0e0);
+        border: 1px solid var(--b3-border-color, #e0e0e0);
         border-radius: 8px;
         box-shadow: 0 12px 28px rgba(0, 0, 0, 0.18);
     }

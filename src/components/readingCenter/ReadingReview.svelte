@@ -107,8 +107,8 @@
     h2, p { margin: 0; }
     h2 { font-size: 20px; margin-bottom: 4px; }
     p { line-height: 1.55; font-size: 13px; }
-    button { border: 1px solid var(--b3-theme-border, #e0e0e0); background: var(--b3-theme-surface, #fff); border-radius: 6px; padding: 6px 10px; cursor: pointer; font-size: 12px; }
-    .empty, article { background: var(--b3-theme-surface, #fff); border: 1px solid var(--b3-theme-border, #e0e0e0); border-radius: 8px; }
+    button { border: 1px solid var(--b3-border-color, #e0e0e0); background: var(--b3-theme-surface, #fff); border-radius: 6px; padding: 6px 10px; cursor: pointer; font-size: 12px; }
+    .empty, article { background: var(--b3-theme-surface, #fff); border: 1px solid var(--b3-border-color, #e0e0e0); border-radius: 8px; }
     .empty { padding: 40px; text-align: center; color: var(--b3-theme-on-surface-light, #666); }
     .review-list { display: flex; flex-direction: column; gap: 10px; }
     article { padding: 14px; }

@@ -43,13 +43,13 @@
 
         .weread-api-notice {
             font-size: 12px;
-            color: var(--b3-theme-warning);
+            color: var(--b3-card-warning-color);
             opacity: 0.85;
             margin-bottom: 8px;
             padding: 6px 10px;
-            border: 1px solid var(--b3-theme-warning);
+            border: 1px solid var(--b3-card-warning-color);
             border-radius: 6px;
-            background: color-mix(in srgb, var(--b3-theme-warning) 6%, var(--b3-theme-background));
+            background: color-mix(in srgb, var(--b3-card-warning-color) 6%, var(--b3-theme-background));
             max-width: 420px;
             text-align: center;
             line-height: 1.5;
@@ -61,7 +61,7 @@
             border-radius: 8px;
             background-color: var(--b3-theme-background);
             // 应用适配的主题色
-            color: var(--text-color);
+            color: var(--b3-theme-on-background);
         }
 
         button {
@@ -70,7 +70,7 @@
             border: 1px solid var(--b3-border-color);
             background-color: var(--b3-theme-background);
             // 应用适配的主题色
-            color: var(--text-color);
+            color: var(--b3-theme-on-background);
         }
 
         .confirm-btn {
