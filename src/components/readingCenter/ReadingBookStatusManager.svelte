@@ -165,11 +165,11 @@
                 <div class="badges">
                     {#if item.hasNewNotes}<span>有新增笔记 {item.lastNewNoteCount || ""}</span>{/if}
                     {#if item.syncFailed}<span class="failed">同步失败</span>{/if}
-                    <span>{item.noteDocId ? "已绑定文档" : "未绑定文档"}</span>
+                    <span class:unbound={!item.noteDocId && !item.syncFailed}>{item.noteDocId ? "已绑定文档" : "未绑定文档"}</span>
                 </div>
                 <div class="footer">
                     <span>最近同步：{formatTime(item.lastSyncedAt)}</span>
-                    <button on:click={() => openBook(item)}>打开笔记</button>
+                    <button disabled={!item.noteDocId} on:click={() => openBook(item)}>打开笔记</button>
                 </div>
             </article>
         {/each}
@@ -352,6 +352,11 @@
         background: rgba(244, 67, 54, 0.1);
     }
 
+    .badges .unbound {
+        color: #FF9800;
+        background: rgba(255, 152, 0, 0.08);
+    }
+
     .footer {
         display: flex;
         flex-wrap: wrap;
@@ -364,6 +369,11 @@
 
     .footer button {
         align-self: flex-end;
+    }
+
+    .footer button:disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
     }
 
     @media (max-width: 480px) {

@@ -61,6 +61,7 @@
             failed: "失败",
             running: "进行中",
             cancelled: "已取消",
+            skipped_all: "已跳过",
         };
         return map[status] ?? status;
     }
@@ -74,6 +75,7 @@
             running: "#2196F3",
             cancelled: "#9E9E9E",
             skipped: "#9E9E9E",
+            skipped_all: "#9E9E9E",
             new_source: "#2196F3",
             not_ready: "#FF9800",
             warning: "#FF9800",
@@ -134,6 +136,16 @@
             ? latestReport.items
             : latestReport.items.filter((item) => item.status === filterStatus)
         : [];
+
+    $: effectiveStatus = latestReport
+        ? (latestReport.status === "success" && latestReport.successCount === 0 && latestReport.skippedCount > 0)
+            ? "skipped_all"
+            : latestReport.status
+        : "";
+
+    $: statusHint = latestReport && effectiveStatus === "skipped_all"
+        ? "本次没有需要写入的内容，可能是无变化或本地文档未绑定"
+        : "";
 </script>
 
 <div class="sync-report-center">
@@ -182,9 +194,12 @@
                         </div>
                         <div class="sync-report-summary-item">
                             <span class="sync-report-summary-label">整体状态</span>
-                            <span class="sync-report-summary-value" style="color: {getStatusColor(latestReport.status)}">
-                                {getStatusText(latestReport.status)}
+                            <span class="sync-report-summary-value" style="color: {getStatusColor(effectiveStatus)}">
+                                {getStatusText(effectiveStatus)}
                             </span>
+                            {#if statusHint}
+                                <span class="sync-report-summary-hint">{statusHint}</span>
+                            {/if}
                         </div>
                     </div>
                     <div class="sync-report-stats">
@@ -461,6 +476,12 @@
         font-size: 14px;
         font-weight: 600;
         color: var(--b3-theme-on-surface, #1a1a1a);
+    }
+
+    .sync-report-summary-hint {
+        font-size: 11px;
+        color: var(--b3-theme-on-surface-light, #888);
+        margin-top: 2px;
     }
 
     .sync-report-stats {

@@ -24,6 +24,12 @@
         };
         return map[status || "unknown"] || status || "暂无报告";
     }
+
+    $: displayStatus = summary?.lastSyncStatus === "success" && summary?.lastSyncSuccessCount === 0 && (summary?.lastSyncSkippedCount || 0) > 0
+        ? "skipped_all"
+        : (summary?.lastSyncStatus || "unknown");
+
+    $: statusHint = displayStatus === "skipped_all" ? "本次无变化" : "";
 </script>
 
 <section class="workbench-panel workbench-weread-assets">
@@ -55,8 +61,8 @@
         </div>
         <button class="workbench-metric workbench-metric-wide" on:click={() => action("open-diagnostics")}>
             <span>最近同步</span>
-            <strong class:ok={summary?.lastSyncStatus === "success"}>{statusText(summary?.lastSyncStatus)}</strong>
-            <em>{summary?.lastSyncMessage || "同步报告会在完成后显示"}</em>
+            <strong class:ok={displayStatus === "success"}>{statusText(displayStatus)}</strong>
+            <em>{statusHint || summary?.lastSyncMessage || "同步报告会在完成后显示"}</em>
         </button>
     </div>
 

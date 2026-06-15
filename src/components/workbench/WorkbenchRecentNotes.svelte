@@ -1,22 +1,19 @@
 <script lang="ts">
     import { createEventDispatcher, onMount } from "svelte";
     import SiYuanIcon from "../common/SiYuanIcon.svelte";
-    import type { ReadingInboxItem } from "../../types/readingInbox";
     import type { WorkbenchAction } from "../../types/workbench";
-    import { getReadingInboxItems } from "../../utils/storage/readingStorage";
+    import type { WorkbenchTaskData, EmptyStateType } from "../../utils/readingCenter/readingWorkbenchTasks";
+    import { getWorkbenchTaskData } from "../../utils/readingCenter/readingWorkbenchTasks";
 
     export let plugin: any;
     export let refreshKey = 0;
 
     const dispatch = createEventDispatcher<{ action: WorkbenchAction }>();
-    let items: ReadingInboxItem[] = [];
+    let taskData: WorkbenchTaskData | null = null;
     let lastRefreshKey = refreshKey;
 
     async function load() {
-        items = (await getReadingInboxItems(plugin))
-            .filter((item) => item.status === "unprocessed" || item.status === "later")
-            .sort((a, b) => b.createdAt - a.createdAt)
-            .slice(0, 5);
+        taskData = await getWorkbenchTaskData(plugin);
     }
 
     onMount(load);
@@ -24,6 +21,35 @@
     $: if (refreshKey !== lastRefreshKey) {
         lastRefreshKey = refreshKey;
         load();
+    }
+
+    function getEmptyStateContent(emptyStateType: EmptyStateType) {
+        switch (emptyStateType) {
+            case "no_baseline":
+                return {
+                    title: "还没有建立笔记基线",
+                    description: "完成一次成功同步后，后续新增的划线和想法会出现在这里。",
+                    showDiagnostics: false,
+                };
+            case "has_baseline_no_new":
+                return {
+                    title: "已建立笔记基线",
+                    description: "最近一次同步未发现新的划线、想法或评论。",
+                    showDiagnostics: false,
+                };
+            case "sync_failed":
+                return {
+                    title: "上次同步失败",
+                    description: "暂时无法检测新增笔记。",
+                    showDiagnostics: true,
+                };
+            default:
+                return {
+                    title: "暂无未处理新增笔记",
+                    description: "同步后新增的划线、想法和书评会显示在这里。",
+                    showDiagnostics: false,
+                };
+        }
     }
 </script>
 
@@ -33,17 +59,31 @@
             <SiYuanIcon name="inbox" size={18} />
             <h2>最近新增笔记</h2>
         </div>
-        <button class="workbench-panel-link" on:click={() => dispatch("action", "open-inbox")}>查看全部</button>
+        {#if taskData && taskData.inboxPendingCount > 0}
+            <button class="workbench-panel-link" on:click={() => dispatch("action", "open-inbox")}>查看全部</button>
+        {/if}
     </div>
 
-    {#if items.length === 0}
+    {#if !taskData}
         <div class="workbench-empty">
-            <strong>暂无未处理新增笔记</strong>
-            <span>同步后新增的划线、想法和书评会显示在这里。</span>
+            <strong>加载中...</strong>
+            <span>正在获取笔记状态。</span>
+        </div>
+    {:else if taskData.recentInboxItems.length === 0}
+        {@const emptyState = getEmptyStateContent(taskData.emptyStateType)}
+        <div class="workbench-empty">
+            <strong>{emptyState.title}</strong>
+            <span>{emptyState.description}</span>
+            {#if emptyState.showDiagnostics}
+                <div class="workbench-empty-actions">
+                    <button class="workbench-panel-link" on:click={() => dispatch("action", "open-diagnostics")}>查看诊断</button>
+                    <button class="workbench-panel-link" on:click={() => dispatch("action", "sync-weread-update")}>重新同步</button>
+                </div>
+            {/if}
         </div>
     {:else}
         <div class="workbench-note-list">
-            {#each items as item (item.id)}
+            {#each taskData.recentInboxItems as item (item.id)}
                 <button on:click={() => dispatch("action", "open-inbox")}>
                     <strong>{item.title}</strong>
                     <span>
@@ -119,6 +159,12 @@
     .workbench-empty strong {
         color: var(--b3-theme-on-background);
         font-size: 14px;
+    }
+
+    .workbench-empty-actions {
+        display: flex;
+        gap: 8px;
+        margin-top: 8px;
     }
 
     .workbench-note-list {

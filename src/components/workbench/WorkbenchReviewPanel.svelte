@@ -1,25 +1,38 @@
 <script lang="ts">
-    import { createEventDispatcher } from "svelte";
+    import { createEventDispatcher, onMount } from "svelte";
     import SiYuanIcon from "../common/SiYuanIcon.svelte";
-    import type { ReadingCenterOverview } from "../../types/readingCenter";
     import type { WorkbenchAction } from "../../types/workbench";
+    import type { WorkbenchTaskData } from "../../utils/readingCenter/readingWorkbenchTasks";
+    import { getWorkbenchTaskData } from "../../utils/readingCenter/readingWorkbenchTasks";
 
-    export let overviewData: ReadingCenterOverview | null = null;
+    export let plugin: any;
+    export let refreshKey = 0;
 
     const dispatch = createEventDispatcher<{ action: WorkbenchAction }>();
+    let taskData: WorkbenchTaskData | null = null;
+    let lastRefreshKey = refreshKey;
 
-    const entries: Array<{ type: WorkbenchAction; label: string; icon: string; description: string; valueKey: string }> = [
-        { type: "open-book-status", label: "待整理书籍", icon: "book", description: "整理状态和新增笔记", valueKey: "pendingBookCount" },
-        { type: "open-review", label: "今日复习", icon: "review", description: "到期复习条目", valueKey: "pendingReview" },
-        { type: "open-topics", label: "主题阅读", icon: "topic", description: "主题沉淀入口", valueKey: "topic" },
-        { type: "open-digest", label: "周报月报", icon: "stats", description: "周期回看入口", valueKey: "digest" },
+    const entries: Array<{ id: string; type: WorkbenchAction; label: string; icon: string; description: string; countKey: keyof WorkbenchTaskData }> = [
+        { id: "inbox", type: "open-inbox", label: "新增笔记", icon: "inbox", description: "未处理或稍后处理", countKey: "inboxPendingCount" },
+        { id: "unbound-books", type: "open-book-status", label: "未绑定书籍", icon: "book", description: "未绑定本地文档", countKey: "unboundBookCount" },
+        { id: "sync-problems", type: "open-diagnostics", label: "同步问题", icon: "diagnostics", description: "同步失败或异常", countKey: "syncProblemCount" },
+        { id: "pending-organize", type: "open-book-status", label: "待整理书籍", icon: "review", description: "有新增笔记或待整理", countKey: "pendingOrganizeCount" },
     ];
 
-    function valueFor(key: string): string | number {
-        if (!overviewData) return "暂无";
-        if (key === "pendingBookCount") return overviewData.pendingBookCount;
-        if (key === "pendingReview") return overviewData.pendingReview;
-        return "入口";
+    async function load() {
+        taskData = await getWorkbenchTaskData(plugin);
+    }
+
+    onMount(load);
+
+    $: if (refreshKey !== lastRefreshKey) {
+        lastRefreshKey = refreshKey;
+        load();
+    }
+
+    function getCount(key: keyof WorkbenchTaskData): number {
+        if (!taskData) return 0;
+        return taskData[key] as number;
     }
 </script>
 
@@ -27,15 +40,15 @@
     <div class="workbench-panel-head">
         <div class="workbench-panel-title">
             <SiYuanIcon name="review" size={18} />
-            <h2>整理与回看</h2>
+            <h2>同步后处理</h2>
         </div>
     </div>
 
     <div class="workbench-review-grid">
-        {#each entries as entry (entry.type)}
+        {#each entries as entry (entry.id)}
             <button on:click={() => dispatch("action", entry.type)}>
                 <span class="workbench-review-icon"><SiYuanIcon name={entry.icon} size={17} /></span>
-                <strong>{valueFor(entry.valueKey)}</strong>
+                <strong>{taskData ? getCount(entry.countKey) : "暂无"}</strong>
                 <span>{entry.label}</span>
                 <em>{entry.description}</em>
             </button>

@@ -46,6 +46,9 @@ export interface ReadingCenterOverview {
     lastSyncStatus: "success" | "partial" | "partial_success" | "failed" | "running" | "cancelled" | "unknown";
     lastSyncTime?: number;
     lastSyncMessage?: string;
+    lastSyncSuccessCount?: number;
+    lastSyncFailedCount?: number;
+    lastSyncSkippedCount?: number;
 }
 
 /** 最近新增笔记条目（占位） */

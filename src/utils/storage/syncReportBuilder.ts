@@ -118,8 +118,8 @@ export async function saveWereadSyncReportAndApplyStatus(plugin: PluginLike, rep
             title: item.title,
             noteDocId: item.noteDocId,
             lastSyncedAt: item.status === "success" ? now : undefined,
-            syncFailed: item.status === "failed" || item.status === "not_ready",
-            lastSyncError: item.status === "failed" || item.status === "not_ready" ? item.reasonText || "同步失败" : "",
+            syncFailed: item.status === "failed",
+            lastSyncError: item.status === "failed" ? item.reasonText || "同步失败" : "",
         });
     }
 }
@@ -205,11 +205,12 @@ function getReportStatus(input: {
     errors: string[];
 }): WereadSyncReportStatus {
     if (input.cancelled) return "cancelled";
-    if (input.errors.length > 0 && input.successCount === 0) return "failed";
+    if (input.errors.length > 0 && input.successCount === 0 && input.failedCount === 0) return "failed";
     if (input.failedCount > 0 && input.successCount > 0) return "partial_success";
     if (input.failedCount > 0 && input.successCount === 0) return "failed";
     if (input.successCount > 0) return "success";
-    return input.totalSources === 0 ? "success" : "partial_success";
+    if (input.totalSources === 0) return "success";
+    return "success";
 }
 
 function inferReasonCode(message = "", rawStatus = ""): WereadSyncReportReasonCode | undefined {
@@ -217,7 +218,7 @@ function inferReasonCode(message = "", rawStatus = ""): WereadSyncReportReasonCo
     const text = `${message} ${rawStatus}`;
     if (!text.trim()) return undefined;
     if (/API Key|api key|认证|验证/.test(text)) return "API_KEY_INVALID";
-    if (/请求|网络|fetch|HTTP|接口/.test(text)) return "API_REQUEST_FAILED";
+    if (/请求|网络|fetch|HTTP|接口|TLS|timeout|handshake/.test(text)) return "API_REQUEST_FAILED";
     if (/bookID|bookId/.test(text) && /空|missing|缺失/.test(text)) return "BOOK_ID_IS_MISSING";
     if (/ISBN|isbn/.test(text) && /失败|找不到|未匹配/.test(text)) return "ISBN_MATCH_FAILED";
     if (/目标文档|本地文档|找不到|未找到/.test(text)) return "TARGET_DOC_NOT_FOUND";
@@ -232,7 +233,7 @@ function inferReasonCode(message = "", rawStatus = ""): WereadSyncReportReasonCo
 function getReasonSuggestion(code?: WereadSyncReportReasonCode): string {
     const map: Partial<Record<WereadSyncReportReasonCode, string>> = {
         API_KEY_INVALID: "请重新验证微信读书 API Key。",
-        API_REQUEST_FAILED: "请稍后重试；如果持续失败，检查网络和 API 服务状态。",
+        API_REQUEST_FAILED: "网络连接超时或请求失败，请稍后重试或检查网络代理。",
         TARGET_DOC_NOT_FOUND: "请先导入该书，或确认本地数据库里的 ISBN/bookID 是否正确。",
         TARGET_DOC_NOT_READY: "请完成新来源导入或重新匹配本地文档后再同步。",
         WRITE_BLOCK_FAILED: "请检查目标文档是否可写，然后重新同步失败项。",
@@ -270,6 +271,7 @@ function getReportStatusText(status: string): string {
         failed: "失败",
         running: "进行中",
         cancelled: "已取消",
+        skipped_all: "已跳过",
     };
     return map[status] || status;
 }

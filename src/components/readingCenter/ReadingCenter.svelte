@@ -291,8 +291,6 @@
             {:else}
                 <ReadingWorkbench
                     {plugin}
-                    {i18n}
-                    {overviewData}
                     refreshKey={workbenchRefreshKey}
                     on:action={handleWorkbenchAction}
                     on:refresh={refreshAll}

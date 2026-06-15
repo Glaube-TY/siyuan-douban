@@ -1,6 +1,5 @@
 <script lang="ts">
     import { createEventDispatcher, onMount } from "svelte";
-    import type { ReadingCenterOverview } from "../../types/readingCenter";
     import type {
         WorkbenchAction,
         WorkbenchLocalAssetSummary,
@@ -21,7 +20,6 @@
     import { getLatestWereadSyncReport } from "../../utils/storage/syncReportStorage";
 
     export let plugin: any;
-    export let overviewData: ReadingCenterOverview | null = null;
     export let refreshKey = 0;
 
     const dispatch = createEventDispatcher<{ action: WorkbenchAction; refresh: void }>();
@@ -108,7 +106,7 @@
 
     <div class="workbench-operations-grid">
         <WorkbenchRecentNotes {plugin} {refreshKey} on:action={action} />
-        <WorkbenchReviewPanel {overviewData} on:action={action} />
+        <WorkbenchReviewPanel {plugin} {refreshKey} on:action={action} />
     </div>
 
     <WorkbenchShelfHub {plugin} {refreshKey} />

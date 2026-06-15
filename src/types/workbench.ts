@@ -47,6 +47,9 @@ export interface WorkbenchWereadAssetSummary {
     lastSyncStatus: string;
     lastSyncTime?: number;
     lastSyncMessage?: string;
+    lastSyncSuccessCount?: number;
+    lastSyncFailedCount?: number;
+    lastSyncSkippedCount?: number;
     autoSync: boolean;
     skipNewBookCheck: boolean;
 }

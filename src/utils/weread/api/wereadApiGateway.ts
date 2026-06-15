@@ -1,6 +1,12 @@
-import { forwardProxy } from "@/api";
+import { forwardProxyStrict } from "@/api";
 import { WEREAD_API_GATEWAY, WEREAD_API_PROTOCOL_VERSION } from "./constants";
 import type { WereadApiName } from "./types";
+
+const NETWORK_ERROR_PATTERNS = /TLS\s*handshake\s*timeout|timeout|i\/o\s*timeout|context\s*deadline\s*exceeded|network|forward\s*request\s*failed|connection\s*reset|connection\s*refused|ECONNRESET|ECONNREFUSED|ETIMEDOUT/i;
+
+function isNetworkError(message: string): boolean {
+  return NETWORK_ERROR_PATTERNS.test(message);
+}
 
 export class WereadApiUpgradeError extends Error {
   constructor(message: string) {
@@ -36,20 +42,29 @@ export async function callWereadApi<T = unknown>(
     ...params,
   };
 
-  const proxyResult = await forwardProxy(
-    WEREAD_API_GATEWAY,
-    "POST",
-    body,
-    [
-      {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-        Accept: "application/json",
-      },
-    ],
-    15000,
-    "application/json"
-  );
+  let proxyResult: any;
+  try {
+    proxyResult = await forwardProxyStrict(
+      WEREAD_API_GATEWAY,
+      "POST",
+      body,
+      [
+        {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+      ],
+      30000,
+      "application/json"
+    );
+  } catch (err: any) {
+    const rawMsg = String(err?.message || "");
+    if (isNetworkError(rawMsg)) {
+      throw new Error("微信读书网络连接超时，请检查网络、代理或稍后重试");
+    }
+    throw new Error(`微信读书接口请求失败：${rawMsg}`);
+  }
 
   let rawBody: unknown = proxyResult;
 

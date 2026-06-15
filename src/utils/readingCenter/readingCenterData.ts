@@ -114,5 +114,8 @@ export async function getReadingCenterOverview(plugin: any): Promise<ReadingCent
         lastSyncMessage: latestReport
             ? `成功 ${latestReport.successCount} / 失败 ${latestReport.failedCount} / 跳过 ${latestReport.skippedCount}`
             : undefined,
+        lastSyncSuccessCount: latestReport?.successCount,
+        lastSyncFailedCount: latestReport?.failedCount,
+        lastSyncSkippedCount: latestReport?.skippedCount,
     };
 }

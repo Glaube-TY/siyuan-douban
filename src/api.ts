@@ -466,6 +466,30 @@ export async function forwardProxy(
     return request(url1, data);
 }
 
+/**
+ * 严格版 forwardProxy：失败时抛出 Error 而非返回 null。
+ * 保留 response.msg / response.data 中的原始错误信息（如 TLS handshake timeout）。
+ */
+export async function forwardProxyStrict(
+    url: string, method: string = 'GET', payload: any = {},
+    headers: any[] = [], timeout: number = 7000, contentType: string = "text/html"
+): Promise<IResForwardProxy> {
+    const data = {
+        url,
+        method,
+        timeout,
+        contentType,
+        headers,
+        payload,
+    };
+    const response: IWebSocketData = await fetchSyncPost('/api/network/forwardProxy', data);
+    if (response.code === 0) {
+        return response.data;
+    }
+    const msg = response.msg || response.data?.msg || response.data?.toString?.() || `forwardProxy 请求失败 (code=${response.code})`;
+    throw new Error(msg);
+}
+
 
 // **************************************** System ****************************************
 
