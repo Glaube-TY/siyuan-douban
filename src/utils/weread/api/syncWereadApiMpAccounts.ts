@@ -12,6 +12,7 @@ import { loadWereadNoteUnitBlockIndex } from "../incremental/blockIndexStorage";
 import { hasUsableWereadSourceIndexForDoc } from "../incremental/indexValidation";
 import { hashText } from "../incremental/hash";
 import type { WereadIncrementalSyncStats, WereadRenderModel } from "../incremental/types";
+import type { WereadSyncProgressCallback, WereadSyncPlanConfirmCallback, WereadSyncPlanItem } from "./wereadSyncProgress";
 
 interface WereadPluginLike {
     loadData: (key: string) => Promise<any>;
@@ -56,6 +57,7 @@ export interface WereadApiMpAccountsSyncResult {
     skippedNormalBook: number;
     skippedNotReady: number;
     skippedUnchanged: number;
+    cancelled?: boolean;
     items: Array<{
         bookID: string;
         title: string;
@@ -80,7 +82,7 @@ export async function syncWereadApiMpAccounts(
     plugin: WereadPluginLike,
     apiKey: string,
     mpTemplate: string,
-    options: { mode: "all" | "update"; forceBookIDs?: string[] }
+    options: { mode: "all" | "update"; forceBookIDs?: string[]; onProgress?: WereadSyncProgressCallback; confirmPlan?: WereadSyncPlanConfirmCallback }
 ): Promise<WereadApiMpAccountsSyncResult> {
     const cache = await plugin.loadData("temporary_weread_notebooksList");
 
@@ -296,6 +298,67 @@ export async function syncWereadApiMpAccounts(
 
     const plannedItems = Array.from(plannedMap.values());
 
+    // 如果没有需要同步的内容，直接返回
+    if (plannedItems.length === 0) {
+      if (options.onProgress) {
+        options.onProgress({
+          stage: "finished",
+          sourceType: "mp",
+          total: 0,
+          message: "公众号没有需要同步的内容",
+          status: "success",
+        });
+      }
+      return {
+        total: cache.length,
+        planned: 0,
+        success: 0,
+        failed: 0,
+        skippedNormalBook: normalBookItems.length,
+        skippedNotReady: notReadyItems.filter((i) => !forceBookIDSet.has(i.bookID) || !readyMap.has(i.bookID)).length,
+        skippedUnchanged,
+        items,
+      };
+    }
+
+    // 计划确认回调
+    if (options.confirmPlan) {
+      const planItemsForConfirm: WereadSyncPlanItem[] = plannedItems.map(item => ({
+        sourceType: "mp",
+        bookID: item.bookID,
+        title: item.title,
+      }));
+      const confirmed = await options.confirmPlan({
+        mode: options.mode,
+        sourceType: "mp",
+        title: "公众号同步",
+        plannedItems: planItemsForConfirm,
+        skippedCount: skippedUnchanged + normalBookItems.length + notReadyItems.length,
+      });
+      if (!confirmed) {
+        // 用户取消，emit cancelled 事件
+        if (options.onProgress) {
+          options.onProgress({
+            stage: "cancelled",
+            sourceType: "mp",
+            message: "用户取消公众号同步",
+            status: "cancelled",
+          });
+        }
+        return {
+          total: cache.length,
+          planned: 0,
+          success: 0,
+          failed: 0,
+          skippedNormalBook: normalBookItems.length,
+          skippedNotReady: notReadyItems.length,
+          skippedUnchanged,
+          cancelled: true,
+          items,
+        };
+      }
+    }
+
     // 阶段 1：并发准备数据（并发数 2）
     type PreparedMpSyncItem =
       | {
@@ -311,13 +374,37 @@ export async function syncWereadApiMpAccounts(
         }
       | { ok: false; bookID: string; title: string; message: string };
 
+    if (options.onProgress) {
+      options.onProgress({
+        stage: "preparing",
+        sourceType: "mp",
+        total: plannedItems.length,
+        message: `准备同步 ${plannedItems.length} 个公众号`,
+        status: "running",
+      });
+    }
+
     const pool = new PromiseLimitPool<PreparedMpSyncItem>(2);
 
-    for (const planned of plannedItems) {
+    for (let i = 0; i < plannedItems.length; i++) {
+      const planned = plannedItems[i];
       const bookID = planned.bookID;
       const title = planned.title;
 
       pool.add(async () => {
+        if (options.onProgress) {
+          options.onProgress({
+            stage: "preparing",
+            sourceType: "mp",
+            bookID,
+            title,
+            index: i + 1,
+            total: plannedItems.length,
+            message: `准备中：《${title || bookID}》`,
+            status: "running",
+          });
+        }
+
         try {
           const syncData = await buildWereadApiMpAccountSyncData(apiKey, bookID);
           const model = buildWereadMpRenderModel({
@@ -373,7 +460,19 @@ export async function syncWereadApiMpAccounts(
     }
 
     // 阶段 2：串行写入
+    if (options.onProgress) {
+      options.onProgress({
+        stage: "writing",
+        sourceType: "mp",
+        total: orderedResults.length,
+        message: `开始写入 ${orderedResults.length} 个公众号`,
+        status: "running",
+      });
+    }
+
+    let writeIndex = 0;
     for (const prepared of orderedResults) {
+      writeIndex++;
       if (prepared.ok === false) {
         failed++;
         items.push({
@@ -382,7 +481,32 @@ export async function syncWereadApiMpAccounts(
           status: "failed",
           message: prepared.message,
         });
+        if (options.onProgress) {
+          options.onProgress({
+            stage: "item_failed",
+            sourceType: "mp",
+            bookID: prepared.bookID,
+            title: prepared.title,
+            index: writeIndex,
+            total: orderedResults.length,
+            message: `《${prepared.title || prepared.bookID}》准备失败：${prepared.message}`,
+            status: "failed",
+          });
+        }
         continue;
+      }
+
+      if (options.onProgress) {
+        options.onProgress({
+          stage: "writing",
+          sourceType: "mp",
+          bookID: prepared.bookID,
+          title: prepared.title,
+          index: writeIndex,
+          total: orderedResults.length,
+          message: `写入中：《${prepared.title || prepared.bookID}》`,
+          status: "running",
+        });
       }
 
       try {
@@ -429,6 +553,18 @@ export async function syncWereadApiMpAccounts(
           newReviewCount,
           message: `同步成功：新增 ${stats.added} 条，更新 ${stats.changed} 条，删除 ${stats.deleted} 条，未变化 ${stats.unchanged} 条`,
         });
+        if (options.onProgress) {
+          options.onProgress({
+            stage: "item_success",
+            sourceType: "mp",
+            bookID: prepared.bookID,
+            title: prepared.title,
+            index: writeIndex,
+            total: orderedResults.length,
+            message: `《${prepared.title || prepared.bookID}》同步完成：新增 ${stats.added} / 更新 ${stats.changed} / 删除 ${stats.deleted}`,
+            status: "success",
+          });
+        }
       } catch (error: any) {
         failed++;
         items.push({
@@ -437,6 +573,18 @@ export async function syncWereadApiMpAccounts(
           status: "failed",
           message: error?.message || "写入文档失败",
         });
+        if (options.onProgress) {
+          options.onProgress({
+            stage: "item_failed",
+            sourceType: "mp",
+            bookID: prepared.bookID,
+            title: prepared.title,
+            index: writeIndex,
+            total: orderedResults.length,
+            message: `《${prepared.title || prepared.bookID}》同步失败：${error?.message || "写入文档失败"}`,
+            status: "failed",
+          });
+        }
       }
     }
 
@@ -470,6 +618,16 @@ export async function syncWereadApiMpAccounts(
 
     const mergedRecords = Array.from(mergedMap.values());
     await plugin.saveData("weread_notebooks", mergedRecords);
+
+    if (options.onProgress) {
+      options.onProgress({
+        stage: "finished",
+        sourceType: "mp",
+        total: plannedItems.length,
+        message: `公众号同步完成：成功 ${success}，失败 ${failed}，计划 ${plannedItems.length}`,
+        status: success > 0 ? "success" : "failed",
+      });
+    }
 
     return {
         total: cache.length,

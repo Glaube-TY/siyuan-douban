@@ -14,6 +14,9 @@
         openWereadCachedNotebooks,
     } from "../../utils/bookSearch/wereadBookSearchService";
     import { runWorkbenchManualWereadApiSync } from "../../utils/weread/api/workbenchManualSyncWereadApi";
+    import type { WereadSyncProgressEvent, WereadSyncPlanConfirmPayload } from "../../utils/weread/api/wereadSyncProgress";
+    import WereadSyncPlanConfirmDialog from "../common/WereadSyncPlanConfirmDialog.svelte";
+    import WereadSyncProgressDialog from "../common/WereadSyncProgressDialog.svelte";
     import ReadingWorkbench from "../workbench/ReadingWorkbench.svelte";
     import ReadingFeatureShell from "./ReadingFeatureShell.svelte";
     import SyncReportCenter from "../syncReport/SyncReportCenter.svelte";
@@ -61,6 +64,10 @@
     let databaseStatus: "success" | "error" | "" = "";
     let workbenchRefreshKey = 0;
     let isWorkbenchSyncing = false;
+
+    // 同步进度弹窗相关
+    let progressDialogRef: WereadSyncProgressDialog | null = null;
+    let progressDialogDialogRef: any = null;
 
     const legacyTabs: FeatureTab[] = [
         {
@@ -190,6 +197,72 @@
         });
     }
 
+    // 同步进度回调
+    function handleSyncProgress(event: WereadSyncProgressEvent) {
+        if (progressDialogRef) {
+            progressDialogRef.addEvent(event);
+        }
+        // 对成功和失败的项目显示简短提示
+        if (event.stage === "item_success") {
+            showMessage(event.message, 3000);
+        } else if (event.stage === "item_failed") {
+            showMessage(event.message, 5000);
+        }
+    }
+
+    // 同步计划确认回调
+    function handleSyncPlanConfirm(payload: WereadSyncPlanConfirmPayload): Promise<boolean> {
+        return new Promise((resolve) => {
+            let dialogRef: any;
+            dialogRef = svelteDialog({
+                title: "确认微信读书同步",
+                width: "min(560px, 92vw)",
+                height: "min(500px, 80vh)",
+                constructor: (container: HTMLElement) => new WereadSyncPlanConfirmDialog({
+                    target: container,
+                    props: {
+                        payload,
+                        onConfirm: () => {
+                            dialogRef.close();
+                            resolve(true);
+                        },
+                        onCancel: () => {
+                            dialogRef.close();
+                            resolve(false);
+                        },
+                    },
+                }),
+            });
+        });
+    }
+
+    // 打开进度弹窗
+    function openProgressDialog() {
+        let dialogRef: any;
+        dialogRef = svelteDialog({
+            title: "微信读书同步进度",
+            width: "min(560px, 92vw)",
+            height: "min(500px, 80vh)",
+            constructor: (container: HTMLElement) => {
+                const component = new WereadSyncProgressDialog({
+                    target: container,
+                    props: {
+                        onClose: () => {
+                            dialogRef.close();
+                        },
+                    },
+                });
+                progressDialogRef = component;
+                progressDialogDialogRef = dialogRef;
+                return component;
+            },
+            callback: () => {
+                progressDialogRef = null;
+                progressDialogDialogRef = null;
+            },
+        });
+    }
+
     async function handleWorkbenchAction(event: CustomEvent<WorkbenchAction>) {
         const action = event.detail;
         if (action === "sync-weread") {
@@ -200,9 +273,19 @@
                 return;
             }
             isWorkbenchSyncing = true;
-            showMessage("正在执行微信读书更新同步...");
+            openProgressDialog();
+            if (progressDialogRef) {
+                progressDialogRef.addEvent({
+                    stage: "checking_sources",
+                    message: "正在检查微信读书来源...",
+                    status: "running",
+                });
+            }
             try {
-                const result = await runWorkbenchManualWereadApiSync(plugin, "update");
+                const result = await runWorkbenchManualWereadApiSync(plugin, "update", {
+                    onProgress: handleSyncProgress,
+                    confirmPlan: handleSyncPlanConfirm,
+                });
                 if (result.message) {
                     showMessage(result.message);
                 } else if (result.totalPlanned > 0) {
@@ -211,6 +294,11 @@
                     showMessage("更新同步完成，无需处理的来源");
                 }
             } catch (e) {
+                handleSyncProgress({
+                    stage: "finished",
+                    message: `同步失败：${e?.message || "未知错误"}`,
+                    status: "failed",
+                });
                 showMessage(`更新同步失败：${e?.message || "未知错误"}`);
             } finally {
                 isWorkbenchSyncing = false;
@@ -222,9 +310,19 @@
                 return;
             }
             isWorkbenchSyncing = true;
-            showMessage("正在执行微信读书全部同步...");
+            openProgressDialog();
+            if (progressDialogRef) {
+                progressDialogRef.addEvent({
+                    stage: "checking_sources",
+                    message: "正在检查微信读书来源...",
+                    status: "running",
+                });
+            }
             try {
-                const result = await runWorkbenchManualWereadApiSync(plugin, "all");
+                const result = await runWorkbenchManualWereadApiSync(plugin, "all", {
+                    onProgress: handleSyncProgress,
+                    confirmPlan: handleSyncPlanConfirm,
+                });
                 if (result.message) {
                     showMessage(result.message);
                 } else if (result.totalPlanned > 0) {
@@ -233,6 +331,11 @@
                     showMessage("全部同步完成，无需处理的来源");
                 }
             } catch (e) {
+                handleSyncProgress({
+                    stage: "finished",
+                    message: `同步失败：${e?.message || "未知错误"}`,
+                    status: "failed",
+                });
                 showMessage(`全部同步失败：${e?.message || "未知错误"}`);
             } finally {
                 isWorkbenchSyncing = false;

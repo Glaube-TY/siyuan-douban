@@ -4,6 +4,7 @@ import { buildWereadApiNotebookCache } from "./buildWereadApiNotebookCache";
 import { showWereadApiNewSourcesDialogAndSync } from "./handleWereadApiNewSources";
 import { loadWereadAuthState } from "../../settings/wereadSettingsService";
 import { buildWereadSyncReport, saveWereadSyncReportAndApplyStatus } from "../../storage/syncReportBuilder";
+import type { WereadSyncProgressCallback, WereadSyncPlanConfirmCallback } from "./wereadSyncProgress";
 
 interface WereadPluginLike {
   loadData: (key: string) => Promise<any>;
@@ -23,7 +24,11 @@ export interface WereadApiWorkbenchManualSyncResult {
 
 export async function runWorkbenchManualWereadApiSync(
   plugin: WereadPluginLike,
-  mode: "all" | "update"
+  mode: "all" | "update",
+  options?: {
+    onProgress?: WereadSyncProgressCallback;
+    confirmPlan?: WereadSyncPlanConfirmCallback;
+  }
 ): Promise<WereadApiWorkbenchManualSyncResult> {
   const startedAt = Date.now();
   const auth = await loadWereadAuthState(plugin);
@@ -65,6 +70,12 @@ export async function runWorkbenchManualWereadApiSync(
   const notebooksList = await buildWereadApiNotebookCache(auth.apiKey);
 
   if (!Array.isArray(notebooksList) || notebooksList.length === 0) {
+    options?.onProgress?.({
+      stage: "finished",
+      total: 0,
+      message: "没有可同步的微信读书来源",
+      status: "success",
+    });
     const emptyResult: WereadApiWorkbenchManualSyncResult = {
       syncedAt: Date.now(),
       normalResult: emptyNormalResult,
@@ -95,6 +106,8 @@ export async function runWorkbenchManualWereadApiSync(
       normalResult = await syncWereadApiNormalBooks(plugin, auth.apiKey, bookTemplate, {
         mode,
         forceBookIDs: forceOptions?.forceBookIDs || [],
+        onProgress: options?.onProgress,
+        confirmPlan: options?.confirmPlan,
       });
     } catch (e) {
       normalResult = {
@@ -102,6 +115,18 @@ export async function runWorkbenchManualWereadApiSync(
         failed: 1,
         items: [{ bookID: "", title: "", status: "failed", message: e?.message || "普通书同步异常" }],
       };
+      options?.onProgress?.({
+        stage: "item_failed",
+        sourceType: "book",
+        title: "普通书同步",
+        message: `普通书同步失败：${e?.message || "普通书同步异常"}`,
+        status: "failed",
+      });
+    }
+
+    // 如果普通书同步被取消，不继续执行公众号同步
+    if (normalResult.cancelled) {
+      return;
     }
 
     try {
@@ -110,10 +135,33 @@ export async function runWorkbenchManualWereadApiSync(
         mpResult = await syncWereadApiMpAccounts(plugin, auth.apiKey, mpTemplate, {
           mode,
           forceBookIDs: forceOptions?.forceMpBookIDs || [],
+          onProgress: options?.onProgress,
+          confirmPlan: options?.confirmPlan,
         });
       }
-    } catch {
-      mpResult = undefined;
+    } catch (e) {
+      mpResult = {
+        total: 0,
+        planned: 0,
+        success: 0,
+        failed: 1,
+        skippedNormalBook: 0,
+        skippedNotReady: 0,
+        skippedUnchanged: 0,
+        items: [{
+          bookID: "",
+          title: "公众号同步",
+          status: "failed",
+          message: e?.message || "公众号同步异常",
+        }],
+      };
+      options?.onProgress?.({
+        stage: "item_failed",
+        sourceType: "mp",
+        title: "公众号同步",
+        message: `公众号同步失败：${e?.message || "公众号同步异常"}`,
+        status: "failed",
+      });
     }
   };
 
@@ -126,6 +174,13 @@ export async function runWorkbenchManualWereadApiSync(
     );
 
     if (flowResult === "cancelled") {
+      if (options?.onProgress) {
+        options.onProgress({
+          stage: "cancelled",
+          message: "同步已取消",
+          status: "cancelled",
+        });
+      }
       const cancelledResult: WereadApiWorkbenchManualSyncResult = {
         syncedAt: Date.now(),
         normalResult,
@@ -147,6 +202,11 @@ export async function runWorkbenchManualWereadApiSync(
       return cancelledResult;
     }
   } catch (e) {
+    options?.onProgress?.({
+      stage: "finished",
+      message: `同步失败：${e?.message || "同步异常"}`,
+      status: "failed",
+    });
     const failedResult: WereadApiWorkbenchManualSyncResult = {
       syncedAt: Date.now(),
       normalResult,
@@ -167,9 +227,52 @@ export async function runWorkbenchManualWereadApiSync(
     return failedResult;
   }
 
+  // 检查是否被取消
+  const isCancelled = normalResult.cancelled || mpResult?.cancelled;
+
   const totalPlanned = (normalResult.planned || 0) + (mpResult?.planned || 0);
   const totalSuccess = (normalResult.success || 0) + (mpResult?.success || 0);
   const totalFailed = (normalResult.failed || 0) + (mpResult?.failed || 0);
+
+  // 统一 emit 最终 finished/cancelled 事件（无 sourceType）
+  if (options?.onProgress) {
+    if (isCancelled) {
+      options.onProgress({
+        stage: "cancelled",
+        message: "同步已取消",
+        status: "cancelled",
+      });
+    } else {
+      options.onProgress({
+        stage: "finished",
+        total: totalPlanned,
+        message: `同步完成：计划 ${totalPlanned}，成功 ${totalSuccess}，失败 ${totalFailed}`,
+        status: totalFailed > 0 ? "failed" : "success",
+      });
+    }
+  }
+
+  if (isCancelled) {
+    const cancelledResult: WereadApiWorkbenchManualSyncResult = {
+      syncedAt: Date.now(),
+      normalResult,
+      mpResult,
+      totalPlanned: 0,
+      totalSuccess: 0,
+      totalFailed: 0,
+      message: "同步已取消",
+    };
+    await saveWereadSyncReportAndApplyStatus(plugin, buildWereadSyncReport({
+      startedAt,
+      endedAt: Date.now(),
+      trigger: "manual",
+      normalResult,
+      mpResult,
+      cancelled: true,
+      warnings: ["同步已取消"],
+    }));
+    return cancelledResult;
+  }
 
   const result: WereadApiWorkbenchManualSyncResult = {
     syncedAt: Date.now(),

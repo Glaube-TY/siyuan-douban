@@ -12,6 +12,7 @@ import { loadWereadNoteUnitBlockIndex } from "../incremental/blockIndexStorage";
 import { hasUsableWereadSourceIndexForDoc } from "../incremental/indexValidation";
 import { hashText } from "../incremental/hash";
 import type { WereadIncrementalSyncStats, WereadRenderModel } from "../incremental/types";
+import type { WereadSyncProgressCallback, WereadSyncPlanConfirmCallback, WereadSyncPlanItem } from "./wereadSyncProgress";
 
 interface WereadPluginLike {
   loadData: (key: string) => Promise<any>;
@@ -75,6 +76,7 @@ export interface WereadApiNormalBooksSyncResult {
   skippedMp: number;
   skippedNotReady: number;
   skippedUnchanged: number;
+  cancelled?: boolean;
   items: Array<{
     bookID: string;
     title: string;
@@ -100,6 +102,8 @@ export async function syncWereadApiNormalBooks(
   options: {
     mode: "all" | "update";
     forceBookIDs?: string[];
+    onProgress?: WereadSyncProgressCallback;
+    confirmPlan?: WereadSyncPlanConfirmCallback;
   }
 ): Promise<WereadApiNormalBooksSyncResult> {
   const enrichedCache = await ensureWereadApiNotebookCacheDetails(plugin, apiKey, { limit: 100 });
@@ -313,15 +317,100 @@ export async function syncWereadApiNormalBooks(
 
   const plannedItems = Array.from(plannedMap.values());
 
+  // 如果没有需要同步的内容，直接返回
+  if (plannedItems.length === 0) {
+    if (options.onProgress) {
+      options.onProgress({
+        stage: "finished",
+        sourceType: "book",
+        total: 0,
+        message: "普通书没有需要同步的内容",
+        status: "success",
+      });
+    }
+    return {
+      total: cache.length,
+      planned: 0,
+      success: 0,
+      failed: 0,
+      skippedMp: mpItems.length,
+      skippedNotReady: notReadyItems.filter((i) => !forceBookIDSet.has(i.bookID) || !readyMap.has(i.bookID)).length,
+      skippedUnchanged,
+      items,
+    };
+  }
+
+  // 计划确认回调
+  if (options.confirmPlan) {
+    const planItemsForConfirm: WereadSyncPlanItem[] = plannedItems.map(item => ({
+      sourceType: "book",
+      bookID: item.bookID,
+      title: item.title,
+    }));
+    const confirmed = await options.confirmPlan({
+      mode: options.mode,
+      sourceType: "book",
+      title: "普通书籍同步",
+      plannedItems: planItemsForConfirm,
+      skippedCount: skippedUnchanged + mpItems.length + notReadyItems.length,
+    });
+    if (!confirmed) {
+      // 用户取消，emit cancelled 事件
+      if (options.onProgress) {
+        options.onProgress({
+          stage: "cancelled",
+          sourceType: "book",
+          message: "用户取消普通书籍同步",
+          status: "cancelled",
+        });
+      }
+      return {
+        total: cache.length,
+        planned: 0,
+        success: 0,
+        failed: 0,
+        skippedMp: mpItems.length,
+        skippedNotReady: notReadyItems.length,
+        skippedUnchanged,
+        cancelled: true,
+        items,
+      };
+    }
+  }
+
   // 阶段 1：并发准备数据（并发数 3）
+  if (options.onProgress) {
+    options.onProgress({
+      stage: "preparing",
+      sourceType: "book",
+      total: plannedItems.length,
+      message: `准备同步 ${plannedItems.length} 本普通书籍`,
+      status: "running",
+    });
+  }
+
   const pool = new PromiseLimitPool<PreparedNormalSyncItem>(3);
 
-  for (const planned of plannedItems) {
+  for (let i = 0; i < plannedItems.length; i++) {
+    const planned = plannedItems[i];
     const bookID = planned.bookID;
     const title = planned.title;
     const isbn = planned.isbn || "";
 
     pool.add(async () => {
+      if (options.onProgress) {
+        options.onProgress({
+          stage: "preparing",
+          sourceType: "book",
+          bookID,
+          title,
+          index: i + 1,
+          total: plannedItems.length,
+          message: `准备中：《${title || bookID}》`,
+          status: "running",
+        });
+      }
+
       try {
         const enhanced = await buildWereadApiEnhancedNotebook(apiKey, { bookID, title });
         const model = buildWereadBookRenderModel({
@@ -383,7 +472,19 @@ export async function syncWereadApiNormalBooks(
   }
 
   // 阶段 2：串行写入
+  if (options.onProgress) {
+    options.onProgress({
+      stage: "writing",
+      sourceType: "book",
+      total: orderedResults.length,
+      message: `开始写入 ${orderedResults.length} 本普通书籍`,
+      status: "running",
+    });
+  }
+
+  let writeIndex = 0;
   for (const prepared of orderedResults) {
+    writeIndex++;
     if (prepared.ok === false) {
       failed++;
       items.push({
@@ -392,7 +493,32 @@ export async function syncWereadApiNormalBooks(
         status: "failed",
         message: prepared.message,
       });
+      if (options.onProgress) {
+        options.onProgress({
+          stage: "item_failed",
+          sourceType: "book",
+          bookID: prepared.bookID,
+          title: prepared.title,
+          index: writeIndex,
+          total: orderedResults.length,
+          message: `《${prepared.title || prepared.bookID}》准备失败：${prepared.message}`,
+          status: "failed",
+        });
+      }
       continue;
+    }
+
+    if (options.onProgress) {
+      options.onProgress({
+        stage: "writing",
+        sourceType: "book",
+        bookID: prepared.bookID,
+        title: prepared.title,
+        index: writeIndex,
+        total: orderedResults.length,
+        message: `写入中：《${prepared.title || prepared.bookID}》`,
+        status: "running",
+      });
     }
 
     try {
@@ -438,6 +564,18 @@ export async function syncWereadApiNormalBooks(
         newReviewCount,
         message: `同步成功：新增 ${stats.added} 条，更新 ${stats.changed} 条，删除 ${stats.deleted} 条，未变化 ${stats.unchanged} 条`,
       });
+      if (options.onProgress) {
+        options.onProgress({
+          stage: "item_success",
+          sourceType: "book",
+          bookID: prepared.bookID,
+          title: prepared.title,
+          index: writeIndex,
+          total: orderedResults.length,
+          message: `《${prepared.title || prepared.bookID}》同步完成：新增 ${stats.added} / 更新 ${stats.changed} / 删除 ${stats.deleted}`,
+          status: "success",
+        });
+      }
     } catch (error: any) {
       failed++;
       items.push({
@@ -446,6 +584,18 @@ export async function syncWereadApiNormalBooks(
         status: "failed",
         message: error?.message || "写入文档失败",
       });
+      if (options.onProgress) {
+        options.onProgress({
+          stage: "item_failed",
+          sourceType: "book",
+          bookID: prepared.bookID,
+          title: prepared.title,
+          index: writeIndex,
+          total: orderedResults.length,
+          message: `《${prepared.title || prepared.bookID}》同步失败：${error?.message || "写入文档失败"}`,
+          status: "failed",
+        });
+      }
     }
   }
 
@@ -479,6 +629,16 @@ export async function syncWereadApiNormalBooks(
 
   const mergedRecords = Array.from(mergedMap.values());
   await plugin.saveData("weread_notebooks", mergedRecords);
+
+  if (options.onProgress) {
+    options.onProgress({
+      stage: "finished",
+      sourceType: "book",
+      total: plannedItems.length,
+      message: `普通书籍同步完成：成功 ${success}，失败 ${failed}，计划 ${plannedItems.length}`,
+      status: success > 0 ? "success" : "failed",
+    });
+  }
 
   return {
     total: cache.length,
