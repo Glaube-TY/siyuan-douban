@@ -72,7 +72,7 @@
                                 {/if}
                                 <label class="book-cover-note-toggle">
                                     <span>生成读书笔记</span>
-                                    <input type="checkbox" bind:checked={bookInfo.addNotes} />
+                                    <input type="checkbox" class="book-note-checkbox" bind:checked={bookInfo.addNotes} />
                                 </label>
                             </div>
                             <div class="book-title-panel">
@@ -270,6 +270,15 @@
         cursor: pointer;
         font-size: 12px;
         color: var(--b3-theme-on-surface);
+        white-space: nowrap;
+    }
+
+    .book-note-checkbox {
+        width: 16px;
+        height: 16px;
+        padding: 0;
+        margin: 0;
+        flex: none;
     }
 
     .book-title-panel {
@@ -326,7 +335,7 @@
     .field-quarter { grid-column: span 3; }
 
     /* 复用旧 _bookSearch.scss 的输入框样式 */
-    .book-form :global(input),
+    .book-form :global(input:not([type="checkbox"])),
     .book-form :global(select),
     .book-form :global(textarea) {
         padding: 5px 10px;
@@ -340,7 +349,7 @@
         transition: border-color 0.15s ease;
     }
 
-    .book-form :global(input:focus),
+    .book-form :global(input:not([type="checkbox"]):focus),
     .book-form :global(select:focus),
     .book-form :global(textarea:focus) {
         border-color: var(--b3-theme-primary);

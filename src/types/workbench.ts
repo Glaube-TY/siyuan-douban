@@ -52,6 +52,9 @@ export interface WorkbenchWereadAssetSummary {
     lastSyncSkippedCount?: number;
     autoSync: boolean;
     skipNewBookCheck: boolean;
+    wereadBookTemplateConfigured?: boolean;
+    wereadMpTemplateConfigured?: boolean;
+    wereadTemplatesConfigured?: boolean;
 }
 
 export type WorkbenchAction =
@@ -79,4 +82,5 @@ export type WorkbenchAction =
     | "open-topics"
     | "open-digest"
     | "open-weread-notebooks"
-    | "open-reading-stats";
+    | "open-reading-stats"
+    | "open-weread-book-management";

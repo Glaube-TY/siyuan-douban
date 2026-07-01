@@ -30,6 +30,14 @@
         : (summary?.lastSyncStatus || "unknown");
 
     $: statusHint = displayStatus === "skipped_all" ? "本次无变化" : "";
+
+    $: authStatusText = summary?.authVerified
+        ? "API Key 已验证"
+        : summary?.authConfigured
+            ? "API Key 未验证"
+            : "API Key 未配置";
+
+    $: authNeedsAttention = !summary?.authVerified;
 </script>
 
 <section class="workbench-panel workbench-weread-assets">
@@ -37,33 +45,31 @@
         <div class="workbench-panel-title">
             <SiYuanIcon name="weread" pluginName={pluginName} size={18} />
             <h2>微信读书同步</h2>
+            <span class="workbench-panel-status">{authStatusText}</span>
         </div>
-        <button class="workbench-panel-link" on:click={() => action("open-weread-auth")}>授权设置</button>
+        <button
+            class:needs-attention={authNeedsAttention}
+            class="workbench-panel-link"
+            on:click={() => action("open-weread-auth")}
+        >授权设置</button>
     </div>
 
-    <div class="workbench-metrics">
-        <button class="workbench-metric workbench-metric-wide" on:click={() => action("open-weread-auth")}>
-            <span>API Key</span>
-            <strong class:ok={summary?.authVerified}>
-                {summary?.authVerified ? "已验证" : summary?.authConfigured ? "未验证" : "未配置"}
-            </strong>
-            <em>{summary?.authVerified ? summary?.apiKeyMasked : summary?.lastError || "点击配置授权"}</em>
-        </button>
-        <div class="workbench-metric">
+    <div class="workbench-compact-stats">
+        <div class="workbench-compact-stat">
             <span>有笔记书籍</span>
             <strong>{summary?.hasNotebookCache ? summary.notebookCount : "暂无"}</strong>
-            <em>{summary?.hasNotebookCache ? `${summary?.noteCount || 0} 条笔记` : "仅读取本地缓存"}</em>
+            <em>{summary?.hasNotebookCache ? `${summary?.noteCount || 0} 条笔记` : ""}</em>
         </div>
-        <div class="workbench-metric" on:click={() => action("open-reading-stats")} on:keydown={(e) => { if (e.key === "Enter") action("open-reading-stats"); }} role="button" tabindex="0">
+        <div class="workbench-compact-stat">
             <span>书架条目</span>
             <strong>{summary?.shelfBookCount ?? "暂无"}</strong>
-            <em>{summary?.hasReadingStatsCache ? "阅读统计缓存" : "暂无统计缓存"}</em>
+            <em>{summary?.hasReadingStatsCache ? "阅读统计缓存" : ""}</em>
         </div>
-        <button class="workbench-metric workbench-metric-wide" on:click={() => action("open-diagnostics")}>
+        <div class="workbench-compact-stat">
             <span>最近同步</span>
-            <strong class:ok={displayStatus === "success"}>{statusText(displayStatus)}</strong>
-            <em>{statusHint || summary?.lastSyncMessage || "同步报告会在完成后显示"}</em>
-        </button>
+            <strong>{statusText(displayStatus)}</strong>
+            <em>{statusHint || summary?.lastSyncMessage || ""}</em>
+        </div>
     </div>
 
     <div class="workbench-weread-footer">
@@ -75,21 +81,13 @@
             <SiYuanIcon name="sync" size={15} />
             <span>全部同步</span>
         </button>
-        <button on:click={() => action("sync-weread")}>
-            <SiYuanIcon name="sync" size={15} />
-            <span>同步面板</span>
-        </button>
         <button on:click={() => action("open-sync-options")}>
             <SiYuanIcon name="settings" size={15} />
             <span>同步选项</span>
         </button>
-        <button on:click={() => action("open-diagnostics")}>
-            <SiYuanIcon name="diagnostics" size={15} />
-            <span>同步诊断</span>
-        </button>
-        <button on:click={() => action("open-reading-stats")}>
-            <SiYuanIcon name="stats" size={15} />
-            <span>阅读统计</span>
+        <button on:click={() => action("open-weread-book-management")}>
+            <SiYuanIcon name="book" size={15} />
+            <span>书籍管理</span>
         </button>
     </div>
 </section>
@@ -97,8 +95,8 @@
 <style>
     .workbench-panel {
         display: grid;
-        gap: 14px;
-        padding: 16px;
+        gap: 10px;
+        padding: 14px;
         border: 1px solid var(--b3-border-color);
         border-radius: 8px;
         background: var(--b3-theme-surface);
@@ -124,67 +122,70 @@
         font-size: 16px;
     }
 
-    .workbench-panel-link,
-    .workbench-weread-footer button,
-    .workbench-metric {
-        border: 1px solid var(--b3-border-color);
-        border-radius: 7px;
-        background: var(--b3-theme-background);
-        color: var(--b3-theme-on-background);
-        cursor: pointer;
+    .workbench-panel-status {
+        padding: 2px 8px;
+        border-radius: 4px;
+        background: color-mix(in srgb, var(--b3-theme-primary) 8%, transparent);
+        color: var(--b3-theme-primary);
+        font-size: 12px;
     }
 
     .workbench-panel-link {
         height: 28px;
         padding: 0 10px;
+        border: 1px solid var(--b3-border-color);
+        border-radius: 7px;
+        background: var(--b3-theme-background);
+        color: var(--b3-theme-on-background);
+        cursor: pointer;
         font-size: 12px;
+        transition: border-color 0.16s ease;
     }
 
-    .workbench-metrics {
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 9px;
-    }
-
-    .workbench-metric {
-        display: grid;
-        gap: 4px;
-        min-height: 86px;
-        padding: 12px;
-        text-align: left;
-    }
-
-    .workbench-metric-wide {
-        grid-column: span 2;
-    }
-
-    .workbench-metric:hover,
-    .workbench-panel-link:hover,
-    .workbench-weread-footer button:hover {
+    .workbench-panel-link:hover {
         border-color: var(--b3-theme-primary);
     }
 
-    .workbench-metric span {
+    .workbench-panel-link.needs-attention {
+        animation: workbench-needs-attention 2s ease-in-out infinite;
+    }
+
+    .workbench-panel-link.needs-attention:hover {
+        animation-play-state: paused;
+        border-color: var(--b3-theme-primary);
+    }
+
+    .workbench-compact-stats {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 8px;
+    }
+
+    .workbench-compact-stat {
+        display: grid;
+        gap: 2px;
+        padding: 8px 10px;
+        border: 1px solid var(--b3-border-color);
+        border-radius: 6px;
+        background: var(--b3-theme-background);
+    }
+
+    .workbench-compact-stat span {
         color: var(--b3-theme-on-surface-light);
         font-size: 12px;
     }
 
-    .workbench-metric strong {
+    .workbench-compact-stat strong {
         color: var(--b3-theme-on-background);
-        font-size: 20px;
-        line-height: 1.1;
+        font-size: 15px;
+        font-weight: 700;
     }
 
-    .workbench-metric strong.ok {
-        color: var(--b3-theme-primary);
-    }
-
-    .workbench-metric em {
-        overflow: hidden;
+    .workbench-compact-stat em {
         color: var(--b3-theme-on-surface-light);
-        font-size: 12px;
+        font-size: 11px;
         font-style: normal;
-        line-height: 1.35;
+        overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
     }
@@ -201,13 +202,40 @@
         gap: 6px;
         height: 30px;
         padding: 0 10px;
+        border: 1px solid var(--b3-border-color);
+        border-radius: 7px;
+        background: var(--b3-theme-background);
+        color: var(--b3-theme-on-background);
+        cursor: pointer;
         font-size: 12px;
         font-weight: 600;
+        transition: border-color 0.16s ease;
+    }
+
+    .workbench-weread-footer button:hover {
+        border-color: var(--b3-theme-primary);
     }
 
     .workbench-weread-footer button.primary {
         border-color: var(--b3-theme-primary);
         background: var(--b3-theme-primary);
         color: #fff;
+    }
+
+    @keyframes workbench-needs-attention {
+        0%, 100% {
+            border-color: var(--b3-border-color);
+            transform: scale(1);
+        }
+        50% {
+            border-color: var(--b3-theme-primary);
+            transform: scale(1.02);
+        }
+    }
+
+    @media (max-width: 720px) {
+        .workbench-compact-stats {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
     }
 </style>

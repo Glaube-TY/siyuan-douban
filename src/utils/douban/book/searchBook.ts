@@ -7,47 +7,47 @@ interface SearchResult {
 }
 
 /**
- * 注入持久化顶部控制栏（幂等：每次注入前先移除旧的）
+ * 确保悬浮操作区存在且可用（幂等：不删除重建，只更新/补充）
  */
-function injectPersistentControlBar(searchWindow: any) {
+function ensureFloatingActions(searchWindow: any) {
     try {
         searchWindow.webContents.executeJavaScript(`
             (function() {
-                const existingBar = document.getElementById('douban-persistent-control-bar');
-                if (existingBar) {
-                    existingBar.remove();
+                // 1. 清理旧顶部栏（如果存在）
+                const oldBar = document.getElementById('douban-persistent-control-bar');
+                if (oldBar) {
+                    oldBar.remove();
+                    if (document.body) {
+                        document.body.style.paddingTop = '';
+                    }
                 }
 
-                const controlBar = document.createElement('div');
-                controlBar.id = 'douban-persistent-control-bar';
-                controlBar.innerHTML = \`
-                    <div style="position: fixed; top: 0; left: 0; right: 0; height: 56px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; display: flex; align-items: center; justify-content: space-between; padding: 0 20px; z-index: 2147483647; box-shadow: 0 2px 10px rgba(0,0,0,0.2); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
-                        <div style="display: flex; align-items: center; gap: 12px;">
-                            <span style="font-size: 16px; font-weight: 500;">📚 豆瓣图书搜索</span>
-                            <span style="font-size: 12px; opacity: 0.85;">请进入书籍详情页后再点击获取</span>
+                // 2. 确保悬浮容器存在
+                let container = document.getElementById('douban-floating-actions');
+                if (!container) {
+                    container = document.createElement('div');
+                    container.id = 'douban-floating-actions';
+                    container.innerHTML = \`
+                        <div style="position: fixed; right: 24px; bottom: 24px; z-index: 2147483647; display: flex; flex-direction: column; gap: 10px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+                            <button id="douban-confirm-book" style="background: var(--b3-theme-primary, #28a745); color: white; border: none; padding: 10px 18px; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 500; box-shadow: 0 2px 8px rgba(0,0,0,0.2); transition: opacity 0.2s;">确认书籍</button>
+                            <button id="douban-close-window" style="background: var(--b3-theme-surface, #dc3545); color: white; border: none; padding: 10px 18px; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 500; box-shadow: 0 2px 8px rgba(0,0,0,0.2); transition: opacity 0.2s;">关闭窗口</button>
                         </div>
-                        <div>
-                            <button id="get-book-info-persistent" style="background: #28a745; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; margin-right: 10px; font-size: 14px; transition: background 0.3s;" onmouseover="this.style.background='#218838'" onmouseout="this.style.background='#28a745'">📖 获取此书信息</button>
-                            <button id="close-window-persistent" style="background: #dc3545; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-size: 14px; transition: background 0.3s;" onmouseover="this.style.background='#c82333'" onmouseout="this.style.background='#dc3545'">❌ 关闭窗口</button>
-                        </div>
-                    </div>
-                \`;
+                    \`;
+                    document.documentElement.appendChild(container);
+                }
 
-                document.documentElement.appendChild(controlBar);
-
-                document.body.style.paddingTop = '56px';
-
+                // 3. 确保全局处理器存在
                 window._doubanGetBookInfo = function() {
-                    const btn = document.getElementById('get-book-info-persistent');
+                    const btn = document.getElementById('douban-confirm-book');
                     if (btn) {
-                        btn.innerHTML = '⏳ 获取中...';
+                        btn.innerHTML = '获取中...';
                         btn.disabled = true;
                     }
 
                     const htmlContent = document.documentElement.outerHTML;
 
                     const processingTip = document.createElement('div');
-                    processingTip.innerHTML = '<div style="position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0, 123, 255, 0.9); color: white; padding: 20px; border-radius: 8px; z-index: 1000000; font-size: 16px; text-align: center;">📚 正在处理书籍信息...<br><small>请稍候</small></div>';
+                    processingTip.innerHTML = '<div style="position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0, 123, 255, 0.9); color: white; padding: 20px; border-radius: 8px; z-index: 1000000; font-size: 16px; text-align: center;">正在处理书籍信息...<br><small>请稍候</small></div>';
                     document.body.appendChild(processingTip);
 
                     console.log('[CAPTURE]' + htmlContent);
@@ -58,13 +58,23 @@ function injectPersistentControlBar(searchWindow: any) {
                 };
 
                 window._doubanCloseWindow = function() {
+                    console.log('[DOUBAN_CLOSE]');
                     window.close();
                 };
 
-                const getBtn = document.getElementById('get-book-info-persistent');
-                const closeBtn = document.getElementById('close-window-persistent');
-                if (getBtn) getBtn.addEventListener('click', window._doubanGetBookInfo);
-                if (closeBtn) closeBtn.addEventListener('click', window._doubanCloseWindow);
+                // 4. 确保按钮状态与事件绑定正确（使用 onclick 覆盖，避免重复监听）
+                const confirmBtn = document.getElementById('douban-confirm-book');
+                const closeBtn = document.getElementById('douban-close-window');
+                if (confirmBtn) {
+                    confirmBtn.innerHTML = '确认书籍';
+                    confirmBtn.disabled = false;
+                    confirmBtn.onclick = window._doubanGetBookInfo;
+                }
+                if (closeBtn) {
+                    closeBtn.innerHTML = '关闭窗口';
+                    closeBtn.disabled = false;
+                    closeBtn.onclick = window._doubanCloseWindow;
+                }
             })();
         `);
     } catch {
@@ -73,10 +83,10 @@ function injectPersistentControlBar(searchWindow: any) {
 }
 
 /**
- * 启动控制栏看门狗：立即注入一次，之后每 500ms 注入一次，窗口销毁后自动停止
+ * 启动悬浮按钮看门狗：立即注入一次，之后每 500ms 检查并补充一次，窗口销毁后自动停止
  */
-function startControlBarWatchdog(searchWindow: any) {
-    injectPersistentControlBar(searchWindow);
+function startFloatingActionsWatchdog(searchWindow: any) {
+    ensureFloatingActions(searchWindow);
 
     const timer = setInterval(() => {
         try {
@@ -84,7 +94,7 @@ function startControlBarWatchdog(searchWindow: any) {
                 clearInterval(timer);
                 return;
             }
-            injectPersistentControlBar(searchWindow);
+            ensureFloatingActions(searchWindow);
         } catch {
             clearInterval(timer);
         }
@@ -136,25 +146,17 @@ export async function openInteractiveSearchWindow(
                 }
             });
 
-            // 启动看门狗，在多个导航事件上持续注入控制栏
-            searchWindow.webContents.on('dom-ready', () => {
-                injectPersistentControlBar(searchWindow);
-            });
-            searchWindow.webContents.on('did-start-navigation', () => {
-                injectPersistentControlBar(searchWindow);
-            });
-            searchWindow.webContents.on('did-navigate', () => {
-                injectPersistentControlBar(searchWindow);
-            });
-            searchWindow.webContents.on('did-navigate-in-page', () => {
-                injectPersistentControlBar(searchWindow);
-            });
-            searchWindow.webContents.on('did-finish-load', () => {
-                injectPersistentControlBar(searchWindow);
-            });
-            searchWindow.webContents.on('did-stop-loading', () => {
-                injectPersistentControlBar(searchWindow);
-            });
+            // 在多个导航事件上持续注入悬浮按钮
+            const tryInject = () => {
+                ensureFloatingActions(searchWindow);
+                setTimeout(() => ensureFloatingActions(searchWindow), 300);
+            };
+            searchWindow.webContents.on('dom-ready', tryInject);
+            searchWindow.webContents.on('did-start-navigation', tryInject);
+            searchWindow.webContents.on('did-navigate', tryInject);
+            searchWindow.webContents.on('did-navigate-in-page', tryInject);
+            searchWindow.webContents.on('did-finish-load', tryInject);
+            searchWindow.webContents.on('did-stop-loading', tryInject);
 
             const searchUrl = `https://search.douban.com/book/subject_search?search_text=${encodeURIComponent(searchKeyword)}&cat=1001`;
 
@@ -183,7 +185,7 @@ export async function openInteractiveSearchWindow(
             });
 
             // 在 loadURL 前启动看门狗
-            startControlBarWatchdog(searchWindow);
+            startFloatingActionsWatchdog(searchWindow);
 
             // 加载搜索页面
             await searchWindow.loadURL(searchUrl, {
@@ -192,7 +194,7 @@ export async function openInteractiveSearchWindow(
             });
 
             // loadURL 完成后立即补注入一次
-            injectPersistentControlBar(searchWindow);
+            ensureFloatingActions(searchWindow);
 
             // 显示窗口
             searchWindow.show();
@@ -226,6 +228,12 @@ export async function openInteractiveSearchWindow(
                             searchWindow.destroy();
                         }, 1000);
                     }
+                } else if (message.includes('[DOUBAN_CLOSE]') && !isCompleted) {
+                    isCompleted = true;
+                    try {
+                        searchWindow.destroy();
+                    } catch {}
+                    resolve({ success: false, error: 'Window closed by user' });
                 }
             });
 

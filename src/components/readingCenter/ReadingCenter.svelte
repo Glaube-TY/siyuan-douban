@@ -9,10 +9,7 @@
     import { getReadingCenterOverview } from "../../utils/readingCenter/readingCenterData";
     import { loadDatabaseSettings } from "../../utils/settings/databaseSettingsService";
     import { openLocalBookShelf } from "../../utils/bookSearch/localBookSearchService";
-    import {
-        openCachedReadingStats,
-        openWereadCachedNotebooks,
-    } from "../../utils/bookSearch/wereadBookSearchService";
+    import { openWereadCachedNotebooks } from "../../utils/bookSearch/wereadBookSearchService";
     import { runWorkbenchManualWereadApiSync } from "../../utils/weread/api/workbenchManualSyncWereadApi";
     import type { WereadSyncProgressEvent, WereadSyncPlanConfirmPayload } from "../../utils/weread/api/wereadSyncProgress";
     import WereadSyncPlanConfirmDialog from "../common/WereadSyncPlanConfirmDialog.svelte";
@@ -25,6 +22,7 @@
     import ReadingTopics from "./ReadingTopics.svelte";
     import ReadingReview from "./ReadingReview.svelte";
     import ReadingDigestReports from "./ReadingDigestReports.svelte";
+    import ReadingStatsCenter from "./ReadingStatsCenter.svelte";
     import SyncChangePanel from "../readingManagement/SyncChangePanel.svelte";
     import UnboundBooksPanel from "../readingManagement/UnboundBooksPanel.svelte";
     import BookHealthPanel from "../readingManagement/BookHealthPanel.svelte";
@@ -37,6 +35,7 @@
     import WereadApiKeyDialog from "../settings/WereadApiKeyDialog.svelte";
     import SyncOptionsDialog from "../settings/SyncOptionsDialog.svelte";
     import AboutPluginDialog from "../settings/AboutPluginDialog.svelte";
+    import WereadBookManagementDialog from "../common/WereadBookManagementDialog.svelte";
 
     export let i18n: I18N;
     export let plugin: any;
@@ -46,6 +45,7 @@
         | "sync-panel"
         | "legacy-settings"
         | "sync-report"
+        | "reading-stats"
         | "sync-changes"
         | "inbox"
         | "unbound-books"
@@ -67,7 +67,6 @@
 
     // 同步进度弹窗相关
     let progressDialogRef: WereadSyncProgressDialog | null = null;
-    let progressDialogDialogRef: any = null;
 
     const legacyTabs: FeatureTab[] = [
         {
@@ -253,12 +252,10 @@
                     },
                 });
                 progressDialogRef = component;
-                progressDialogDialogRef = dialogRef;
                 return component;
             },
             callback: () => {
                 progressDialogRef = null;
-                progressDialogDialogRef = null;
             },
         });
     }
@@ -380,9 +377,29 @@
         } else if (action === "open-weread-notebooks") {
             await openWereadCachedNotebooks(plugin);
         } else if (action === "open-reading-stats") {
-            await openCachedReadingStats(plugin);
+            switchToView("reading-stats");
+        } else if (action === "open-weread-book-management") {
+            let dialogRef: any;
+            dialogRef = svelteDialog({
+                title: "微信读书书籍管理",
+                width: "min(720px, 92vw)",
+                height: "min(560px, 80vh)",
+                constructor: (container: HTMLElement) => new WereadBookManagementDialog({
+                    target: container,
+                    props: {
+                        plugin,
+                        onConfirm: () => {
+                            dialogRef.close();
+                            refreshAll();
+                        },
+                        onCancel: () => {
+                            dialogRef.close();
+                        },
+                    },
+                }),
+            });
         } else if (action === "add-book") {
-            showMessage("请在统一搜索中切换到豆瓣图书，搜索后添加书籍");
+            showMessage("请在豆瓣读书搜索导入中搜索并添加书籍");
         } else if (action === "search") {
             switchToDashboard();
         }
@@ -443,6 +460,8 @@
         </ReadingFeatureShell>
     {:else if currentView === "sync-report"}
         <SyncReportCenter {plugin} on:back={switchToDashboard} on:retryFailed={handleRetryFailed} on:maintenance={() => switchToView("maintenance")} />
+    {:else if currentView === "reading-stats"}
+        <ReadingStatsCenter {plugin} on:back={switchToDashboard} on:action={handleWorkbenchAction} />
     {:else if currentView === "sync-changes"}
         <SyncChangePanel {plugin} on:back={switchToDashboard} on:action={handleWorkbenchAction} />
     {:else if currentView === "inbox"}

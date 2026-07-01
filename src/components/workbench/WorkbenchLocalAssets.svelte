@@ -10,6 +10,15 @@
     function action(type: WorkbenchAction) {
         dispatch("action", type);
     }
+
+    $: databaseStatusText = summary?.databaseStatus.valid
+        ? "数据库已连接"
+        : summary?.databaseStatus.configured
+            ? "数据库校验失败"
+            : "数据库未配置";
+
+    $: databaseNeedsAttention = !summary?.databaseStatus.valid;
+    $: templateNeedsAttention = !summary?.bookTemplateConfigured;
 </script>
 
 <section class="workbench-panel workbench-local-assets">
@@ -17,36 +26,33 @@
         <div class="workbench-panel-title">
             <SiYuanIcon name="localShelf" size={18} />
             <h2>本地阅读资产</h2>
+            <span class="workbench-panel-status">{databaseStatusText}</span>
         </div>
-        <button class="workbench-panel-link" on:click={() => action("open-database-settings")}>数据库设置</button>
     </div>
 
-    <div class="workbench-metrics">
-        <button class="workbench-metric workbench-metric-wide" on:click={() => action("open-database-settings")}>
-            <span>数据库状态</span>
-            <strong class:ok={summary?.databaseStatus.valid}>
-                {summary?.databaseStatus.valid ? "已连接" : summary?.databaseStatus.configured ? "校验失败" : "未配置"}
-            </strong>
-            <em>{summary?.databaseStatus.message || "读取中"}</em>
-        </button>
-        <div class="workbench-metric">
+    <div class="workbench-compact-stats">
+        <div class="workbench-compact-stat">
             <span>本地书籍</span>
             <strong>{summary?.localBookCount ?? "未加载"}</strong>
-            <em>数据库中的书籍数量</em>
         </div>
-        <button class="workbench-metric" on:click={() => action("open-template-settings")}>
-            <span>模板状态</span>
-            <strong class:ok={summary?.bookTemplateConfigured}>{summary?.bookTemplateConfigured ? "已配置" : "未配置"}</strong>
-            <em>{summary?.addNotes ? "添加时生成笔记" : "仅添加记录"}</em>
-        </button>
     </div>
 
     <div class="workbench-local-footer">
+        <button
+            class:needs-attention={databaseNeedsAttention}
+            on:click={() => action("open-database-settings")}
+        >
+            <SiYuanIcon name="database" size={15} />
+            <span>数据库设置</span>
+        </button>
         <button on:click={() => action("open-book-preferences")}>
             <SiYuanIcon name="settings" size={15} />
             <span>评分 / 分类 / 状态</span>
         </button>
-        <button on:click={() => action("open-template-settings")}>
+        <button
+            class:needs-attention={templateNeedsAttention}
+            on:click={() => action("open-template-settings")}
+        >
             <SiYuanIcon name="template" size={15} />
             <span>模板设置</span>
         </button>
@@ -56,8 +62,8 @@
 <style>
     .workbench-panel {
         display: grid;
-        gap: 14px;
-        padding: 16px;
+        gap: 10px;
+        padding: 14px;
         border: 1px solid var(--b3-border-color);
         border-radius: 8px;
         background: var(--b3-theme-surface);
@@ -83,69 +89,39 @@
         font-size: 16px;
     }
 
-    .workbench-panel-link {
-        height: 28px;
-        padding: 0 10px;
-        border: 1px solid var(--b3-border-color);
-        border-radius: 7px;
-        background: var(--b3-theme-background);
-        color: var(--b3-theme-on-background);
-        cursor: pointer;
-        font-size: 12px;
-    }
-
-    .workbench-metrics {
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 9px;
-    }
-
-    .workbench-metric {
-        display: grid;
-        gap: 4px;
-        min-height: 86px;
-        padding: 12px;
-        border: 1px solid var(--b3-border-color);
-        border-radius: 8px;
-        background: var(--b3-theme-background);
-        color: var(--b3-theme-on-background);
-        cursor: pointer;
-        text-align: left;
-    }
-
-    .workbench-metric:hover,
-    .workbench-panel-link:hover,
-    .workbench-local-footer button:hover {
-        border-color: var(--b3-theme-primary);
-    }
-
-    .workbench-metric-wide {
-        grid-column: span 2;
-    }
-
-    .workbench-metric span {
-        color: var(--b3-theme-on-surface-light);
-        font-size: 12px;
-    }
-
-    .workbench-metric strong {
-        color: var(--b3-theme-on-background);
-        font-size: 20px;
-        line-height: 1.1;
-    }
-
-    .workbench-metric strong.ok {
+    .workbench-panel-status {
+        padding: 2px 8px;
+        border-radius: 4px;
+        background: color-mix(in srgb, var(--b3-theme-primary) 8%, transparent);
         color: var(--b3-theme-primary);
+        font-size: 12px;
     }
 
-    .workbench-metric em {
-        overflow: hidden;
+    .workbench-compact-stats {
+        display: grid;
+        grid-template-columns: repeat(1, minmax(0, 1fr));
+        gap: 8px;
+    }
+
+    .workbench-compact-stat {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 8px 10px;
+        border: 1px solid var(--b3-border-color);
+        border-radius: 6px;
+        background: var(--b3-theme-background);
+    }
+
+    .workbench-compact-stat span {
         color: var(--b3-theme-on-surface-light);
         font-size: 12px;
-        font-style: normal;
-        line-height: 1.35;
-        text-overflow: ellipsis;
-        white-space: nowrap;
+    }
+
+    .workbench-compact-stat strong {
+        color: var(--b3-theme-on-background);
+        font-size: 15px;
+        font-weight: 700;
     }
 
     .workbench-local-footer {
@@ -167,5 +143,25 @@
         cursor: pointer;
         font-size: 12px;
         font-weight: 600;
+        transition: border-color 0.16s ease;
+    }
+
+    .workbench-local-footer button:hover {
+        border-color: var(--b3-theme-primary);
+    }
+
+    .workbench-local-footer button.needs-attention {
+        animation: workbench-needs-attention 2s ease-in-out infinite;
+    }
+
+    @keyframes workbench-needs-attention {
+        0%, 100% {
+            border-color: var(--b3-border-color);
+            transform: scale(1);
+        }
+        50% {
+            border-color: var(--b3-theme-primary);
+            transform: scale(1.02);
+        }
     }
 </style>

@@ -3,10 +3,8 @@
     import { showMessage } from "siyuan";
     import SiYuanIcon from "../common/SiYuanIcon.svelte";
     import DoubanBookDetailDialog from "../bookSearch/DoubanBookDetailDialog.svelte";
-    import type { WorkbenchAction, WorkbenchSearchResult, WorkbenchSearchSource } from "../../types/workbench";
+    import type { WorkbenchAction, WorkbenchSearchResult } from "../../types/workbench";
     import { addEditedDoubanBookToDatabase, loadDoubanBookPreferences, searchDoubanBook } from "../../utils/bookSearch/doubanSearchService";
-    import { openLocalBookResult, searchLocalBooks } from "../../utils/bookSearch/localBookSearchService";
-    import { openWereadCachedNotebooks, searchWereadCachedBooks } from "../../utils/bookSearch/wereadBookSearchService";
     import { svelteDialog } from "../../libs/dialog";
 
     export let plugin: any;
@@ -15,38 +13,19 @@
 
     let query = "";
     let searchInput: HTMLInputElement;
-    let source: WorkbenchSearchSource = "local";
     let results: WorkbenchSearchResult[] = [];
     let selectedResult: WorkbenchSearchResult | null = null;
-    let statusText = "选择来源后搜索书名、ISBN、作者或微信读书书籍";
+    let statusText = "搜索豆瓣书名、ISBN 或作者后导入本地数据库";
     let isSearching = false;
     let isDoubanDetailOpen = false;
-
-    const sources: Array<{ key: WorkbenchSearchSource; label: string; icon: string }> = [
-        { key: "local", label: "本地书籍", icon: "localShelf" },
-        { key: "douban", label: "豆瓣图书", icon: "douban" },
-        { key: "weread", label: "微信读书", icon: "weread" },
-    ];
-
-    const sourceLabels: Record<string, string> = {
-        local: "本地",
-        douban: "豆瓣图书",
-        weread: "微信读书",
-    };
 
     async function runSearch() {
         isSearching = true;
         selectedResult = null;
         try {
-            if (source === "local") {
-                results = await searchLocalBooks(plugin, query);
-            } else if (source === "douban") {
-                results = await searchDoubanBook(plugin, query);
-            } else {
-                results = await searchWereadCachedBooks(plugin, query);
-            }
+            results = await searchDoubanBook(plugin, query);
             statusText = results.length ? `找到 ${results.length} 条结果` : "暂无匹配结果";
-            if (source === "douban" && results.length === 1 && results[0].raw) {
+            if (results.length === 1 && results[0].raw) {
                 openDoubanDetailDialog(results[0]);
             }
         } catch (error: any) {
@@ -59,7 +38,7 @@
     }
 
     function openDoubanDetailDialog(result: WorkbenchSearchResult) {
-        if (!result || result.source !== "douban" || !result.raw) return;
+        if (!result || !result.raw) return;
         selectedResult = result;
         isDoubanDetailOpen = true;
         statusText = "已打开豆瓣图书详情，请确认修改后添加";
@@ -115,50 +94,39 @@
 
     function chooseResult(result: WorkbenchSearchResult) {
         selectedResult = result;
-        if (result.source === "douban" && result.raw) {
+        if (result.raw) {
             openDoubanDetailDialog(result);
-        } else if (result.source === "local") {
-            openLocalBookResult(plugin, result);
-        } else if (result.source === "weread") {
-            if (result.noteDocId) {
-                showMessage("已找到本地笔记，请在有笔记书籍列表中查看详情");
-            } else {
-                showMessage("微信读书结果来自本地缓存，可从有笔记书籍入口查看");
-            }
         }
-    }
-
-    async function openWereadCache() {
-        await openWereadCachedNotebooks(plugin);
     }
 </script>
 
 <section class="workbench-search">
     <div class="workbench-search-head">
         <div>
-            <h2>统一搜索</h2>
-            <p>从本地数据库、豆瓣图书和微信读书缓存进入常用书籍操作。</p>
-        </div>
-        <div class="workbench-search-source" role="tablist">
-            {#each sources as item (item.key)}
-                <button class:active={source === item.key} on:click={() => (source = item.key)}>
-                    <SiYuanIcon name={item.icon} pluginName={plugin.name} size={15} />
-                    <span>{item.label}</span>
-                </button>
-            {/each}
+            <h2>豆瓣读书书籍搜索导入</h2>
+            <p>从豆瓣读书搜索书籍，确认详情后导入本地阅读数据库。</p>
         </div>
     </div>
 
     <div class="workbench-search-bar">
-        <!-- svelte-ignore a11y-click-events-have-key-events -->
-        <!-- svelte-ignore a11y-no-static-element-interactions -->
-        <div class="workbench-search-input-wrap" on:click={() => searchInput?.focus()}>
+        <div
+            class="workbench-search-input-wrap"
+            tabindex="0"
+            role="button"
+            on:click={() => searchInput?.focus()}
+            on:keydown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    searchInput?.focus();
+                }
+            }}
+        >
             <SiYuanIcon name="search" size={16} />
             <input
                 class="b3-text-field"
                 bind:this={searchInput}
                 bind:value={query}
-                placeholder="搜索书名、ISBN、作者或微信读书书籍"
+                placeholder="搜索书名、ISBN 或作者"
                 on:keydown={(event) => event.key === "Enter" && runSearch()}
                 on:click|stopPropagation
                 on:mousedown|stopPropagation
@@ -172,17 +140,13 @@
 
     <div class="workbench-search-status">
         <span>{statusText}</span>
-        {#if source === "weread"}
-            <button on:click={openWereadCache}>打开有笔记书籍</button>
-            <button on:click={() => dispatch("action", "sync-weread")}>进入同步面板</button>
-        {/if}
     </div>
 
-    {#if results.length > 0 && !(source === "douban" && isDoubanDetailOpen)}
+    {#if results.length > 0 && !isDoubanDetailOpen}
         <div class="workbench-search-results">
             {#each results as result (result.id)}
                 <button
-                    class:active={selectedResult?.id === result.id && selectedResult?.source === result.source}
+                    class:active={selectedResult?.id === result.id}
                     class="workbench-search-result"
                     on:click={() => chooseResult(result)}
                 >
@@ -195,7 +159,7 @@
                         <strong>{result.title}</strong>
                         <em>{result.author || result.isbn || result.description || "暂无摘要"}</em>
                     </span>
-                    <span class="workbench-search-result-source">{sourceLabels[result.source] || result.source}</span>
+                    <span class="workbench-search-result-source">豆瓣图书</span>
                 </button>
             {/each}
         </div>
@@ -232,42 +196,6 @@
         line-height: 1.5;
     }
 
-    .workbench-search-source {
-        display: inline-flex;
-        gap: 4px;
-        padding: 4px;
-        border: 1px solid var(--b3-border-color);
-        border-radius: 8px;
-        background: var(--b3-theme-background);
-    }
-
-    .workbench-search-source button,
-    .workbench-search-status button,
-    .workbench-button {
-        border: 1px solid transparent;
-        border-radius: 7px;
-        cursor: pointer;
-        transition: border-color 0.16s ease, background 0.16s ease, transform 0.16s ease;
-    }
-
-    .workbench-search-source button {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        height: 30px;
-        padding: 0 10px;
-        background: transparent;
-        color: var(--b3-theme-on-background);
-        font-size: 12px;
-        font-weight: 600;
-    }
-
-    .workbench-search-source button.active {
-        background: var(--b3-theme-surface);
-        border-color: var(--b3-border-color);
-        color: var(--b3-theme-primary);
-    }
-
     .workbench-search-bar {
         display: grid;
         grid-template-columns: minmax(220px, 1fr) auto;
@@ -278,6 +206,7 @@
         display: flex;
         align-items: center;
         gap: 8px;
+        height: 34px;
         min-width: 0;
         padding: 0 10px;
         border: 1px solid var(--b3-border-color);
@@ -287,6 +216,9 @@
     }
 
     .workbench-search-input-wrap input {
+        flex: 1;
+        width: 100%;
+        height: 100%;
         min-width: 0;
         border: 0;
         background: transparent;
@@ -307,11 +239,14 @@
         gap: 7px;
         height: 34px;
         padding: 0 12px;
-        border-color: var(--b3-border-color);
+        border: 1px solid var(--b3-border-color);
+        border-radius: 7px;
         background: var(--b3-theme-background);
         color: var(--b3-theme-on-background);
         font-size: 13px;
         font-weight: 600;
+        cursor: pointer;
+        transition: border-color 0.16s ease, background 0.16s ease, transform 0.16s ease;
     }
 
     .workbench-button:hover {
@@ -331,14 +266,6 @@
         align-items: center;
         gap: 8px;
         color: var(--b3-theme-on-surface-light);
-        font-size: 12px;
-    }
-
-    .workbench-search-status button {
-        height: 26px;
-        padding: 0 9px;
-        background: color-mix(in srgb, var(--b3-theme-primary) 8%, transparent);
-        color: var(--b3-theme-primary);
         font-size: 12px;
     }
 
@@ -415,11 +342,6 @@
         .workbench-search-head,
         .workbench-search-bar {
             grid-template-columns: 1fr;
-        }
-
-        .workbench-search-source {
-            justify-self: start;
-            flex-wrap: wrap;
         }
     }
 
