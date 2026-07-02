@@ -52,22 +52,22 @@
 
 正确：首页请求，参数平铺。
 ```json
-{"api_name":"/user/notebooks","count":20,"skill_version":"1.0.3"}
+{"api_name":"/user/notebooks","count":20,"skill_version":"1.0.4"}
 ```
 
 正确：下一页请求，`lastSort` 取上一页 `books` 最后一项的 `sort`。
 ```json
-{"api_name":"/user/notebooks","count":20,"lastSort":1778312777,"skill_version":"1.0.3"}
+{"api_name":"/user/notebooks","count":20,"lastSort":1778312777,"skill_version":"1.0.4"}
 ```
 
 错误：不要使用 `params` 包裹业务参数，否则后端收不到 `count` 和 `lastSort`。
 ```json
-{"api_name":"/user/notebooks","params":{"count":20,"lastSort":1778312777},"skill_version":"1.0.3"}
+{"api_name":"/user/notebooks","params":{"count":20,"lastSort":1778312777},"skill_version":"1.0.4"}
 ```
 
 错误：不要使用 `offset`/`limit`，这些字段不是本接口分页参数。
 ```json
-{"api_name":"/user/notebooks","offset":20,"limit":20,"skill_version":"1.0.3"}
+{"api_name":"/user/notebooks","offset":20,"limit":20,"skill_version":"1.0.4"}
 ```
 
 ### `/book/bookmarklist` — 单本书的划线内容列表（不含书签内容）
@@ -118,6 +118,10 @@
 | `reviews` | 想法/点评数组 |
 | `reviews[].review.reviewId` | 唯一 ID |
 | `reviews[].review.content` | 内容文本 |
+| `reviews[].review.abstract` | 想法对应的划线原文。仅划线想法等能定位到原文的内容有值，整本书评或章节点评可能为空或不存在 |
+| `reviews[].review.range` | 划线原文位置范围，格式如 `"2959-3007"`。仅能定位到原文的内容有值 |
+| `reviews[].review.chapterUid` | 章节 UID。章节相关内容可能有值 |
+| `reviews[].review.chapterIdx` | 章节序号。章节相关内容可能有值 |
 | `reviews[].review.createTime` | 创建时间 |
 | `reviews[].review.star` | 评分（0-5，-1=无评分） |
 | `reviews[].review.chapterName` | 所在章节名（章节点评时有值，书评为空） |
@@ -126,9 +130,9 @@
 | `hasMore` | 是否有更多（1=有） |
 | `synckey` | 翻页游标（下次请求传入） |
 
-### `/book/underlines` — 章节划线热度统计
+> `abstract` 和 `range` 是条件字段：如果想法是针对某段划线/原文发表的，应优先用它们展示"原文 + 想法"；如果是整本书评、章节点评或普通想法，可能没有对应原文。
 
-> 本插件当前同步主链路暂不使用该接口；仅作为上游能力参考。新增功能前必须先确认真实返回并更新主文档。
+### `/book/underlines` — 章节划线热度统计
 
 > 获取某章节每条划线的热度统计（人数/得分/类型），**不含划线文本**，主要用于阅读器内显示"X人划线"热度标签。
 
@@ -188,8 +192,6 @@
 | `chapters[].title` | 章节标题 |
 
 ### `/book/readreviews` — 划线下的想法/评论
-
-> 本插件当前同步主链路暂不使用该接口；仅作为上游能力参考。新增功能前必须先确认真实返回并更新主文档。
 
 **请求参数：**
 
@@ -273,4 +275,3 @@
 - **内容导出 = 划线内容 + 想法/点评内容**；当前不能导出书签内容。
 - `reviewCount` 已包含个人点评/书评想法，计算总笔记数时不要再额外加“点评数”。
 - 当用户说“所有笔记内容”时，必须同时查询 `/book/bookmarklist` 和 `/review/list/mine`，不能只返回划线。
-

@@ -37,7 +37,7 @@ const result = await callWereadApi<T>(apiKey, apiName, params);
 ```
 
 **调用规则：**
-1. 每个请求自动注入 `skill_version: "1.0.3"`，开发者无需手动添加。
+1. 每个请求自动注入 `skill_version: "1.0.4"`，开发者无需手动添加。
 2. 参数直接放在请求体里，不要包 `params` 对象。
 3. API Key 不允许 `console.log`。
 4. 鉴权失败返回 `{ errcode: -2013, errmsg: "鉴权失败" }`。
