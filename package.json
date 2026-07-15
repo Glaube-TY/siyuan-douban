@@ -1,7 +1,8 @@
 {
   "name": "siyuan-douban",
-  "version": "4.1.3",
+  "version": "4.2.0",
   "type": "module",
+  "packageManager": "pnpm@10.14.0",
   "description": "Search books from Douban, generate reading notes, and sync WeRead highlights, thoughts, book reviews, and reading statistics to SiYuan (https://github.com/Glaube-TY/siyuan-douban)",
   "repository": "https://github.com/Glaube-TY/siyuan-douban",
   "homepage": "https://github.com/Glaube-TY/siyuan-douban",
@@ -13,6 +14,7 @@
     "make-link": "node --no-warnings ./scripts/make_dev_link.js",
     "make-link-win": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File ./scripts/elevate.ps1 -scriptPath ./scripts/make_dev_link.js",
     "update-version": "node --no-warnings ./scripts/update_version.js",
+    "release": "node --no-warnings ./scripts/release.js",
     "make-install": "vite build && node --no-warnings ./scripts/make_install.js"
   },
   "devDependencies": {

@@ -1,6 +1,6 @@
 import { reloadAttributeView } from "../../api";
-import { fetchBookHtml, fetchDoubanBook } from "../douban/book";
-import { openInteractiveSearchWindow } from "../douban/book/searchBook";
+import { fetchBookHtml, fetchDoubanBook, fetchDoubanSubjectHtml } from "../douban/book";
+import { searchDoubanSubjects } from "../douban/book/searchBook";
 import { loadAVData } from "../bookHandling";
 import { DEFAULT_SETTINGS, loadPluginData } from "../core/configDefaults";
 import { loadDatabaseSettings } from "../settings/databaseSettingsService";
@@ -21,32 +21,73 @@ function normalizeAuthors(value: unknown): string {
     return String(value || "");
 }
 
+function extractSubjectId(html: string): string {
+    const doc = new DOMParser().parseFromString(html, "text/html");
+    const canonicalUrl = doc.querySelector<HTMLLinkElement>('link[rel="canonical"]')?.href
+        || doc.querySelector<HTMLMetaElement>('meta[property="og:url"]')?.content
+        || "";
+    return canonicalUrl.match(/\/subject\/(\d+)/)?.[1]
+        || html.match(/https?:\/\/book\.douban\.com\/subject\/(\d+)/)?.[1]
+        || "";
+}
+
 export async function searchDoubanBook(plugin: PluginLike, query: string): Promise<WorkbenchSearchResult[]> {
+    void plugin;
     const keyword = String(query || "").trim();
     if (!keyword) return [];
 
-    let html = "";
     if (isISBN(keyword)) {
-        html = await fetchBookHtml(keyword.replace(/[-\s]/g, ""));
-    } else {
-        const result = await openInteractiveSearchWindow(keyword, plugin.i18n || {});
-        if (!result.success || !result.html) {
-            throw new Error(result.error || "豆瓣图书搜索失败");
-        }
-        html = result.html;
+        const html = await fetchBookHtml(keyword.replace(/[-\s]/g, ""));
+        const book = await fetchDoubanBook(html);
+        const subjectId = extractSubjectId(html);
+        return [{
+            id: subjectId || book.isbn || book.title,
+            source: "douban",
+            title: book.title || "未命名书籍",
+            author: normalizeAuthors(book.authors),
+            isbn: book.isbn,
+            cover: book.cover,
+            description: book.description || book.publisher || "",
+            raw: { ...book, doubanSubjectId: subjectId, detailLoaded: true },
+        }];
     }
 
+    const candidates = await searchDoubanSubjects(keyword);
+    return candidates.map((candidate) => ({
+        id: candidate.id,
+        source: "douban" as const,
+        title: candidate.title,
+        author: candidate.author,
+        cover: candidate.cover,
+        description: candidate.year ? `${candidate.year} 年` : "",
+        raw: {
+            doubanSubjectId: candidate.id,
+            subjectUrl: candidate.url,
+            detailLoaded: false,
+        },
+    }));
+}
+
+export async function loadDoubanBookDetail(result: WorkbenchSearchResult): Promise<WorkbenchSearchResult> {
+    const raw = (result?.raw || {}) as any;
+    if (raw.detailLoaded) return result;
+
+    const subjectId = String(raw.doubanSubjectId || result.id || "");
+    const html = await fetchDoubanSubjectHtml(subjectId);
     const book = await fetchDoubanBook(html);
-    return [{
-        id: book.isbn || book.title,
-        source: "douban",
-        title: book.title || "未命名书籍",
-        author: normalizeAuthors(book.authors),
+    return {
+        ...result,
+        title: book.title || result.title,
+        author: normalizeAuthors(book.authors) || result.author,
         isbn: book.isbn,
-        cover: book.cover,
-        description: book.description || book.publisher || "",
-        raw: book,
-    }];
+        cover: book.cover || result.cover,
+        description: book.description || book.publisher || result.description,
+        raw: {
+            ...book,
+            doubanSubjectId: subjectId,
+            detailLoaded: true,
+        },
+    };
 }
 
 export async function addEditedDoubanBookToDatabase(plugin: PluginLike, editedBookInfo: any): Promise<{ code: number; msg: string }> {

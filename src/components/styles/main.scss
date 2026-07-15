@@ -213,3 +213,180 @@
     overflow-y: auto;
     overflow-x: hidden;
 }
+
+// 所有 Svelte 弹窗共享的滚动兜底：组件未提供独立滚动区时，由挂载容器接管。
+.siyuan-douban-svelte-dialog {
+    .b3-dialog__container,
+    .b3-dialog__body,
+    .dialog-content,
+    .siyuan-douban-dialog-host {
+        min-height: 0 !important;
+        box-sizing: border-box;
+    }
+
+    .dialog-content {
+        overflow: hidden !important;
+    }
+
+    .siyuan-douban-dialog-host {
+        max-height: 100%;
+        overflow-x: hidden;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        -webkit-overflow-scrolling: touch;
+        touch-action: pan-y;
+    }
+}
+
+.siyuan-douban-mobile-dialog,
+.siyuan-douban-mobile-subdialog,
+.siyuan-douban-mobile-detail-dialog {
+    .b3-dialog__container {
+        width: 100vw !important;
+        max-width: 100vw !important;
+        height: 100dvh !important;
+        max-height: 100dvh !important;
+        border-radius: 0 !important;
+    }
+
+    .b3-dialog__header {
+        display: none !important;
+    }
+
+    .b3-dialog__body,
+    .dialog-content {
+        height: 100% !important;
+        min-height: 0 !important;
+        padding: 0 !important;
+        overflow: hidden !important;
+    }
+
+    .siyuan-douban-dialog-host {
+        width: 100% !important;
+        height: 100% !important;
+        min-height: 0 !important;
+        overflow-x: hidden !important;
+        overflow-y: auto !important;
+        -webkit-overflow-scrolling: touch;
+        touch-action: pan-y;
+    }
+}
+
+.siyuan-douban-mobile-detail-dialog {
+    .siyuan-douban-dialog-host {
+        overflow: hidden !important;
+        touch-action: auto;
+    }
+
+    .douban-detail-dialog {
+        width: 100% !important;
+        height: 100% !important;
+        min-height: 0 !important;
+        overflow: hidden !important;
+    }
+
+    .douban-detail-body {
+        flex: 1 1 auto !important;
+        height: 0 !important;
+        min-height: 0 !important;
+        overflow-x: hidden !important;
+        overflow-y: auto !important;
+        -webkit-overflow-scrolling: touch;
+        touch-action: pan-y;
+    }
+}
+
+// 移动端设置弹窗只保留内容区滚动，避免 Grid 行被拉伸成整屏高度。
+.siyuan-douban-mobile-subdialog {
+    .dialog-content > div {
+        min-height: 0 !important;
+    }
+
+    .settings-dialog {
+        height: 100% !important;
+        min-height: 0 !important;
+        gap: 10px !important;
+        padding:
+            calc(12px + env(safe-area-inset-top))
+            calc(12px + env(safe-area-inset-right))
+            calc(12px + env(safe-area-inset-bottom))
+            calc(12px + env(safe-area-inset-left)) !important;
+        overflow: hidden !important;
+    }
+
+    .settings-dialog-header {
+        gap: 10px !important;
+        padding-bottom: 10px !important;
+    }
+
+    .settings-dialog-icon {
+        width: 32px !important;
+        height: 32px !important;
+        flex: 0 0 32px !important;
+    }
+
+    .settings-dialog h2 {
+        margin-bottom: 2px !important;
+        font-size: 16px !important;
+    }
+
+    .settings-dialog p {
+        font-size: 12px !important;
+        line-height: 1.4 !important;
+    }
+
+    .settings-dialog-body {
+        flex: 1 1 auto !important;
+        min-height: 0 !important;
+        align-content: start !important;
+        grid-auto-rows: max-content !important;
+        gap: 10px !important;
+        overflow-x: hidden !important;
+        overflow-y: auto !important;
+        overscroll-behavior: contain;
+        -webkit-overflow-scrolling: touch;
+        touch-action: pan-y;
+    }
+
+    .settings-dialog-field {
+        align-self: start !important;
+        gap: 6px !important;
+    }
+
+    .settings-dialog input.b3-text-field,
+    .settings-dialog select.b3-select {
+        box-sizing: border-box !important;
+        height: 40px !important;
+        min-height: 40px !important;
+        max-height: 40px !important;
+        padding-top: 0 !important;
+        padding-bottom: 0 !important;
+    }
+
+    .settings-dialog textarea.b3-text-field {
+        box-sizing: border-box !important;
+        min-height: 88px !important;
+        max-height: none !important;
+    }
+
+    .settings-dialog-status,
+    .settings-dialog-switch-row {
+        box-sizing: border-box !important;
+        min-height: 40px !important;
+        padding: 9px 10px !important;
+    }
+
+    .settings-dialog-actions {
+        gap: 8px !important;
+        padding-top: 10px !important;
+        flex-wrap: wrap;
+    }
+
+    .settings-dialog-actions .b3-button {
+        box-sizing: border-box !important;
+        height: 40px !important;
+        min-height: 40px !important;
+        padding-top: 0 !important;
+        padding-bottom: 0 !important;
+    }
+}

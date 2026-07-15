@@ -2,18 +2,25 @@
   "name": "siyuan-douban",
   "author": "Glaube-TY",
   "url": "https://github.com/Glaube-TY/siyuan-douban",
-  "version": "4.1.3",
+  "version": "4.2.0",
   "minAppVersion": "3.6.5",
   "backends": [
     "windows",
     "linux",
+    "ios",
+    "android",
+    "harmony",
+    "docker",
     "darwin"
   ],
   "frontends": [
     "desktop",
+    "mobile",
+    "browser-desktop",
+    "browser-mobile",
     "desktop-window"
   ],
-  "disabledInPublish": true,
+  "disabledInPublish": false,
   "displayName": {
     "en_US": "Reading Notes",
     "zh_CN": "读书笔记"

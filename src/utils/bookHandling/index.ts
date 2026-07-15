@@ -3,6 +3,7 @@ import { parseDateToTimestamp } from '../core/formatOp';
 import { getImage, downloadCover } from "@/utils/core/getImg";
 import { ensureAttributeViewKeys, appendBookToAttributeView } from './ensureAttributeViewKeys';
 import { bindBookToNote } from './bindBookToNote';
+import { findBookByNormalizedTitle } from './bookDeduplication';
 
 export async function loadAVData(avID: string, fullData: any, plugin: any) {
     try {
@@ -56,6 +57,14 @@ export async function loadAVData(avID: string, fullData: any, plugin: any) {
                     };
                 }
             }
+
+            // ISBN 可能因微信读书直连导入而缺失，入库前再按规范化书名去重。
+            if (findBookByNormalizedTitle(originalDatabasekeyValues, fullData.title)) {
+                return {
+                    code: 1,
+                    msg: "书籍已存在（书名匹配），跳过添加操作"
+                };
+            }
         }
 
         // 定义书籍属性列
@@ -64,9 +73,17 @@ export async function loadAVData(avID: string, fullData: any, plugin: any) {
         // 确保数据库包含所有必需的属性列
         const databaseKeys = await ensureAttributeViewKeys(avID, requiredBookAttributes, getAttributeType);
 
-        // 下载封面
-        const coverBase64Data = await getImage(fullData.cover);
-        fullData.cover = await downloadCover(coverBase64Data as string, fullData.title);
+        // 下载封面。封面失败不应阻断书籍元数据入库。
+        if (/^https?:\/\//i.test(String(fullData.cover || ""))) {
+            const subjectId = String(fullData.doubanSubjectId || "");
+            const referer = subjectId
+                ? `https://book.douban.com/subject/${subjectId}/`
+                : "https://book.douban.com/";
+            const coverBase64Data = await getImage(fullData.cover, referer);
+            fullData.cover = coverBase64Data
+                ? await downloadCover(coverBase64Data, fullData.title)
+                : "";
+        }
 
         // 添加书籍数据到数据库并回查 blockID
         const { blockID, matchingValue } = await appendBookToAttributeView(

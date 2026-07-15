@@ -1,51 +1,64 @@
-import { forwardProxy } from "@/api";
+import { forwardProxyStrict } from "@/api";
+
+export const DOUBAN_DESKTOP_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
+
+export function getDoubanHeaders(referer: string = "https://book.douban.com/") {
+    return [
+        { "User-Agent": DOUBAN_DESKTOP_USER_AGENT },
+        { Referer: referer },
+        { Accept: "text/html,application/xhtml+xml,application/json;q=0.9,*/*;q=0.8" },
+        { "Accept-Language": "zh-CN,zh;q=0.9" },
+    ];
+}
+
+export async function fetchDoubanText(url: string, referer: string = "https://book.douban.com/"): Promise<string> {
+    const response = await forwardProxyStrict(
+        url,
+        "GET",
+        "",
+        getDoubanHeaders(referer),
+        15000,
+        "text/html",
+        "text",
+        "text",
+    );
+
+    if (response.status < 200 || response.status >= 400 || !response.body) {
+        throw new Error(`豆瓣请求失败（HTTP ${response.status || "未知"}）`);
+    }
+    return response.body;
+}
 
 export async function fetchBookHtml(isbn: string) {
-    const SEARCH_ENGINES = [
-        "https://www.google.com",
-        "https://www.bing.com",
-        "https://yandex.com",
-        "https://search.naver.com",
-        "https://www.baidu.com",
-        "https://www.sogou.com",
-        "https://duckduckgo.com",
-        "https://startpage.com",
-    ];
-
     const DOUBAN_URLS = [
         `https://book.douban.com/isbn/${isbn}/`,
         `https://douban.com/isbn/${isbn}/`,
         `https://book.douban.com/subject_search?search_text=${isbn}`
     ];
+    let lastError = "未知错误";
 
     for (const url of DOUBAN_URLS) {
         try {
-            const response = await forwardProxy(
-                url,
-                "GET",
-                {},
-                [
-                    { name: "User-Agent", value: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36 Edg/124.0.0.0" },
-                    { name: "Referer", value: "https://www.douban.com/" },
-                    { name: "Accept-Language", value: "zh-CN,zh;q=0.9" },
-                    { name: "Accept-Encoding", value: "gzip, deflate, br" },
-                    { name: "Connection", value: "keep-alive" },
-                    { name: "Referer", value: SEARCH_ENGINES[Math.floor(Math.random() * SEARCH_ENGINES.length)] }
-                ],
-                10000,
-                "text/html"
-            );
-
-            if (response?.body) {
-                return response.body;
+            const html = await fetchDoubanText(url);
+            const doc = new DOMParser().parseFromString(html, "text/html");
+            const canonicalUrl = doc.querySelector<HTMLLinkElement>('link[rel="canonical"]')?.href
+                || doc.querySelector<HTMLMetaElement>('meta[property="og:url"]')?.content
+                || "";
+            if (doc.querySelector("#info") && /\/subject\/\d+/.test(canonicalUrl || html)) {
+                return html;
             }
-        } catch (error) {
-            if (error.message.includes('stopped after 3 redirects')) {
-                continue;
-            }
-            throw new Error(`通过ISBN号获取豆瓣书籍失败: ${error.message}`);
+            lastError = "返回内容不是豆瓣书籍详情页";
+        } catch (error: any) {
+            lastError = error?.message || String(error);
         }
     }
-    
-    throw new Error(`通过ISBN号 ${isbn} 获取豆瓣书籍失败: 所有URL都尝试失败`);
+
+    throw new Error(`通过 ISBN ${isbn} 获取豆瓣书籍失败：${lastError}`);
+}
+
+export async function fetchDoubanSubjectHtml(subjectId: string): Promise<string> {
+    if (!/^\d+$/.test(subjectId)) {
+        throw new Error("无效的豆瓣书籍 ID");
+    }
+    return fetchDoubanText(`https://book.douban.com/subject/${subjectId}/`);
 }

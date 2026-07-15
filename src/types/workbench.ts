@@ -76,7 +76,6 @@ export type WorkbenchAction =
     | "open-weread-auth"
     | "open-sync-options"
     | "open-about"
-    | "open-legacy-settings"
     | "open-book-status"
     | "open-review"
     | "open-topics"

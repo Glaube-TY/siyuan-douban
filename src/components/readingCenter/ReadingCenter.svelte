@@ -3,7 +3,7 @@
     import { showMessage } from "siyuan";
     import type { I18N } from "siyuan";
     import { svelteDialog } from "../../libs/dialog";
-    import type { ReadingCenterOverview, FeatureTab } from "../../types/readingCenter";
+    import type { ReadingCenterOverview } from "../../types/readingCenter";
     import type { WorkbenchAction } from "../../types/workbench";
     import type { ReadingInboxItem } from "../../types/readingInbox";
     import { getReadingCenterOverview } from "../../utils/readingCenter/readingCenterData";
@@ -28,7 +28,6 @@
     import BookHealthPanel from "../readingManagement/BookHealthPanel.svelte";
     import DataMaintenancePanel from "../readingManagement/DataMaintenancePanel.svelte";
     import WereadTab from "../tabs/WereadTab.svelte";
-    import OldSettingsPage from "../index.svelte";
     import DatabaseSettingsDialog from "../settings/DatabaseSettingsDialog.svelte";
     import BookPreferenceSettingsDialog from "../settings/BookPreferenceSettingsDialog.svelte";
     import TemplateSettingsDialog from "../settings/TemplateSettingsDialog.svelte";
@@ -39,11 +38,12 @@
 
     export let i18n: I18N;
     export let plugin: any;
+    export let mobile = false;
+    export let onClose: () => void = () => {};
 
     type ReadingCenterView =
         | "dashboard"
         | "sync-panel"
-        | "legacy-settings"
         | "sync-report"
         | "reading-stats"
         | "sync-changes"
@@ -57,7 +57,6 @@
         | "digest";
 
     let currentView: ReadingCenterView = "dashboard";
-    let initialTabKey = "search";
     let overviewData: ReadingCenterOverview | null = null;
     let isLoading = true;
     let pendingTopicItem: ReadingInboxItem | null = null;
@@ -67,37 +66,6 @@
 
     // 同步进度弹窗相关
     let progressDialogRef: WereadSyncProgressDialog | null = null;
-
-    const legacyTabs: FeatureTab[] = [
-        {
-            key: "search",
-            label: "书籍查询",
-            description: "兼容旧版豆瓣搜索和本地书架",
-            iconType: "siyuan",
-            icon: "iconSearch",
-        },
-        {
-            key: "settings",
-            label: "用户设置",
-            description: "旧版完整设置页",
-            iconType: "siyuan",
-            icon: "iconSettings",
-        },
-        {
-            key: "weread",
-            label: "微信读书",
-            description: "旧版微信读书同步面板",
-            iconType: "image",
-            icon: `/plugins/${plugin.name}/asset/WeRead.png`,
-        },
-        {
-            key: "about",
-            label: "关于插件",
-            description: "旧版关于页面",
-            iconType: "siyuan",
-            icon: "iconInfo",
-        },
-    ];
 
     onMount(async () => {
         await refreshAll();
@@ -131,29 +99,12 @@
         currentView = view;
     }
 
-    function switchToLegacy(tabKey: string) {
-        initialTabKey = tabKey;
-        currentView = "legacy-settings";
-    }
-
-    function handleLegacySwitchTab(event: CustomEvent) {
-        initialTabKey = event.detail?.key || "search";
-    }
-
-    function getLegacyTitle(key: string) {
-        return legacyTabs.find((item) => item.key === key)?.label || "旧版设置";
-    }
-
-    function getLegacySubtitle(key: string) {
-        return legacyTabs.find((item) => item.key === key)?.description || "兼容入口";
-    }
-
     function openComponentDialog(component: any, options: { title: string; width?: string; height?: string; props?: Record<string, any> }) {
         let dialogRef: any;
         dialogRef = svelteDialog({
             title: options.title,
-            width: options.width || "620px",
-            height: options.height,
+            width: mobile ? "100vw" : (options.width || "620px"),
+            height: mobile ? "100dvh" : options.height,
             constructor: (container: HTMLElement) => new component({
                 target: container,
                 props: {
@@ -165,6 +116,9 @@
                 },
             }),
         });
+        if (mobile) {
+            dialogRef.dialog.element.classList.add("siyuan-douban-mobile-subdialog");
+        }
     }
 
     function openDatabaseSettings() {
@@ -192,7 +146,6 @@
             title: "关于插件",
             width: "min(720px, 92vw)",
             height: "min(620px, 86vh)",
-            props: { onOpenLegacy: () => switchToLegacy("settings") },
         });
     }
 
@@ -362,8 +315,6 @@
             openSyncOptions();
         } else if (action === "open-about") {
             openAbout();
-        } else if (action === "open-legacy-settings") {
-            switchToLegacy("settings");
         } else if (action === "open-book-status") {
             switchToView("book-status");
         } else if (action === "open-review") {
@@ -416,8 +367,18 @@
     }
 </script>
 
-<div class="reading-center-container">
-    {#if currentView === "dashboard"}
+<div class="reading-center-container" class:reading-center-container-mobile={mobile}>
+    {#if mobile}
+        <header class="reading-center-mobile-header">
+            <div><span>读书笔记</span><small>{currentView === "dashboard" ? "移动工作台" : "功能详情"}</small></div>
+            <button type="button" on:click={onClose} aria-label="关闭读书笔记工作台">关闭</button>
+        </header>
+    {/if}
+    <main
+        class:reading-center-mobile-view={mobile}
+        class:reading-center-mobile-dashboard-view={mobile && currentView === "dashboard"}
+    >
+      {#if currentView === "dashboard"}
         <div class="reading-center-dashboard">
             {#if isLoading && !overviewData}
                 <div class="reading-center-loading">
@@ -427,6 +388,7 @@
             {:else}
                 <ReadingWorkbench
                     {plugin}
+                    {mobile}
                     refreshKey={workbenchRefreshKey}
                     on:action={handleWorkbenchAction}
                     on:refresh={refreshAll}
@@ -444,19 +406,6 @@
             <div class="siyuan-douban-plugin reading-center-legacy-plugin">
                 <WereadTab bind:plugin bind:i18n {databaseStatus} />
             </div>
-        </ReadingFeatureShell>
-    {:else if currentView === "legacy-settings"}
-        <ReadingFeatureShell
-            title={getLegacyTitle(initialTabKey)}
-            subtitle={getLegacySubtitle(initialTabKey)}
-            tabs={legacyTabs}
-            activeTab={initialTabKey}
-            on:back={switchToDashboard}
-            on:switchTab={handleLegacySwitchTab}
-        >
-            {#key initialTabKey}
-                <OldSettingsPage {i18n} {plugin} {initialTabKey} embeddedMode={true} hideSidebar={true} />
-            {/key}
         </ReadingFeatureShell>
     {:else if currentView === "sync-report"}
         <SyncReportCenter {plugin} on:back={switchToDashboard} on:retryFailed={handleRetryFailed} on:maintenance={() => switchToView("maintenance")} />
@@ -480,7 +429,8 @@
         <ReadingReview {plugin} on:back={switchToDashboard} />
     {:else if currentView === "digest"}
         <ReadingDigestReports {plugin} on:back={switchToDashboard} />
-    {/if}
+      {/if}
+    </main>
 </div>
 
 <style>
@@ -498,6 +448,76 @@
         margin: 0 auto;
         padding: clamp(14px, 2vw, 26px);
         box-sizing: border-box;
+    }
+
+    .reading-center-container-mobile {
+        display: flex;
+        flex-direction: column;
+        width: 100%;
+        height: 100%;
+        min-height: 0;
+        overflow: hidden;
+        position: relative;
+    }
+
+    .reading-center-container-mobile .reading-center-dashboard {
+        flex: 1 1 auto;
+        min-height: 0;
+        height: 100%;
+        overflow-y: auto;
+        overflow-x: hidden;
+        padding: 12px 12px 0;
+        overscroll-behavior: contain;
+        -webkit-overflow-scrolling: touch;
+        touch-action: pan-y;
+    }
+
+    main:not(.reading-center-mobile-view) {
+        display: contents;
+    }
+
+    .reading-center-mobile-view {
+        flex: 1 1 auto;
+        height: 0;
+        min-height: 0;
+        overflow-x: hidden;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        -webkit-overflow-scrolling: touch;
+        touch-action: pan-y;
+    }
+
+    .reading-center-mobile-dashboard-view {
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        touch-action: auto;
+    }
+
+    .reading-center-mobile-header {
+        z-index: 25;
+        display: flex;
+        flex: 0 0 auto;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        min-height: 52px;
+        padding: calc(8px + env(safe-area-inset-top)) 14px 8px;
+        border-bottom: 1px solid var(--b3-border-color);
+        background: color-mix(in srgb, var(--b3-theme-background) 94%, transparent);
+        backdrop-filter: blur(16px);
+    }
+
+    .reading-center-mobile-header > div { display: grid; gap: 1px; }
+    .reading-center-mobile-header span { font-size: 16px; font-weight: 700; }
+    .reading-center-mobile-header small { color: var(--b3-theme-on-surface-light); font-size: 10px; }
+    .reading-center-mobile-header button {
+        min-width: 58px;
+        min-height: 36px;
+        border: 1px solid var(--b3-border-color);
+        border-radius: 9px;
+        background: var(--b3-theme-surface);
+        color: var(--b3-theme-on-background);
     }
 
     @media (min-width: 1600px) {

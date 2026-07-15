@@ -134,6 +134,7 @@ export const simpleDialog = (args: {
         height: args.height,
         destroyCallback: args.callback
     });
+    dialog.element.classList.add("siyuan-douban-svelte-dialog");
     dialog.element.querySelector(".dialog-content").appendChild(args.ele);
     return {
         dialog,
@@ -148,6 +149,7 @@ export const svelteDialog = (args: {
     callback?: () => void;
 }) => {
     let container = document.createElement('div')
+    container.className = 'siyuan-douban-dialog-host';
     container.style.display = 'block';
     container.style.width = '100%';
     container.style.height = '100%';

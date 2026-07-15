@@ -4,59 +4,210 @@ on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag, for example v4.2.0"
+        required: true
+        type: string
+      ref:
+        description: "Optional full git ref/SHA to build. Defaults to the release tag."
+        required: false
+        type: string
+
+permissions:
+  contents: write
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+      BUILD_REF_INPUT: ${{ inputs.ref }}
     steps:
-      # Checkout
-      - name: Checkout
-        uses: actions/checkout@v3
+      - name: Checkout release ref
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
 
-      # Install Node.js
-      - name: Install Node.js
-        uses: actions/setup-node@v3
+          if [[ -z "${RELEASE_TAG}" || "${RELEASE_TAG}" != v* ]]; then
+            echo "RELEASE_TAG must start with v, got: ${RELEASE_TAG}"
+            exit 1
+          fi
+
+          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
+            build_ref="${BUILD_REF_INPUT:-refs/tags/${RELEASE_TAG}}"
+          else
+            build_ref="${GITHUB_REF}"
+          fi
+
+          git init .
+          git remote remove origin 2>/dev/null || true
+          git remote add origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+
+          if [[ "${build_ref}" == refs/tags/* || "${build_ref}" == refs/heads/* ]]; then
+            git fetch --depth=1 origin "+${build_ref}:${build_ref}"
+            git checkout --force "${build_ref}"
+          else
+            git fetch --depth=1 origin "${build_ref}"
+            git checkout --force FETCH_HEAD
+          fi
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.14.0
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
           node-version: 20
           registry-url: "https://registry.npmjs.org"
+          cache: pnpm
 
-        # Install pnpm
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
-        id: pnpm-install
-        with:
-          version: 8
-          run_install: false
-
-      # Get pnpm store directory
-      - name: Get pnpm store directory
-        id: pnpm-cache
-        shell: bash
-        run: |
-          echo "STORE_PATH=$(pnpm store path)" >> $GITHUB_OUTPUT
-
-      # Setup pnpm cache
-      - name: Setup pnpm cache
-        uses: actions/cache@v3
-        with:
-          path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
-          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
-          restore-keys: |
-            ${{ runner.os }}-pnpm-store-
-
-      # Install dependencies
       - name: Install dependencies
-        run: pnpm install
+        run: pnpm install --frozen-lockfile
 
-      # Build for production, 这一步会生成一个 package.zip
       - name: Build for production
         run: pnpm build
 
-      - name: Release
-        uses: ncipollo/release-action@v1
-        with:
-          allowUpdates: true
-          artifactErrorsFailBuild: true
-          artifacts: "package.zip"
-          token: ${{ secrets.GITHUB_TOKEN }}
-          prerelease: false
+      - name: Verify package.zip
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s package.zip
+          unzip -t package.zip
+          ls -lh package.zip
+
+      - name: Create or update GitHub release
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          node <<'NODE'
+          const fs = require('node:fs');
+          const { execFileSync } = require('node:child_process');
+
+          const token = process.env.GITHUB_TOKEN;
+          const repo = process.env.GITHUB_REPOSITORY;
+          const tag = process.env.RELEASE_TAG;
+          const apiBase = process.env.GITHUB_API_URL || 'https://api.github.com';
+          const artifactPath = 'package.zip';
+          const assetName = 'package.zip';
+
+          if (!token) throw new Error('GITHUB_TOKEN is missing.');
+          if (!repo) throw new Error('GITHUB_REPOSITORY is missing.');
+          if (!tag || !tag.startsWith('v')) throw new Error(`Invalid release tag: ${tag}`);
+          if (!fs.existsSync(artifactPath)) throw new Error(`${artifactPath} was not generated.`);
+
+          function parseJson(text) {
+            if (!text) return null;
+            try {
+              return JSON.parse(text);
+            } catch {
+              return text;
+            }
+          }
+
+          function parseReleaseMessage(message) {
+            const normalized = String(message || '').trim();
+            if (!normalized) return { title: tag, body: `Release ${tag}` };
+            const lines = normalized.split(/\r?\n/);
+            const rawTitle = (lines.shift() || '').trim();
+            const title = rawTitle.replace(/^release:\s*/i, '').trim() || tag;
+            const body = lines.join('\n').trim() || `Release ${tag}`;
+            return { title, body };
+          }
+
+          function getReleaseMetadata() {
+            try {
+              const tagMessage = execFileSync('git', ['tag', '-l', tag, '--format=%(contents)'], { encoding: 'utf8' }).trim();
+              if (tagMessage) return parseReleaseMessage(tagMessage);
+            } catch {
+              // Fall back to the commit message.
+            }
+            try {
+              const commitMessage = execFileSync('git', ['log', '-1', '--pretty=%B'], { encoding: 'utf8' }).trim();
+              if (commitMessage) return parseReleaseMessage(commitMessage);
+            } catch {
+              // Fall back to generated metadata.
+            }
+            return { title: tag, body: `Release ${tag}` };
+          }
+
+          async function request(url, options = {}) {
+            const headers = {
+              Authorization: `Bearer ${token}`,
+              Accept: 'application/vnd.github+json',
+              'X-GitHub-Api-Version': '2022-11-28',
+              ...(options.headers || {}),
+            };
+            if (typeof options.body === 'string' && !Object.keys(headers).some((key) => key.toLowerCase() === 'content-type')) {
+              headers['Content-Type'] = 'application/json';
+            }
+            const response = await fetch(url, { ...options, headers });
+            const text = await response.text();
+            const data = parseJson(text);
+            if (!response.ok) {
+              const message = data && typeof data === 'object' && data.message ? data.message : text;
+              const error = new Error(`${options.method || 'GET'} ${url} failed (${response.status}): ${message}`);
+              error.status = response.status;
+              throw error;
+            }
+            return data;
+          }
+
+          async function getReleaseByTag() {
+            try {
+              return await request(`${apiBase}/repos/${repo}/releases/tags/${encodeURIComponent(tag)}`);
+            } catch (error) {
+              if (error.status === 404) return null;
+              throw error;
+            }
+          }
+
+          async function main() {
+            const { title, body } = getReleaseMetadata();
+            let release = await getReleaseByTag();
+            if (release) {
+              release = await request(`${apiBase}/repos/${repo}/releases/${release.id}`, {
+                method: 'PATCH',
+                body: JSON.stringify({ name: title, body, prerelease: false, draft: false }),
+              });
+            } else {
+              release = await request(`${apiBase}/repos/${repo}/releases`, {
+                method: 'POST',
+                body: JSON.stringify({ tag_name: tag, name: title, body, prerelease: false, draft: false }),
+              });
+            }
+
+            const assets = await request(`${apiBase}/repos/${repo}/releases/${release.id}/assets?per_page=100`);
+            for (const asset of assets) {
+              if (asset.name === assetName) {
+                await request(`${apiBase}/repos/${repo}/releases/assets/${asset.id}`, { method: 'DELETE' });
+              }
+            }
+
+            const artifact = fs.readFileSync(artifactPath);
+            const uploadUrl = `https://uploads.github.com/repos/${repo}/releases/${release.id}/assets?name=${encodeURIComponent(assetName)}`;
+            await request(uploadUrl, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/zip',
+                'Content-Length': String(artifact.byteLength),
+              },
+              body: artifact,
+            });
+            console.log(`[release] Uploaded ${assetName} to ${tag}.`);
+          }
+
+          main().catch((error) => {
+            console.error(error);
+            process.exit(1);
+          });
+          NODE

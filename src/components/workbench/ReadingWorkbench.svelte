@@ -22,6 +22,7 @@
 
     export let plugin: any;
     export let refreshKey = 0;
+    export let mobile = false;
 
     const dispatch = createEventDispatcher<{ action: WorkbenchAction; refresh: void }>();
 
@@ -98,6 +99,10 @@
         dispatch("refresh");
     }
 
+    function triggerAction(actionType: WorkbenchAction) {
+        dispatch("action", actionType);
+    }
+
     onMount(loadSummaries);
 
     $: if (refreshKey !== lastRefreshKey) {
@@ -106,53 +111,72 @@
     }
 </script>
 
-<div class="workbench-root" class:workbench-root-loading={isLoading}>
-    <WorkbenchHero on:action={action} />
+<div class="workbench-root" class:workbench-root-loading={isLoading} class:workbench-root-mobile={mobile}>
+    {#if mobile}
+        <div class="mobile-workbench-content">
+            {#if activeSection === "overview"}
+                <section class="mobile-workbench-intro">
+                    <span>个人阅读中枢</span>
+                    <strong>今天想读点什么？</strong>
+                    <small>搜索书籍，或展开下方分组继续操作。</small>
+                </section>
 
-    <nav class="workbench-section-tabs" aria-label="阅读总控台导航">
-        <button
-            type="button"
-            class:active={activeSection === "overview"}
-            on:click={() => activeSection = "overview"}
-        >
-            <span>总控台</span>
-            <em>检索、同步与整理</em>
-        </button>
-        <button
-            type="button"
-            class:active={activeSection === "shelf-hub"}
-            on:click={() => activeSection = "shelf-hub"}
-        >
-            <span>书架中心</span>
-            <em>书架资产与笔记入口</em>
-        </button>
-        <button
-            type="button"
-            class:active={activeSection === "weread-stats"}
-            on:click={() => activeSection = "weread-stats"}
-        >
-            <span>微信读书数据</span>
-            <em>阅读统计与同步覆盖</em>
-        </button>
-    </nav>
+                <WorkbenchSearch {plugin} {mobile} on:action={action} on:refresh={refresh} />
 
-    {#if activeSection === "overview"}
-        <WorkbenchSearch {plugin} on:action={action} on:refresh={refresh} />
-
-        <div class="workbench-assets-grid">
-            <WorkbenchLocalAssets summary={localSummary} on:action={action} />
-            <WorkbenchWereadAssets summary={wereadSummary} pluginName={plugin.name} on:action={action} />
+                <div class="mobile-workbench-groups">
+                    <details open>
+                        <summary><span><strong>本地阅读</strong><small>数据库、模板与书架</small></span><em>展开</em></summary>
+                        <div class="mobile-group-content"><WorkbenchLocalAssets summary={localSummary} on:action={action} /></div>
+                    </details>
+                    <details>
+                        <summary><span><strong>微信读书</strong><small>授权、同步与缓存</small></span><em>展开</em></summary>
+                        <div class="mobile-group-content"><WorkbenchWereadAssets summary={wereadSummary} pluginName={plugin.name} on:action={action} /></div>
+                    </details>
+                    <details>
+                        <summary><span><strong>整理与回顾</strong><small>最近笔记和复习入口</small></span><em>展开</em></summary>
+                        <div class="mobile-group-content mobile-group-stack">
+                            <WorkbenchRecentNotes {plugin} {refreshKey} on:action={action} on:refresh={refresh} />
+                            <WorkbenchReviewPanel {plugin} {refreshKey} on:action={action} />
+                        </div>
+                    </details>
+                </div>
+            {:else if activeSection === "shelf-hub"}
+                <WorkbenchShelfHub {plugin} {refreshKey} />
+            {:else}
+                <ReadingStatsCenter {plugin} {refreshKey} embedded={true} showBack={false} on:action={action} />
+            {/if}
         </div>
 
-        <div class="workbench-operations-grid">
-            <WorkbenchRecentNotes {plugin} {refreshKey} on:action={action} on:refresh={refresh} />
-            <WorkbenchReviewPanel {plugin} {refreshKey} on:action={action} />
-        </div>
+        <nav class="mobile-workbench-nav" aria-label="移动端阅读工作台导航">
+            <button type="button" class:active={activeSection === "overview"} on:click={() => activeSection = "overview"}><span>⌂</span><em>工作台</em></button>
+            <button type="button" class:active={activeSection === "shelf-hub"} on:click={() => activeSection = "shelf-hub"}><span>▤</span><em>书架</em></button>
+            <button type="button" class:active={activeSection === "weread-stats"} on:click={() => activeSection = "weread-stats"}><span>◫</span><em>数据</em></button>
+            <button type="button" on:click={() => triggerAction("open-about")}><span>ⓘ</span><em>关于</em></button>
+        </nav>
+    {:else}
+        <WorkbenchHero on:action={action} />
 
-    {:else if activeSection === "shelf-hub"}
-        <WorkbenchShelfHub {plugin} {refreshKey} />
-    {:else if activeSection === "weread-stats"}
-        <ReadingStatsCenter {plugin} {refreshKey} embedded={true} showBack={false} on:action={action} />
+        <nav class="workbench-section-tabs" aria-label="阅读总控台导航">
+            <button type="button" class:active={activeSection === "overview"} on:click={() => activeSection = "overview"}><span>总控台</span><em>检索、同步与整理</em></button>
+            <button type="button" class:active={activeSection === "shelf-hub"} on:click={() => activeSection = "shelf-hub"}><span>书架中心</span><em>书架资产与笔记入口</em></button>
+            <button type="button" class:active={activeSection === "weread-stats"} on:click={() => activeSection = "weread-stats"}><span>微信读书数据</span><em>阅读统计与同步覆盖</em></button>
+        </nav>
+
+        {#if activeSection === "overview"}
+            <WorkbenchSearch {plugin} on:action={action} on:refresh={refresh} />
+            <div class="workbench-assets-grid">
+                <WorkbenchLocalAssets summary={localSummary} on:action={action} />
+                <WorkbenchWereadAssets summary={wereadSummary} pluginName={plugin.name} on:action={action} />
+            </div>
+            <div class="workbench-operations-grid">
+                <WorkbenchRecentNotes {plugin} {refreshKey} on:action={action} on:refresh={refresh} />
+                <WorkbenchReviewPanel {plugin} {refreshKey} on:action={action} />
+            </div>
+        {:else if activeSection === "shelf-hub"}
+            <WorkbenchShelfHub {plugin} {refreshKey} />
+        {:else if activeSection === "weread-stats"}
+            <ReadingStatsCenter {plugin} {refreshKey} embedded={true} showBack={false} on:action={action} />
+        {/if}
     {/if}
 </div>
 
@@ -165,6 +189,93 @@
     .workbench-root-loading {
         cursor: progress;
     }
+
+    .workbench-root-mobile {
+        display: block;
+        min-height: 100%;
+        padding-bottom: calc(70px + env(safe-area-inset-bottom));
+    }
+
+    .mobile-workbench-content {
+        display: grid;
+        gap: 12px;
+    }
+
+    .mobile-workbench-intro {
+        display: grid;
+        gap: 4px;
+        padding: 4px 2px 2px;
+    }
+
+    .mobile-workbench-intro span { color: var(--b3-theme-primary); font-size: 11px; font-weight: 700; }
+    .mobile-workbench-intro strong { font-size: 22px; line-height: 1.3; }
+    .mobile-workbench-intro small { color: var(--b3-theme-on-surface-light); font-size: 12px; }
+
+    .mobile-workbench-groups {
+        display: grid;
+        gap: 10px;
+    }
+
+    .mobile-workbench-groups > details {
+        overflow: hidden;
+        border: 1px solid var(--b3-border-color);
+        border-radius: 14px;
+        background: var(--b3-theme-surface);
+    }
+
+    .mobile-workbench-groups summary {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 14px;
+        list-style: none;
+    }
+
+    .mobile-workbench-groups summary::-webkit-details-marker { display: none; }
+    .mobile-workbench-groups summary > span { display: grid; gap: 3px; }
+    .mobile-workbench-groups summary strong { font-size: 14px; }
+    .mobile-workbench-groups summary small,
+    .mobile-workbench-groups summary em { color: var(--b3-theme-on-surface-light); font-size: 11px; font-style: normal; }
+    .mobile-workbench-groups details[open] summary em { color: var(--b3-theme-primary); }
+
+    .mobile-group-content {
+        padding: 0 10px 10px;
+    }
+
+    .mobile-group-stack {
+        display: grid;
+        gap: 10px;
+    }
+
+    .mobile-workbench-nav {
+        position: fixed;
+        z-index: 20;
+        right: 0;
+        bottom: 0;
+        left: 0;
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        padding: 7px 8px calc(7px + env(safe-area-inset-bottom));
+        border-top: 1px solid var(--b3-border-color);
+        background: color-mix(in srgb, var(--b3-theme-background) 92%, transparent);
+        backdrop-filter: blur(16px);
+    }
+
+    .mobile-workbench-nav button {
+        display: grid;
+        place-items: center;
+        gap: 3px;
+        min-height: 48px;
+        border: 0;
+        border-radius: 10px;
+        background: transparent;
+        color: var(--b3-theme-on-surface-light);
+    }
+
+    .mobile-workbench-nav button span { font-size: 18px; line-height: 1; }
+    .mobile-workbench-nav button em { font-size: 10px; font-style: normal; }
+    .mobile-workbench-nav button.active { background: color-mix(in srgb, var(--b3-theme-primary) 12%, transparent); color: var(--b3-theme-primary); }
 
     .workbench-section-tabs {
         display: flex;

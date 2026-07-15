@@ -1,4 +1,5 @@
 <script lang="ts">
+    import { secureExternalImageUrl } from "../../utils/core/externalImageUrl";
     import { formatReadingDuration, formatReadingCompare } from "@/utils/weread/api/formatWereadReadingStats";
     import type { WereadReadingDashboard, WereadReadingStatsPeriod } from "@/utils/weread/api/buildWereadApiReadingStats";
     import WereadReadingCategoryRadar from "./wereadReadingCategoryRadar.svelte";
@@ -207,7 +208,7 @@
                         {#each selectedPeriod.readLongest.slice(0, 8) as book}
                             <div class="weread-reading-book-item">
                                 {#if book.cover}
-                                    <img class="weread-reading-cover" src={book.cover} alt="" />
+                                    <img class="weread-reading-cover" src={secureExternalImageUrl(book.cover)} alt="" />
                                 {:else}
                                     <div class="weread-reading-cover-placeholder" aria-hidden="true" />
                                 {/if}

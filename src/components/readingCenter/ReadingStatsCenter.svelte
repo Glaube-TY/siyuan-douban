@@ -1,4 +1,5 @@
 <script lang="ts">
+    import { secureExternalImageUrl } from "../../utils/core/externalImageUrl";
     import { createEventDispatcher, onMount } from "svelte";
     import { showMessage } from "siyuan";
     import type { EChartsCoreOption } from "echarts/core";
@@ -686,7 +687,7 @@
                         {#each longestBooksPeriod.longestBooks as book}
                             <article class="longest-book-item">
                                 {#if book.cover}
-                                    <img src={book.cover} alt="" />
+                                    <img src={secureExternalImageUrl(book.cover)} alt="" />
                                 {:else}
                                     <div class="book-cover-placeholder" aria-hidden="true">书</div>
                                 {/if}

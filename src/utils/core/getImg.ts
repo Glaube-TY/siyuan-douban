@@ -1,146 +1,106 @@
-import { putFile } from "@/api";
-import { formatTime } from './formatOp';
-import { logError } from './logger';
+import { forwardProxyStrict, putFile } from "@/api";
+import { formatTime } from "./formatOp";
+import { logError } from "./logger";
+import { DOUBAN_DESKTOP_USER_AGENT } from "../douban/book/getWebPage";
 
-export async function getImage(url: string) {
-    try {
-        if (typeof window.require !== "function") {
-            throw new Error("Electron environment required");
-        }
+function normalizeImageMime(contentType: string, base64Data: string): string {
+    const normalized = String(contentType || "").split(";")[0].trim().toLowerCase();
+    if (normalized.startsWith("image/")) return normalized;
 
-        const remote = window.require('@electron/remote');
-        if (!remote) {
-            throw new Error("Remote module not available");
-        }
-
-        const { BrowserWindow } = remote;
-
-        // 解析URL获取域名和路径信息
-        const urlObj = new URL(url);
-        const path = urlObj.pathname + urlObj.search;
-        
-        // 从图片URL中提取书籍ID信息，构建动态referer
-        let bookId = '';
-        const pathMatch = path.match(/s(\d+)\.jpg$/);
-        if (pathMatch) {
-            bookId = pathMatch[1];
-        } else {
-            const altMatch = path.match(/(\d+)\.jpg$/);
-            if (altMatch) {
-                bookId = altMatch[1];
-            }
-        }
-        
-        if (!bookId) {
-            bookId = '37479747';
-        }
-        
-        const refererUrl = `https://book.douban.com/subject/${bookId}/?icn=index-latestbook-subject`;
-        
-        return new Promise((resolve, reject) => {
-            const imgWindow = new BrowserWindow({
-                width: 1,
-                height: 1,
-                show: false,
-                webPreferences: {
-                    nodeIntegration: false,
-                    contextIsolation: true,
-                    sandbox: false,
-                    webSecurity: false
-                }
-            });
-
-            const session = imgWindow.webContents.session;
-            const onWillDownload = (event: any) => {
-                event.preventDefault();
-                try { imgWindow.destroy(); } catch {}
-                reject(new Error("图片地址触发下载，已取消"));
-            };
-            session.once("will-download", onWillDownload);
-
-            imgWindow.webContents.session.webRequest.onBeforeSendHeaders((details, callback) => {
-                details.requestHeaders['accept'] = 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8';
-                details.requestHeaders['accept-encoding'] = 'gzip, deflate, br, zstd';
-                details.requestHeaders['accept-language'] = 'zh-CN,zh;q=0.9,en;q=0.8,en-GB;q=0.7,en-US;q=0.6';
-                details.requestHeaders['cache-control'] = 'max-age=0';
-                details.requestHeaders['referer'] = refererUrl;
-                details.requestHeaders['sec-ch-ua'] = '"Microsoft Edge";v="143", "Chromium";v="143", "Not A(Brand)";v="24"';
-                details.requestHeaders['sec-ch-ua-mobile'] = '?0';
-                details.requestHeaders['sec-ch-ua-platform'] = '"Windows"';
-                details.requestHeaders['sec-fetch-dest'] = 'image';
-                details.requestHeaders['sec-fetch-mode'] = 'cors';
-                details.requestHeaders['sec-fetch-site'] = 'cross-site';
-                details.requestHeaders['user-agent'] = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0';
-                callback({ requestHeaders: details.requestHeaders });
-            });
-
-            imgWindow.loadURL(url).then(() => {
-                imgWindow.webContents.executeJavaScript(`
-                    new Promise((resolve) => {
-                        const img = new Image();
-                        img.crossOrigin = 'anonymous';
-                        img.onload = () => {
-                            const canvas = document.createElement('canvas');
-                            canvas.width = img.width;
-                            canvas.height = img.height;
-                            const ctx = canvas.getContext('2d');
-                            ctx.drawImage(img, 0, 0);
-                            resolve(canvas.toDataURL('image/jpeg'));
-                        };
-                        img.onerror = () => resolve('');
-                        img.src = location.href;
-                    });
-                `).then((dataUrl) => {
-                    session.removeListener("will-download", onWillDownload);
-                    imgWindow.destroy();
-                    if (dataUrl) {
-                        resolve(dataUrl);
-                    } else {
-                        reject(new Error('Failed to convert image'));
-                    }
-                }).catch((error) => {
-                    session.removeListener("will-download", onWillDownload);
-                    imgWindow.destroy();
-                    reject(error);
-                });
-            }).catch((error) => {
-                session.removeListener("will-download", onWillDownload);
-                imgWindow.destroy();
-                reject(error);
-            });
-        });
-    } catch (error) {
-        logError("core/getImg", "图片获取失败", error);
-        return "";
-    }
+    if (base64Data.startsWith("/9j/")) return "image/jpeg";
+    if (base64Data.startsWith("iVBOR")) return "image/png";
+    if (base64Data.startsWith("UklGR")) return "image/webp";
+    if (base64Data.startsWith("R0lGOD")) return "image/gif";
+    return "";
 }
 
-export async function downloadCover(base64Data: string, title: string,) {
-    // 从base64数据中提取MIME类型
-    const matches = base64Data.match(/^data:(image\/\w+);base64,/);
+function buildImageCandidateUrls(rawUrl: string): string[] {
+    const normalizedUrl = rawUrl.replace(/^http:/, "https:");
+    const urls = [normalizedUrl];
+
+    try {
+        const parsed = new URL(normalizedUrl);
+        if (/^img\d+\.doubanio\.com$/i.test(parsed.hostname)) {
+            for (const hostname of ["img1.doubanio.com", "img2.doubanio.com", "img3.doubanio.com"]) {
+                if (hostname === parsed.hostname) continue;
+                const fallback = new URL(parsed.href);
+                fallback.hostname = hostname;
+                urls.push(fallback.href);
+            }
+        }
+    } catch {
+        // URL 已在入口处校验；解析失败时保留原地址交给代理返回具体错误。
+    }
+
+    return Array.from(new Set(urls));
+}
+
+export async function getImage(url: string, referer: string = "https://book.douban.com/"): Promise<string> {
+    if (!/^https?:\/\//i.test(String(url || ""))) return "";
+
+    let lastError: unknown = null;
+    for (const candidateUrl of buildImageCandidateUrls(url)) {
+        try {
+            const response = await forwardProxyStrict(
+                candidateUrl,
+                "GET",
+                "",
+                [
+                    { "User-Agent": DOUBAN_DESKTOP_USER_AGENT },
+                    { Referer: referer },
+                    { Accept: "image/avif,image/webp,image/apng,image/*,*/*;q=0.8" },
+                ],
+                15000,
+                "text/html",
+                "base64",
+                "text",
+            );
+
+            if (response.status < 200 || response.status >= 300 || !response.body) {
+                throw new Error(`图片请求失败（HTTP ${response.status || "未知"}）`);
+            }
+
+            const mimeType = normalizeImageMime(response.contentType, response.body);
+            if (!mimeType) {
+                throw new Error(`封面响应不是有效图片（${response.contentType || "未知类型"}）`);
+            }
+            return `data:${mimeType};base64,${response.body}`;
+        } catch (error) {
+            lastError = error;
+        }
+    }
+
+    logError("core/getImg", "图片获取失败", lastError);
+    return "";
+}
+
+export async function downloadCover(base64Data: string, title: string) {
+    const matches = base64Data.match(/^data:(image\/[-+\w.]+);base64,/);
     if (!matches || matches.length < 2) {
-        throw new Error('无效的Base64图片数据');
+        throw new Error("无效的 Base64 图片数据");
     }
 
     const mimeType = matches[1];
-    const fileExt = mimeType.split('/')[1] || 'jpg';
-    const cleanTitle = title.replace(/[^\w\u4e00-\u9fa5]/g, '_');
+    const extByMime: Record<string, string> = {
+        "image/jpeg": "jpg",
+        "image/jpg": "jpg",
+        "image/png": "png",
+        "image/webp": "webp",
+        "image/gif": "gif",
+    };
+    const fileExt = extByMime[mimeType] || "jpg";
+    const cleanTitle = title.replace(/[^\w\u4e00-\u9fa5]/g, "_");
     const timestamp = formatTime();
-
-    // 生成文件名（保持与原逻辑一致）
     const fileName = `${cleanTitle}_${timestamp}.${fileExt}`;
     const filePath = `/data/assets/covers/${fileName}`;
 
-    // 创建文件对象
-    const byteString = atob(base64Data.split(',')[1]);
-    const arrayBuffer = new ArrayBuffer(byteString.length);
-    const uint8Array = new Uint8Array(arrayBuffer);
+    const byteString = atob(base64Data.split(",")[1]);
+    const uint8Array = new Uint8Array(byteString.length);
     for (let i = 0; i < byteString.length; i++) {
         uint8Array[i] = byteString.charCodeAt(i);
     }
     const imageFile = new File([uint8Array], fileName, { type: mimeType });
 
     await putFile(filePath, false, imageFile);
-
     return `assets/covers/${fileName}`;
 }

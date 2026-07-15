@@ -4,7 +4,6 @@
 
     export let i18n: any;
     export let close: () => void = () => {};
-    export let onOpenLegacy: () => void = () => {};
 </script>
 
 <div class="settings-dialog settings-dialog-about">
@@ -21,7 +20,6 @@
         </div>
     </div>
     <footer class="settings-dialog-actions">
-        <button class="settings-dialog-legacy-link" on:click={() => { close(); onOpenLegacy(); }} title="仅用于兼容旧版设置页，日常请使用工作台功能">高级：兼容旧版设置页</button>
         <button class="b3-button b3-button--primary" on:click={close}>关闭</button>
     </footer>
 </div>
@@ -34,7 +32,5 @@
     p { margin: 0; color: var(--b3-theme-on-surface-light); font-size: 13px; line-height: 1.5; }
     .settings-dialog-about-body { flex: 1; min-height: 0; overflow: auto; border: 1px solid var(--b3-border-color); border-radius: 8px; background: var(--b3-theme-surface); }
     .settings-dialog-about-body > .settings-dialog-about-content { display: block; width: 100%; height: 100%; min-height: 0; }
-    .settings-dialog-actions { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding-top: 14px; border-top: 1px solid var(--b3-border-color); flex-shrink: 0; }
-    .settings-dialog-legacy-link { background: none; border: none; color: var(--b3-theme-on-surface-light); font-size: 11px; cursor: pointer; padding: 4px 6px; border-radius: 4px; text-decoration: underline; text-decoration-style: dotted; text-underline-offset: 2px; opacity: 0.6; }
-    .settings-dialog-legacy-link:hover { opacity: 1; color: var(--b3-theme-on-background); }
+    .settings-dialog-actions { display: flex; justify-content: flex-end; align-items: center; gap: 8px; padding-top: 14px; border-top: 1px solid var(--b3-border-color); flex-shrink: 0; }
 </style>

@@ -1,5 +1,6 @@
 import { sql, getAttributeView } from "@/api";
 import { ensureWereadApiNotebookCacheDetails } from "./ensureWereadApiNotebookCacheDetails";
+import { getAttributeViewValueText, normalizeBookTitle } from "../../bookHandling/bookDeduplication";
 
 interface WereadPluginLike {
   loadData: (key: string) => Promise<any>;
@@ -81,6 +82,11 @@ export async function detectWereadApiNewSources(
   const bookNameBlockIDs = new Set<string>(
     (bookNameKey?.values || []).map((item: any) => item.blockID)
   );
+  const validBookTitlesInDB = new Set<string>(
+    (bookNameKey?.values || [])
+      .map((item: any) => normalizeBookTitle(getAttributeViewValueText(item)))
+      .filter(Boolean)
+  );
 
   const validISBNsInDB = new Set<string>();
   for (const item of isbnKey?.values || []) {
@@ -147,6 +153,7 @@ export async function detectWereadApiNewSources(
 
   for (const item of candidates) {
     const bookID = item.bookID;
+    const normalizedTitle = normalizeBookTitle(item.title);
     const storedCustomISBN = customISBNByBookID.get(bookID) || "";
     const isbn = item.isbn || storedCustomISBN;
     const isMpAccount = item.sourceType === "weread_mp_account" || bookID.startsWith("MP_WXS_");
@@ -173,6 +180,7 @@ export async function detectWereadApiNewSources(
       if (useBookIDBookIDs.has(bookID)) continue;
       if (bookID && validBookIDsInDB.has(bookID)) continue;
       if (normalizedIsbn && validISBNsInDB.has(normalizedIsbn)) continue;
+      if (normalizedTitle && validBookTitlesInDB.has(normalizedTitle)) continue;
       normalBooks.push({
         title: item.title,
         isbn,

@@ -4,6 +4,7 @@
     import SiYuanIcon from "../common/SiYuanIcon.svelte";
     import { loadLocalBookSearchState } from "../../utils/bookSearch/localBookSearchService";
     import { loadWereadCachedBooks } from "../../utils/bookSearch/wereadBookSearchService";
+    import { secureExternalImageUrl } from "../../utils/core/externalImageUrl";
     import { loadWereadAuthState } from "../../utils/settings/wereadSettingsService";
     import { attachWereadApiLocalNoteDocs } from "../../utils/weread/api/findWereadApiBookTargetDoc";
     import { buildApiBookShelf } from "../../utils/weread/api/buildApiBookShelf";
@@ -250,7 +251,7 @@
                 {#each filteredBooks as book (book.bookID || book.isbn || book.blockID || book.title)}
                     <div class="shelf-hub-card" role="button" tabindex="0" on:click={() => openBook(book)} on:keydown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openBook(book); } }}>
                         {#if book.cover}
-                            <img src={book.cover} alt="" class="shelf-hub-cover" />
+                            <img src={secureExternalImageUrl(book.cover)} alt="" class="shelf-hub-cover" />
                         {:else}
                             <div class="shelf-hub-cover-placeholder">
                                 <SiYuanIcon name="book" size={20} />

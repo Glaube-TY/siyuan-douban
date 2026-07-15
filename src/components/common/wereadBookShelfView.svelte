@@ -1,4 +1,5 @@
 <script lang="ts">
+    import { secureExternalImageUrl } from "../../utils/core/externalImageUrl";
     import { onMount, onDestroy } from "svelte";
     import { showMessage } from "siyuan";
     import { openDoc } from "@/utils/openDoc";
@@ -302,7 +303,7 @@
         <div class="weread-bookshelf-list">
             {#each visibleBooks as book (getBookSourceKey(book))}
                 <div class="weread-bookshelf-list-row" on:contextmenu={(event) => showContextMenu(book, event)}>
-                    <img src={book.cover || ""} alt="" />
+                    <img src={secureExternalImageUrl(book.cover)} alt="" />
                     <div class="list-title">
                         <strong>{book.title || "暂无"}</strong>
                         <span>{book.author || "暂无作者"}</span>
@@ -341,7 +342,7 @@
                                     {#if book.cover}
                                         <img
                                             class="weread-bookshelf-cover-img"
-                                            src={book.cover}
+                                            src={secureExternalImageUrl(book.cover)}
                                             alt={book.title || ""}
                                             loading="lazy"
                                         />

@@ -452,7 +452,8 @@ export async function pushErrMsg(msg: string, timeout: number = 7000) {
 // **************************************** Network ****************************************
 export async function forwardProxy(
     url: string, method: string = 'GET', payload: any = {},
-    headers: any[] = [], timeout: number = 7000, contentType: string = "text/html"
+    headers: any[] = [], timeout: number = 7000, contentType: string = "text/html",
+    responseEncoding: string = "text", payloadEncoding: string = "json", redirect: boolean = true
 ): Promise<IResForwardProxy> {
     let data = {
         url: url,
@@ -460,7 +461,10 @@ export async function forwardProxy(
         timeout: timeout,
         contentType: contentType,
         headers: headers,
-        payload: payload
+        payload: payload,
+        responseEncoding,
+        payloadEncoding,
+        redirect,
     }
     let url1 = '/api/network/forwardProxy';
     return request(url1, data);
@@ -472,7 +476,8 @@ export async function forwardProxy(
  */
 export async function forwardProxyStrict(
     url: string, method: string = 'GET', payload: any = {},
-    headers: any[] = [], timeout: number = 7000, contentType: string = "text/html"
+    headers: any[] = [], timeout: number = 7000, contentType: string = "text/html",
+    responseEncoding: string = "text", payloadEncoding: string = "json", redirect: boolean = true
 ): Promise<IResForwardProxy> {
     const data = {
         url,
@@ -481,6 +486,9 @@ export async function forwardProxyStrict(
         contentType,
         headers,
         payload,
+        responseEncoding,
+        payloadEncoding,
+        redirect,
     };
     const response: IWebSocketData = await fetchSyncPost('/api/network/forwardProxy', data);
     if (response.code === 0) {

@@ -3,6 +3,7 @@ import { sql, getConf, render, updateBlock, getAttributeView, removeAttributeVie
 import { downloadWereadCoverSafely } from './downloadWereadCover';
 import { ensureAttributeViewKeys, appendBookToAttributeView } from '../bookHandling/ensureAttributeViewKeys';
 import { bindBookToNote } from '../bookHandling/bindBookToNote';
+import { findBookByNormalizedTitle } from '../bookHandling/bookDeduplication';
 
 // 添加 useBookID 书籍到数据库
 export async function addUseBookIDsToDatabase(plugin: any, avID: string, bookDetail: any) {
@@ -54,6 +55,14 @@ export async function addUseBookIDsToDatabase(plugin: any, avID: string, bookDet
                     msg: "书籍已存在，跳过添加操作"
                 };
             }
+        }
+
+        // 同一本书可能已通过 ISBN 或其他来源导入，但没有当前 bookID。
+        if (findBookByNormalizedTitle(originalDatabasekeyValues, bookDetail.title)) {
+            return {
+                code: 1,
+                msg: "书籍已存在（书名匹配），跳过添加操作"
+            };
         }
     }
 

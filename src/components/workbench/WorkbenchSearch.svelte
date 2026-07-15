@@ -4,10 +4,12 @@
     import SiYuanIcon from "../common/SiYuanIcon.svelte";
     import DoubanBookDetailDialog from "../bookSearch/DoubanBookDetailDialog.svelte";
     import type { WorkbenchAction, WorkbenchSearchResult } from "../../types/workbench";
-    import { addEditedDoubanBookToDatabase, loadDoubanBookPreferences, searchDoubanBook } from "../../utils/bookSearch/doubanSearchService";
+    import { addEditedDoubanBookToDatabase, loadDoubanBookDetail, loadDoubanBookPreferences, searchDoubanBook } from "../../utils/bookSearch/doubanSearchService";
+    import { getImage } from "../../utils/core/getImg";
     import { svelteDialog } from "../../libs/dialog";
 
     export let plugin: any;
+    export let mobile = false;
 
     const dispatch = createEventDispatcher<{ action: WorkbenchAction; refresh: void }>();
 
@@ -18,6 +20,17 @@
     let statusText = "搜索豆瓣书名、ISBN 或作者后导入本地数据库";
     let isSearching = false;
     let isDoubanDetailOpen = false;
+    let previewCovers: Record<string, string> = {};
+
+    async function loadResultCoverPreviews(items: WorkbenchSearchResult[]) {
+        const next: Record<string, string> = {};
+        await Promise.all(items.slice(0, 10).map(async (item) => {
+            if (!item.cover) return;
+            const data = await getImage(item.cover, `https://book.douban.com/subject/${item.id}/`);
+            if (data) next[item.id] = data;
+        }));
+        previewCovers = { ...previewCovers, ...next };
+    }
 
     async function runSearch() {
         isSearching = true;
@@ -25,8 +38,10 @@
         try {
             results = await searchDoubanBook(plugin, query);
             statusText = results.length ? `找到 ${results.length} 条结果` : "暂无匹配结果";
-            if (results.length === 1 && results[0].raw) {
-                openDoubanDetailDialog(results[0]);
+            previewCovers = {};
+            void loadResultCoverPreviews(results);
+            if (results.length === 1 && (results[0].raw as any)?.detailLoaded) {
+                await openDoubanDetailDialog(results[0]);
             }
         } catch (error: any) {
             results = [];
@@ -37,23 +52,27 @@
         }
     }
 
-    function openDoubanDetailDialog(result: WorkbenchSearchResult) {
+    async function openDoubanDetailDialog(result: WorkbenchSearchResult) {
         if (!result || !result.raw) return;
         selectedResult = result;
         isDoubanDetailOpen = true;
-        statusText = "已打开豆瓣图书详情，请确认修改后添加";
+        statusText = "正在加载豆瓣书籍详情...";
 
-        loadDoubanBookPreferences(plugin).then((preferences) => {
+        try {
+            result = await loadDoubanBookDetail(result);
+            const preferences = await loadDoubanBookPreferences(plugin);
             const bookRaw = result.raw as any;
             const bookInfo = {
                 ...bookRaw,
                 addNotes: bookRaw.addNotes ?? true,
             };
 
+            statusText = "已打开豆瓣图书详情，请确认修改后添加";
+
             const dialogRef = svelteDialog({
                 title: `确认添加：${bookInfo.title || "豆瓣图书"}`,
-                width: "min(780px, 94vw)",
-                height: "min(780px, 88vh)",
+                width: mobile ? "100vw" : "min(780px, 94vw)",
+                height: mobile ? "100dvh" : "min(780px, 88vh)",
                 constructor: (container: HTMLElement) =>
                     new DoubanBookDetailDialog({
                         target: container,
@@ -62,6 +81,7 @@
                             customRatings: preferences.ratings,
                             customCategories: preferences.categories,
                             customReadingStatuses: preferences.statuses,
+                            mobile,
                             close: () => dialogRef.close(),
                         },
                     }),
@@ -71,6 +91,9 @@
                     selectedResult = null;
                 },
             });
+            if (mobile) {
+                dialogRef.dialog.element.classList.add("siyuan-douban-mobile-detail-dialog");
+            }
 
             dialogRef.component.$on("confirm", async (event: CustomEvent<any>) => {
                 const editedBookInfo = event.detail;
@@ -89,18 +112,22 @@
                     showMessage(`添加失败：${e?.message || "未知错误"}`);
                 }
             });
-        });
+        } catch (error: any) {
+            isDoubanDetailOpen = false;
+            statusText = error?.message || "详情加载失败";
+            showMessage(statusText);
+        }
     }
 
-    function chooseResult(result: WorkbenchSearchResult) {
+    async function chooseResult(result: WorkbenchSearchResult) {
         selectedResult = result;
         if (result.raw) {
-            openDoubanDetailDialog(result);
+            await openDoubanDetailDialog(result);
         }
     }
 </script>
 
-<section class="workbench-search">
+<section class="workbench-search" class:workbench-search-mobile={mobile}>
     <div class="workbench-search-head">
         <div>
             <h2>豆瓣读书书籍搜索导入</h2>
@@ -150,8 +177,8 @@
                     class="workbench-search-result"
                     on:click={() => chooseResult(result)}
                 >
-                    {#if result.cover}
-                        <img src={result.cover} alt="" />
+                    {#if previewCovers[result.id]}
+                        <img src={previewCovers[result.id]} alt="" />
                     {:else}
                         <span class="workbench-search-result-placeholder"><SiYuanIcon name="book" size={18} /></span>
                     {/if}
@@ -349,5 +376,48 @@
         .workbench-search-results {
             grid-template-columns: 1fr;
         }
+    }
+
+    .workbench-search-mobile {
+        gap: 12px;
+        padding: 14px;
+        border-radius: 14px;
+    }
+
+    .workbench-search-mobile .workbench-search-head p {
+        font-size: 12px;
+    }
+
+    .workbench-search-mobile .workbench-search-bar {
+        grid-template-columns: 1fr;
+    }
+
+    .workbench-search-mobile .workbench-search-input-wrap,
+    .workbench-search-mobile .workbench-button {
+        min-height: 44px;
+        height: 44px;
+        border-radius: 10px;
+    }
+
+    .workbench-search-mobile .workbench-search-results {
+        grid-template-columns: 1fr;
+        gap: 10px;
+    }
+
+    .workbench-search-mobile .workbench-search-result {
+        grid-template-columns: 48px minmax(0, 1fr);
+        min-height: 66px;
+        padding: 10px;
+        border-radius: 12px;
+    }
+
+    .workbench-search-mobile .workbench-search-result img,
+    .workbench-search-mobile .workbench-search-result-placeholder {
+        width: 48px;
+        height: 60px;
+    }
+
+    .workbench-search-mobile .workbench-search-result-source {
+        display: none;
     }
 </style>
