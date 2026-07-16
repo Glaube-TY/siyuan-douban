@@ -1,6 +1,6 @@
 {
   "name": "siyuan-douban",
-  "version": "4.2.1",
+  "version": "4.2.2",
   "type": "module",
   "packageManager": "pnpm@10.14.0",
   "description": "Search books from Douban, generate reading notes, and sync WeRead highlights, thoughts, book reviews, and reading statistics to SiYuan (https://github.com/Glaube-TY/siyuan-douban)",
