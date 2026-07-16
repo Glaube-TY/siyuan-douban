@@ -192,7 +192,7 @@
 
   <div class="progress-actions">
     <button class="b3-button" on:click={handleClose}>
-      {isFinished ? "关闭" : "隐藏"}
+      {isFinished ? "关闭" : "后台运行"}
     </button>
   </div>
 </div>
@@ -203,7 +203,10 @@
     display: flex;
     flex-direction: column;
     gap: 16px;
-    max-height: 70vh;
+    width: 100%;
+    height: 100%;
+    max-height: 100%;
+    box-sizing: border-box;
     overflow: hidden;
   }
 
@@ -357,7 +360,9 @@
   }
 
   .events-scroll {
-    max-height: 200px;
+    flex: 1;
+    min-height: 80px;
+    max-height: none;
     overflow-y: auto;
     border: 1px solid var(--b3-border-color);
     border-radius: 6px;
@@ -443,5 +448,59 @@
     justify-content: center;
     padding-top: 8px;
     border-top: 1px solid var(--b3-border-color);
+  }
+
+  @media (max-width: 600px) {
+    .sync-progress {
+      gap: 10px;
+      padding:
+        calc(10px + env(safe-area-inset-top))
+        calc(10px + env(safe-area-inset-right))
+        calc(10px + env(safe-area-inset-bottom))
+        calc(10px + env(safe-area-inset-left));
+    }
+
+    .progress-title {
+      margin-bottom: 8px;
+    }
+
+    .current-status,
+    .summary {
+      padding: 10px;
+    }
+
+    .status-text,
+    .event-message {
+      white-space: normal;
+      overflow-wrap: anywhere;
+    }
+
+    .summary-stats {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .stat-value {
+      font-size: 20px;
+    }
+
+    .event-row {
+      display: grid;
+      grid-template-columns: auto auto minmax(0, 1fr);
+      gap: 4px 6px;
+      align-items: start;
+      padding: 6px 0;
+    }
+
+    .event-title,
+    .event-message {
+      grid-column: 1 / -1;
+    }
+
+    .event-title {
+      white-space: normal;
+      overflow-wrap: anywhere;
+    }
   }
 </style>

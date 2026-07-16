@@ -125,14 +125,18 @@ export const confirmDialogSync = async (args: IConfirmDialogArgs) => {
 export const simpleDialog = (args: {
     title: string, ele: HTMLElement | DocumentFragment,
     width?: string, height?: string,
-    callback?: () => void;
+    callback?: () => void,
+    disableClose?: boolean,
+    hideCloseIcon?: boolean;
 }) => {
     const dialog = new Dialog({
         title: args.title,
         content: `<div class="dialog-content" style="display: flex; height: 100%;"/>`,
         width: args.width,
         height: args.height,
-        destroyCallback: args.callback
+        destroyCallback: args.callback,
+        disableClose: args.disableClose,
+        hideCloseIcon: args.hideCloseIcon,
     });
     dialog.element.classList.add("siyuan-douban-svelte-dialog");
     dialog.element.querySelector(".dialog-content").appendChild(args.ele);
@@ -146,7 +150,9 @@ export const simpleDialog = (args: {
 export const svelteDialog = (args: {
     title: string, constructor: (container: HTMLElement) => SvelteComponent,
     width?: string, height?: string,
-    callback?: () => void;
+    callback?: () => void,
+    disableClose?: boolean,
+    hideCloseIcon?: boolean;
 }) => {
     let container = document.createElement('div')
     container.className = 'siyuan-douban-dialog-host';

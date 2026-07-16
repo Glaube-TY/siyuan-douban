@@ -470,10 +470,14 @@
 <style lang="scss">
     .notebooks-dialog {
         padding: 10px;
-        max-height: 80vh;
-        overflow: auto;
+        max-height: calc(86dvh - 64px);
+        overflow-x: auto;
+        overflow-y: auto;
         width: 100%;
-        max-width: 90vw;
+        max-width: 100%;
+        box-sizing: border-box;
+        overscroll-behavior: contain;
+        -webkit-overflow-scrolling: touch;
 
         .confirm-btn-container {
             display: flex;
@@ -542,9 +546,23 @@
         }
 
         .book-table {
-            width: auto;
+            width: 100%;
+            table-layout: fixed;
             border-collapse: collapse;
             margin: 10px 0;
+
+            th:first-child,
+            td:first-child {
+                width: 76px;
+            }
+
+            .book-title {
+                width: 28%;
+            }
+
+            .book-isbn {
+                width: 34%;
+            }
 
             input[type="checkbox"]:disabled {
                 opacity: 0.6;
@@ -583,7 +601,7 @@
             }
 
             .ignore-column {
-                width: 60px;
+                width: 96px;
             }
             .ignore-checkbox {
                 text-align: center;
@@ -597,7 +615,7 @@
                 }
             }
             .use-bookid-column {
-                width: 80px;
+                width: 118px;
                 text-align: center;
             }
             .use-bookID {
@@ -626,6 +644,47 @@
             }
             .note-count-cell {
                 text-align: center;
+            }
+        }
+    }
+
+    @media (max-width: 600px) {
+        .notebooks-dialog {
+            max-height: calc(100dvh - 48px);
+            padding:
+                8px
+                calc(8px + env(safe-area-inset-right))
+                calc(8px + env(safe-area-inset-bottom))
+                calc(8px + env(safe-area-inset-left));
+            touch-action: pan-x pan-y;
+
+            .confirm-btn-container {
+                position: sticky;
+                top: 0;
+                z-index: 2;
+                flex-wrap: wrap;
+                padding: 4px 0 8px;
+                background: var(--b3-theme-background);
+
+                button {
+                    flex: 1 1 30%;
+                    min-width: 88px;
+                    min-height: 40px;
+                    padding: 8px 10px;
+                }
+            }
+
+            .tab-bar {
+                overflow-x: auto;
+                padding-bottom: 2px;
+
+                .tab-btn {
+                    flex: 0 0 auto;
+                }
+            }
+
+            .book-table {
+                min-width: 720px;
             }
         }
     }

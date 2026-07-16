@@ -135,6 +135,7 @@
     export let wereadPositionMark = "";
 
     export let databaseStatus = "";
+    export let mobile = false;
 
     let autoSync = false;
     let skipNewBookCheck = false;
@@ -186,8 +187,10 @@
             let dialogRef: any;
             dialogRef = svelteDialog({
                 title: "确认微信读书同步",
-                width: "min(560px, 92vw)",
-                height: "min(500px, 80vh)",
+                width: mobile ? "100vw" : "min(560px, 92vw)",
+                height: mobile ? "100dvh" : "min(500px, 80vh)",
+                disableClose: true,
+                hideCloseIcon: true,
                 constructor: (container: HTMLElement) => new WereadSyncPlanConfirmDialog({
                     target: container,
                     props: {
@@ -203,6 +206,9 @@
                     },
                 }),
             });
+            if (mobile) {
+                dialogRef.dialog.element.classList.add("siyuan-douban-mobile-subdialog");
+            }
         });
     }
 
@@ -211,8 +217,10 @@
         let dialogRef: any;
         dialogRef = svelteDialog({
             title: "微信读书同步进度",
-            width: "min(560px, 92vw)",
-            height: "min(500px, 80vh)",
+            width: mobile ? "100vw" : "min(560px, 92vw)",
+            height: mobile ? "100dvh" : "min(500px, 80vh)",
+            disableClose: true,
+            hideCloseIcon: true,
             constructor: (container: HTMLElement) => {
                 const component = new WereadSyncProgressDialog({
                     target: container,
@@ -229,6 +237,9 @@
                 progressDialogRef = null;
             },
         });
+        if (mobile) {
+            dialogRef.dialog.element.classList.add("siyuan-douban-mobile-subdialog");
+        }
     }
 
     async function runWereadApiManualSync(mode: "all" | "update", options?: { manageLoading?: boolean; forceBookIDs?: string[]; forceMpBookIDs?: string[] }) {
@@ -388,7 +399,8 @@
                 plugin,
                 apiKey,
                 mode,
-                (forceOptions?) => runWereadApiManualSync(mode, { manageLoading: false, ...forceOptions })
+                (forceOptions?) => runWereadApiManualSync(mode, { manageLoading: false, ...forceOptions }),
+                handleSyncProgress,
             );
             if (result === "cancelled") {
                 handleSyncProgress({

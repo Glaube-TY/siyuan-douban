@@ -77,7 +77,10 @@
     display: flex;
     flex-direction: column;
     gap: 16px;
-    max-height: 70vh;
+    width: 100%;
+    height: 100%;
+    max-height: 100%;
+    box-sizing: border-box;
     overflow: hidden;
   }
 
@@ -165,7 +168,9 @@
   }
 
   .items-scroll {
-    max-height: 200px;
+    flex: 1;
+    min-height: 80px;
+    max-height: none;
     overflow-y: auto;
     border: 1px solid var(--b3-border-color);
     border-radius: 6px;
@@ -206,5 +211,45 @@
     justify-content: flex-end;
     padding-top: 8px;
     border-top: 1px solid var(--b3-border-color);
+  }
+
+  @media (max-width: 600px) {
+    .sync-plan-confirm {
+      gap: 10px;
+      padding:
+        calc(10px + env(safe-area-inset-top))
+        calc(10px + env(safe-area-inset-right))
+        calc(10px + env(safe-area-inset-bottom))
+        calc(10px + env(safe-area-inset-left));
+    }
+
+    .confirm-info {
+      gap: 6px;
+      padding: 10px;
+    }
+
+    .info-row {
+      align-items: flex-start;
+      flex-wrap: wrap;
+      gap: 4px 8px;
+    }
+
+    .warning-banner {
+      align-items: flex-start;
+      padding: 8px 10px;
+    }
+
+    .confirm-actions {
+      gap: 8px;
+    }
+
+    .confirm-actions .fn__space {
+      display: none;
+    }
+
+    .confirm-actions .b3-button {
+      flex: 1;
+      min-height: 40px;
+    }
   }
 </style>

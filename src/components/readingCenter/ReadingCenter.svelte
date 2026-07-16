@@ -66,6 +66,8 @@
 
     // 同步进度弹窗相关
     let progressDialogRef: WereadSyncProgressDialog | null = null;
+    let progressDialogHandle: any = null;
+    let syncProgressEvents: WereadSyncProgressEvent[] = [];
 
     onMount(async () => {
         await refreshAll();
@@ -151,8 +153,10 @@
 
     // 同步进度回调
     function handleSyncProgress(event: WereadSyncProgressEvent) {
+        const loggedEvent = { ...event, timestamp: event.timestamp || Date.now() };
+        syncProgressEvents = [...syncProgressEvents.slice(-299), loggedEvent];
         if (progressDialogRef) {
-            progressDialogRef.addEvent(event);
+            progressDialogRef.addEvent(loggedEvent);
         }
         // 对成功和失败的项目显示简短提示
         if (event.stage === "item_success") {
@@ -168,8 +172,10 @@
             let dialogRef: any;
             dialogRef = svelteDialog({
                 title: "确认微信读书同步",
-                width: "min(560px, 92vw)",
-                height: "min(500px, 80vh)",
+                width: mobile ? "100vw" : "min(560px, 92vw)",
+                height: mobile ? "100dvh" : "min(500px, 80vh)",
+                disableClose: true,
+                hideCloseIcon: true,
                 constructor: (container: HTMLElement) => new WereadSyncPlanConfirmDialog({
                     target: container,
                     props: {
@@ -185,16 +191,23 @@
                     },
                 }),
             });
+            if (mobile) {
+                dialogRef.dialog.element.classList.add("siyuan-douban-mobile-subdialog");
+            }
         });
     }
 
     // 打开进度弹窗
     function openProgressDialog() {
+        if (progressDialogHandle) return;
+
         let dialogRef: any;
         dialogRef = svelteDialog({
             title: "微信读书同步进度",
-            width: "min(560px, 92vw)",
-            height: "min(500px, 80vh)",
+            width: mobile ? "100vw" : "min(560px, 92vw)",
+            height: mobile ? "100dvh" : "min(500px, 80vh)",
+            disableClose: true,
+            hideCloseIcon: true,
             constructor: (container: HTMLElement) => {
                 const component = new WereadSyncProgressDialog({
                     target: container,
@@ -205,12 +218,20 @@
                     },
                 });
                 progressDialogRef = component;
+                for (const progressEvent of syncProgressEvents) {
+                    component.addEvent(progressEvent);
+                }
                 return component;
             },
             callback: () => {
                 progressDialogRef = null;
+                progressDialogHandle = null;
             },
         });
+        progressDialogHandle = dialogRef;
+        if (mobile) {
+            dialogRef.dialog.element.classList.add("siyuan-douban-mobile-subdialog");
+        }
     }
 
     async function handleWorkbenchAction(event: CustomEvent<WorkbenchAction>) {
@@ -219,10 +240,12 @@
             switchToView("sync-panel");
         } else if (action === "sync-weread-update") {
             if (isWorkbenchSyncing) {
-                showMessage("同步正在进行中，请稍候...");
+                openProgressDialog();
+                showMessage("同步仍在进行，已重新打开进度窗口");
                 return;
             }
             isWorkbenchSyncing = true;
+            syncProgressEvents = [];
             openProgressDialog();
             try {
                 const result = await runWorkbenchManualWereadApiSync(plugin, "update", {
@@ -244,10 +267,12 @@
             }
         } else if (action === "sync-weread-all") {
             if (isWorkbenchSyncing) {
-                showMessage("同步正在进行中，请稍候...");
+                openProgressDialog();
+                showMessage("同步仍在进行，已重新打开进度窗口");
                 return;
             }
             isWorkbenchSyncing = true;
+            syncProgressEvents = [];
             openProgressDialog();
             try {
                 const result = await runWorkbenchManualWereadApiSync(plugin, "all", {
@@ -380,7 +405,7 @@
             on:back={switchToDashboard}
         >
             <div class="siyuan-douban-plugin reading-center-legacy-plugin">
-                <WereadTab bind:plugin bind:i18n {databaseStatus} />
+                <WereadTab bind:plugin bind:i18n {databaseStatus} {mobile} />
             </div>
         </ReadingFeatureShell>
     {:else if currentView === "sync-report"}

@@ -68,8 +68,17 @@ export async function showWereadApiNewSourcesDialogAndSync(
     });
 
     return new Promise<"synced" | "cancelled">((resolve) => {
+    const isMobileViewport = typeof window !== "undefined"
+      && window.matchMedia?.("(max-width: 600px)").matches;
+    const desktopDialogWidth = typeof window !== "undefined"
+      ? `${Math.min(920, Math.max(560, window.innerWidth - 48))}px`
+      : "920px";
     const dialog = svelteDialog({
       title: plugin.i18n.newBooksConfirm || "确认新来源",
+      width: isMobileViewport ? "100vw" : desktopDialogWidth,
+      height: isMobileViewport ? "100dvh" : undefined,
+      disableClose: true,
+      hideCloseIcon: true,
       constructor: (containerEl: HTMLElement) => {
         const booksForDialog = newSources.map(book => ({ ...book }));
 
@@ -187,6 +196,9 @@ export async function showWereadApiNewSourcesDialogAndSync(
         });
       },
     });
+    if (isMobileViewport) {
+      dialog.dialog.element.classList.add("siyuan-douban-mobile-subdialog");
+    }
   });
   } catch (e) {
     showMessage(`同步失败：${e?.message || "未知错误"}`);
