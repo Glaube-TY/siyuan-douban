@@ -8,6 +8,7 @@ import { loadPluginData, DEFAULT_WEREAD_SETTINGS } from "./utils/core/configDefa
 import { autoSyncWereadApi } from "./utils/weread/api/autoSyncWereadApi";
 import { formatWereadApiAutoSyncResultSummary } from "./utils/weread/api/formatWereadApiSyncResult";
 import { loadWereadAuthState } from "./utils/settings/wereadSettingsService";
+import { localizeKnownUiText } from "./utils/i18n";
 
 const STORAGE_NAME = "menu-config";
 
@@ -79,15 +80,15 @@ export default class PluginDouban extends Plugin {
             try {
                 showMessage(this.i18n.wereadApiAutoSyncStart || "微信读书自动同步开始");
                 const result = await autoSyncWereadApi(this);
-                const summary = formatWereadApiAutoSyncResultSummary(result, { maxTitles: 3 });
+                const summary = formatWereadApiAutoSyncResultSummary(result, { maxTitles: 3, i18nSource: this });
                 showMessage(summary || (this.i18n.wereadApiAutoSyncSuccess || "微信读书自动同步完成"));
             } catch (error: any) {
-                showMessage(`${this.i18n.wereadApiAutoSyncFailed || "微信读书自动同步失败"}：${error?.message || ""}`);
+                showMessage(`${this.i18n.wereadApiAutoSyncFailed || "微信读书自动同步失败"}：${localizeKnownUiText(this, error?.message || "")}`);
             }
             return;
         }
 
-        showMessage("请先验证微信读书 API Key");
+        showMessage(this.i18n.wereadVerifyApiKeyFirst || "请先验证微信读书 API Key");
     }
 
     onunload() {
@@ -235,7 +236,7 @@ export default class PluginDouban extends Plugin {
         for (const item of Array.from(tabItems)) {
             const el = item as HTMLElement;
             const titleSpan = el.querySelector('.item__text');
-            if (titleSpan && titleSpan.textContent === '读书笔记') {
+            if (titleSpan && [this.i18n.addTopBarIcon, "读书笔记", "Reading Notes"].includes(titleSpan.textContent || "")) {
                 // 自定义标签页才有 data-initdata，普通文档标签页没有
                 const initData = el.getAttribute('data-initdata');
                 if (initData) {
@@ -276,7 +277,7 @@ export default class PluginDouban extends Plugin {
                 app: this.app,
                 custom: {
                     icon: "iconNotebook",
-                    title: "读书笔记",
+                    title: this.i18n.addTopBarIcon || "读书笔记",
                     data: this.getReadingCenterCustomData(),
                     id: this.getReadingCenterCustomId(),
                 },
@@ -304,7 +305,7 @@ export default class PluginDouban extends Plugin {
 
         let dialogRef: ReturnType<typeof svelteDialog> | null = null;
         dialogRef = svelteDialog({
-            title: "读书笔记",
+            title: this.i18n.addTopBarIcon || "读书笔记",
             width: "100vw",
             height: "100dvh",
             constructor: (container: HTMLElement) => new ReadingCenter({
@@ -357,7 +358,7 @@ export default class PluginDouban extends Plugin {
     private registerCommand() {
         // 添加快速打开读书笔记插件的快捷键命令
         this.addCommand({
-            langKey: "打开读书笔记",
+            langKey: "openReadingNotes",
             hotkey: "⌘⇧;",
             callback: () => {
                 this.openReadingCenter();

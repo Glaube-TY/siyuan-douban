@@ -186,7 +186,7 @@
         return new Promise((resolve) => {
             let dialogRef: any;
             dialogRef = svelteDialog({
-                title: "确认微信读书同步",
+                title: i18nText("planTitle", "确认微信读书同步"),
                 width: mobile ? "100vw" : "min(560px, 92vw)",
                 height: mobile ? "100dvh" : "min(500px, 80vh)",
                 disableClose: true,
@@ -194,6 +194,7 @@
                 constructor: (container: HTMLElement) => new WereadSyncPlanConfirmDialog({
                     target: container,
                     props: {
+                        plugin,
                         payload,
                         onConfirm: () => {
                             dialogRef.close();
@@ -216,7 +217,7 @@
     function openProgressDialog() {
         let dialogRef: any;
         dialogRef = svelteDialog({
-            title: "微信读书同步进度",
+            title: i18nText("progressSyncTitle", "微信读书同步进度"),
             width: mobile ? "100vw" : "min(560px, 92vw)",
             height: mobile ? "100dvh" : "min(500px, 80vh)",
             disableClose: true,
@@ -225,6 +226,7 @@
                 const component = new WereadSyncProgressDialog({
                     target: container,
                     props: {
+                        plugin,
                         onClose: () => {
                             dialogRef.close();
                         },
@@ -252,12 +254,12 @@
                 startedAt,
                 endedAt: Date.now(),
                 trigger: "manual",
-                errors: ["请先配置微信读书笔记模板"],
+                errors: [i18nText("wereadApiManualSyncNeedTemplate", "请先配置微信读书笔记模板")],
             });
             await saveWereadSyncReportAndApplyStatus(plugin, report);
             handleSyncProgress({
                 stage: "finished",
-                message: "同步失败：请先配置微信读书笔记模板",
+                message: i18nText("wereadSyncTemplateFailed", "同步失败：请先配置微信读书笔记模板"),
                 status: "failed",
             });
             showMessage(i18n.wereadApiManualSyncNeedTemplate || "请先配置微信读书笔记模板");
@@ -269,15 +271,15 @@
                 startedAt,
                 endedAt: Date.now(),
                 trigger: "manual",
-                errors: ["API Key 未验证"],
+                errors: [i18nText("wereadApiKeyNotVerified", "API Key 未验证")],
             });
             await saveWereadSyncReportAndApplyStatus(plugin, report);
             handleSyncProgress({
                 stage: "finished",
-                message: "同步失败：请先验证微信读书 API Key",
+                message: i18nText("wereadSyncApiKeyFailed", "同步失败：请先验证微信读书 API Key"),
                 status: "failed",
             });
-            showMessage("请先验证微信读书 API Key");
+            showMessage(i18nText("wereadVerifyApiKeyFirst", "请先验证微信读书 API Key"));
             return;
         }
         const manageLoading = options?.manageLoading !== false;
@@ -314,7 +316,7 @@
                 normalResult,
                 mpResult,
                 cancelled: isCancelled,
-                warnings: isCancelled ? ["同步已取消"] : undefined,
+                warnings: isCancelled ? [i18nText("wereadSyncCancelled", "同步已取消")] : undefined,
             });
             await saveWereadSyncReportAndApplyStatus(plugin, report);
 
@@ -322,7 +324,7 @@
                 // 统一 emit cancelled 事件（无 sourceType）
                 handleSyncProgress({
                     stage: "cancelled",
-                    message: "同步已取消",
+                    message: i18nText("wereadSyncCancelled", "同步已取消"),
                     status: "cancelled",
                 });
                 showMessage(i18n.wereadSyncCancelled || "同步已取消");
@@ -337,7 +339,9 @@
             handleSyncProgress({
                 stage: "finished",
                 total: totalPlanned,
-                message: `同步完成：计划 ${totalPlanned}，成功 ${totalSuccess}，失败 ${totalFailed}`,
+                message: i18nReplace("wereadSyncCompletedSummary", "同步完成：计划 {planned}，成功 {success}，失败 {failed}", {
+                    "{planned}": String(totalPlanned), "{success}": String(totalSuccess), "{failed}": String(totalFailed),
+                }),
                 status: totalFailed > 0 ? "failed" : "success",
             });
 
@@ -355,12 +359,12 @@
                 trigger: "manual",
                 normalResult,
                 mpResult,
-                errors: [error?.message || "手动同步异常"],
+                errors: [error?.message || i18nText("wereadManualSyncException", "手动同步异常")],
             });
             await saveWereadSyncReportAndApplyStatus(plugin, report);
             handleSyncProgress({
                 stage: "finished",
-                message: `同步失败：${error?.message || "手动同步异常"}`,
+                message: i18nReplace("wereadSyncFailedWithError", "同步失败：{error}", { "{error}": error?.message || i18nText("wereadManualSyncException", "手动同步异常") }),
                 status: "failed",
             });
             showMessage(`${i18n.wereadApiManualSyncFailed || "同步失败"}：${error?.message || ""}`);
@@ -405,16 +409,16 @@
             if (result === "cancelled") {
                 handleSyncProgress({
                     stage: "cancelled",
-                    message: "同步已取消",
+                    message: i18nText("wereadSyncCancelled", "同步已取消"),
                     status: "cancelled",
                 });
                 showMessage(i18n.wereadSyncCancelled || "同步已取消");
             }
         } catch (error) {
-            const message = error?.message || "同步失败";
+            const message = error?.message || i18nText("wereadApiManualSyncFailed", "同步失败");
             handleSyncProgress({
                 stage: "finished",
-                message: `同步失败：${message}`,
+                message: i18nReplace("wereadSyncFailedWithError", "同步失败：{error}", { "{error}": message }),
                 status: "failed",
             });
             showMessage(`${i18n.wereadApiManualSyncFailed || "同步失败"}：${message}`);
@@ -622,7 +626,7 @@
     async function openBookShelf() {
         const apiKey = wereadApiKeyInput.trim();
         if (!wereadApiKeyVerified || !apiKey) {
-            showMessage("请先验证微信读书 API Key");
+            showMessage(i18nText("wereadVerifyApiKeyFirst", "请先验证微信读书 API Key"));
             return;
         }
         loadingBookShelf = true;
@@ -711,7 +715,7 @@
         } catch (error: any) {
             wereadApiKeyVerified = false;
             wereadApiKeyVerifiedAt = 0;
-            wereadApiKeyLastError = error?.message || "验证失败";
+            wereadApiKeyLastError = error?.message || i18nText("wereadApiKeyValidationFailed", "验证失败");
             showMessage(i18n.showMessageWereadApiKeyInvalid);
         } finally {
             isVerifyingWereadApiKey = false;
@@ -977,7 +981,7 @@
                                 {#if isLoadingReadingStats}
                                     {i18nText("wereadReadingStatsLoading", "正在加载...")}
                                 {:else if readingStats}
-                                    {formatReadingDuration(readingStats.weekly.totalReadTime)}
+                                    {formatReadingDuration(readingStats.weekly.totalReadTime, plugin)}
                                 {:else}
                                     --
                                 {/if}
@@ -989,7 +993,7 @@
                                 {#if isLoadingReadingStats}
                                     {i18nText("wereadReadingStatsLoading", "正在加载...")}
                                 {:else if readingStats}
-                                    {formatReadingDuration(readingStats.monthly.totalReadTime)}
+                                    {formatReadingDuration(readingStats.monthly.totalReadTime, plugin)}
                                 {:else}
                                     --
                                 {/if}
@@ -1001,7 +1005,7 @@
                                 {#if isLoadingReadingStats}
                                     {i18nText("wereadReadingStatsLoading", "正在加载...")}
                                 {:else if readingStats}
-                                    {formatReadingDuration(readingStats.annually.totalReadTime)}
+                                    {formatReadingDuration(readingStats.annually.totalReadTime, plugin)}
                                 {:else}
                                     --
                                 {/if}
@@ -1013,7 +1017,7 @@
                                 {#if isLoadingReadingStats}
                                     {i18nText("wereadReadingStatsLoading", "正在加载...")}
                                 {:else if readingStats}
-                                    {formatReadingDuration(readingStats.overall.totalReadTime)}
+                                    {formatReadingDuration(readingStats.overall.totalReadTime, plugin)}
                                 {:else}
                                     --
                                 {/if}

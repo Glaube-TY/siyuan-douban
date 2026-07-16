@@ -6,8 +6,11 @@
     type WereadSyncProgressEvent,
     type WereadSyncStage,
   } from "../../utils/weread/api/wereadSyncProgress";
+  import { localizeKnownUiText, t } from "../../utils/i18n";
 
+  export let plugin: any;
   export let onClose: () => void;
+  const tx = (key: string, fallback: string) => t(plugin, key, fallback);
 
   let events: WereadSyncProgressEvent[] = [];
   let currentMessage = "";
@@ -44,21 +47,21 @@
     if (event.stage === "cancelled") {
       // 取消事件直接结束
       isFinished = true;
-      summaryMessage = event.message;
+      summaryMessage = localizeKnownUiText(plugin, event.message);
       finalStatus = "cancelled";
     } else if (event.stage === "finished" && !event.sourceType) {
       // 只有 sourceType 为空的 finished 才是最终完成
       isFinished = true;
-      summaryMessage = event.message;
+      summaryMessage = localizeKnownUiText(plugin, event.message);
       if (event.total !== undefined) {
         plannedCount = event.total;
       }
       finalStatus = event.status === "failed" ? "failed" : "success";
     } else if (event.stage === "finished" && event.sourceType) {
       // sourceType 级别的 finished 只作为普通日志追加
-      currentMessage = event.message;
+      currentMessage = localizeKnownUiText(plugin, event.message);
     } else {
-      currentMessage = event.message;
+      currentMessage = localizeKnownUiText(plugin, event.message);
       if (event.stage === "item_success") {
         successCount++;
         plannedCount = Math.max(plannedCount, successCount + failedCount);
@@ -75,16 +78,16 @@
 
   function getStageLabel(stage: WereadSyncStage): string {
     switch (stage) {
-      case "checking_sources": return "检查来源";
-      case "planning": return "计划中";
-      case "confirming": return "确认中";
-      case "preparing": return "准备中";
-      case "writing": return "写入中";
-      case "item_success": return "成功";
-      case "item_failed": return "失败";
-      case "item_skipped": return "跳过";
-      case "finished": return "完成";
-      case "cancelled": return "取消";
+      case "checking_sources": return tx("progressCheckingSources", "检查来源");
+      case "planning": return tx("progressPlanning", "计划中");
+      case "confirming": return tx("progressConfirming", "确认中");
+      case "preparing": return tx("progressPreparing", "准备中");
+      case "writing": return tx("progressWriting", "写入中");
+      case "item_success": return tx("progressSuccess", "成功");
+      case "item_failed": return tx("progressFailed", "失败");
+      case "item_skipped": return tx("progressSkipped", "跳过");
+      case "finished": return tx("progressFinished", "完成");
+      case "cancelled": return tx("progressCancelled", "取消");
       default: return stage;
     }
   }
@@ -112,7 +115,7 @@
 
 <div class="sync-progress">
   <div class="progress-header">
-    <p class="progress-title">微信读书同步进度</p>
+    <p class="progress-title">{tx("progressSyncTitle", "微信读书同步进度")}</p>
     <div class="progress-bar-container">
       <div
         class="progress-bar"
@@ -140,28 +143,28 @@
     <div class="summary">
       <div class="summary-title">
         {#if finalStatus === "cancelled"}
-          同步已取消
+          {tx("progressCancelledState", "同步已取消")}
         {:else if finalStatus === "failed"}
-          同步失败
+          {tx("progressFailedState", "同步失败")}
         {:else}
-          同步完成
+          {tx("progressFinishedState", "同步完成")}
         {/if}
       </div>
       <div class="summary-stats">
         <div class="stat-item success">
-          <span class="stat-label">成功</span>
+          <span class="stat-label">{tx("progressSuccess", "成功")}</span>
           <span class="stat-value">{successCount}</span>
         </div>
         <div class="stat-item failed">
-          <span class="stat-label">失败</span>
+          <span class="stat-label">{tx("progressFailed", "失败")}</span>
           <span class="stat-value">{failedCount}</span>
         </div>
         <div class="stat-item skipped">
-          <span class="stat-label">跳过</span>
+          <span class="stat-label">{tx("progressSkipped", "跳过")}</span>
           <span class="stat-value">{skippedCount}</span>
         </div>
         <div class="stat-item planned">
-          <span class="stat-label">计划</span>
+          <span class="stat-label">{tx("progressPlanned", "计划")}</span>
           <span class="stat-value">{plannedCount}</span>
         </div>
       </div>
@@ -172,19 +175,19 @@
   {/if}
 
   <div class="events-list">
-    <div class="events-header">同步详情：</div>
+    <div class="events-header">{tx("progressDetailsTitle", "同步详情：")}</div>
     <div class="events-scroll" bind:this={eventsScroll}>
       {#each events as event}
         <div class="event-row {getStageClass(event.stage)}">
           <span class="event-time">{new Date(event.timestamp || 0).toLocaleTimeString([], { hour12: false })}</span>
           <span class="event-stage">{getStageLabel(event.stage)}</span>
           {#if event.sourceType}
-            <span class="event-source">[{event.sourceType === "book" ? "书" : "公"}]</span>
+            <span class="event-source">[{event.sourceType === "book" ? tx("progressSourceBookShort", "书") : tx("progressSourceMpShort", "公")}]</span>
           {/if}
           {#if event.title}
             <span class="event-title">{event.title}</span>
           {/if}
-          <span class="event-message">{event.message}</span>
+          <span class="event-message">{localizeKnownUiText(plugin, event.message)}</span>
         </div>
       {/each}
     </div>
@@ -192,7 +195,7 @@
 
   <div class="progress-actions">
     <button class="b3-button" on:click={handleClose}>
-      {isFinished ? "关闭" : "后台运行"}
+      {isFinished ? tx("uiClose", "关闭") : tx("progressRunInBackground", "后台运行")}
     </button>
   </div>
 </div>

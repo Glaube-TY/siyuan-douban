@@ -3,6 +3,7 @@
     import { showMessage } from "siyuan";
     import SiYuanIcon from "../common/SiYuanIcon.svelte";
     import { loadWereadSyncOptions, saveWereadSyncOptions } from "../../utils/settings/wereadSettingsService";
+    import { t } from "../../utils/i18n";
 
     export let plugin: any;
     export let close: () => void = () => {};
@@ -12,6 +13,7 @@
     let skipNewBookCheck = false;
     let isLoading = true;
     let isSaving = false;
+    const tx = (key: string, fallback: string) => t(plugin, key, fallback);
 
     onMount(async () => {
         const options = await loadWereadSyncOptions(plugin);
@@ -24,7 +26,7 @@
         isSaving = true;
         try {
             await saveWereadSyncOptions(plugin, { autoSync, skipNewBookCheck });
-            showMessage("同步选项已保存");
+            showMessage(tx("settingsSyncOptionsSaved", "同步选项已保存"));
             onSaved();
             close();
         } finally {
@@ -37,27 +39,27 @@
     <header class="settings-dialog-header">
         <div class="settings-dialog-icon"><SiYuanIcon name="sync" size={20} /></div>
         <div>
-            <h2>同步选项</h2>
-            <p>只调整已有同步开关，不改动自动同步和手动同步主链路。</p>
+            <h2>{tx("settingsSyncOptionsTitle", "同步选项")}</h2>
+            <p>{tx("settingsSyncOptionsDesc", "只调整已有同步开关，不改动自动同步和手动同步主链路。")}</p>
         </div>
     </header>
 
     {#if isLoading}
-        <div class="settings-dialog-loading">加载中...</div>
+        <div class="settings-dialog-loading">{tx("uiLoading", "加载中...")}</div>
     {:else}
         <div class="settings-dialog-body">
             <label class="settings-dialog-switch-row">
                 <span>
-                    <strong>自动同步</strong>
-                    <em>布局就绪后按原有逻辑检查 API Key 并执行自动同步。</em>
+                    <strong>{tx("settingsAutoSync", "自动同步")}</strong>
+                    <em>{tx("settingsAutoSyncDesc", "布局就绪后按原有逻辑检查 API Key 并执行自动同步。")}</em>
                 </span>
                 <input type="checkbox" class="settings-switch" bind:checked={autoSync} />
                 <span class="settings-switch-track"><span class="settings-switch-thumb"></span></span>
             </label>
             <label class="settings-dialog-switch-row">
                 <span>
-                    <strong>跳过新书确认</strong>
-                    <em>沿用原同步面板的选项，只影响已有新来源确认流程。</em>
+                    <strong>{tx("settingsSkipNewConfirm", "跳过新书确认")}</strong>
+                    <em>{tx("settingsSkipNewConfirmDesc", "沿用原同步面板的选项，只影响已有新来源确认流程。")}</em>
                 </span>
                 <input type="checkbox" class="settings-switch" bind:checked={skipNewBookCheck} />
                 <span class="settings-switch-track"><span class="settings-switch-thumb"></span></span>
@@ -66,8 +68,8 @@
     {/if}
 
     <footer class="settings-dialog-actions">
-        <button class="b3-button b3-button--outline" on:click={close}>取消</button>
-        <button class="b3-button b3-button--primary" on:click={save} disabled={isSaving}>保存</button>
+        <button class="b3-button b3-button--outline" on:click={close}>{t(plugin, "cancel", "取消")}</button>
+        <button class="b3-button b3-button--primary" on:click={save} disabled={isSaving}>{tx("uiSave", "保存")}</button>
     </footer>
 </div>
 

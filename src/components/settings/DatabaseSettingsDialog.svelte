@@ -8,10 +8,12 @@
         validateDatabaseBlock,
     } from "../../utils/settings/databaseSettingsService";
     import type { WorkbenchDatabaseStatus } from "../../types/workbench";
+    import { t } from "../../utils/i18n";
 
     export let plugin: any;
     export let close: () => void = () => {};
     export let onSaved: () => void = () => {};
+    const tx = (key: string, fallback: string) => t(plugin, key, fallback);
 
     let blockID = "";
     let status: WorkbenchDatabaseStatus | null = null;
@@ -25,7 +27,7 @@
     });
 
     async function validate() {
-        status = await validateDatabaseBlock(blockID);
+            status = await validateDatabaseBlock(blockID, plugin);
         showMessage(status.message);
     }
 
@@ -33,7 +35,7 @@
         isSaving = true;
         try {
             status = await saveDatabaseSettings(plugin, blockID);
-            showMessage(status.valid ? "数据库设置已保存" : status.message);
+            showMessage(status.valid ? tx("settingsDatabaseSaved", "数据库设置已保存") : status.message);
             onSaved();
             if (status.valid) close();
         } finally {
@@ -46,18 +48,18 @@
     <header class="settings-dialog-header">
         <div class="settings-dialog-icon"><SiYuanIcon name="database" size={20} /></div>
         <div>
-            <h2>本地数据库设置</h2>
-            <p>连接本地书籍属性视图，用于搜索、添加和打开读书笔记。</p>
+            <h2>{tx("settingsDatabaseTitle", "本地数据库设置")}</h2>
+            <p>{tx("settingsDatabaseDesc", "连接本地书籍属性视图，用于搜索、添加和打开读书笔记。")}</p>
         </div>
     </header>
 
     {#if isLoading}
-        <div class="settings-dialog-loading">加载中...</div>
+        <div class="settings-dialog-loading">{tx("uiLoading", "加载中...")}</div>
     {:else}
         <div class="settings-dialog-body">
             <label class="settings-dialog-field">
-                <span>书籍数据库块 ID</span>
-                <input class="b3-text-field" bind:value={blockID} placeholder="请输入包含属性视图的块 ID" />
+                <span>{tx("settingsDatabaseBlockId", "书籍数据库块 ID")}</span>
+                <input class="b3-text-field" bind:value={blockID} placeholder={tx("settingsDatabasePlaceholder", "请输入包含属性视图的块 ID")} />
             </label>
 
             {#if status}
@@ -70,9 +72,9 @@
     {/if}
 
     <footer class="settings-dialog-actions">
-        <button class="b3-button b3-button--outline" on:click={close}>取消</button>
-        <button class="b3-button b3-button--outline" on:click={validate} disabled={isSaving}>验证</button>
-        <button class="b3-button b3-button--primary" on:click={save} disabled={isSaving}>保存</button>
+        <button class="b3-button b3-button--outline" on:click={close}>{t(plugin, "cancel", "取消")}</button>
+        <button class="b3-button b3-button--outline" on:click={validate} disabled={isSaving}>{tx("uiValidate", "验证")}</button>
+        <button class="b3-button b3-button--primary" on:click={save} disabled={isSaving}>{tx("uiSave", "保存")}</button>
     </footer>
 </div>
 

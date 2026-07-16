@@ -4,10 +4,12 @@
     import { getReadingBookStatuses, getReadingInboxItems } from "../../utils/storage/readingStorage";
     import { safeLoadReadingStatsCache } from "../../utils/readingCenter/readingCenterData";
     import { formatReadingDuration } from "../../utils/weread/api/formatWereadReadingStats";
+    import { t } from "../../utils/i18n";
 
     export let plugin: any;
 
     const dispatch = createEventDispatcher();
+    const tx = (key: string, fallback: string) => t(plugin, key, fallback);
 
     let mode: "week" | "month" = "week";
     let markdown = "";
@@ -25,47 +27,47 @@
         const reviewedCount = statuses.filter((item) => item.status === "reviewed").length;
         const pendingCount = statuses.filter((item) => item.status === "to_review" || item.hasNewNotes).length;
         const periodStats = mode === "week" ? stats?.weekly : stats?.monthly;
-        const title = mode === "week" ? "阅读周报" : "阅读月报";
+        const title = mode === "week" ? tx("digestWeekly", "阅读周报") : tx("digestMonthly", "阅读月报");
         markdown = [
             `# ${title}`,
             "",
-            `- 阅读时长：${periodStats ? formatReadingDuration(periodStats.totalReadTime || 0) : "暂无"}`,
-            `- 阅读天数：${periodStats?.readDays ?? "暂无"}`,
-            `- 新增划线/想法：${recentInbox.length}`,
-            `- 普通书新增：${recentInbox.filter((item) => item.sourceType === "weread-book").length}`,
-            `- 公众号新增：${recentInbox.filter((item) => item.sourceType === "weread-mp").length}`,
-            `- 待整理书籍：${pendingCount}`,
-            `- 已整理书籍：${reviewedCount}`,
+            `- ${tx("digestReadingDuration", "阅读时长：")}${periodStats ? formatReadingDuration(periodStats.totalReadTime || 0) : tx("uiNoData", "暂无")}`,
+            `- ${tx("digestReadingDays", "阅读天数：")}${periodStats?.readDays ?? tx("uiNoData", "暂无")}`,
+            `- ${tx("digestNewNotes", "新增划线/想法：")}${recentInbox.length}`,
+            `- ${tx("digestNewBooks", "普通书新增：")}${recentInbox.filter((item) => item.sourceType === "weread-book").length}`,
+            `- ${tx("digestNewMp", "公众号新增：")}${recentInbox.filter((item) => item.sourceType === "weread-mp").length}`,
+            `- ${tx("digestPendingBooks", "待整理书籍：")}${pendingCount}`,
+            `- ${tx("digestReviewedBooks", "已整理书籍：")}${reviewedCount}`,
             "",
-            "## 新增内容",
-            recentInbox.length === 0 ? "暂无新增内容" : recentInbox.slice(0, 20).map((item) => `- ${item.title}：${item.content || item.reviewContent || ""}`).join("\n"),
+            `## ${tx("digestNewContent", "新增内容")}`,
+            recentInbox.length === 0 ? tx("digestNoNewContent", "暂无新增内容") : recentInbox.slice(0, 20).map((item) => `- ${item.title}: ${item.content || item.reviewContent || ""}`).join("\n"),
         ].join("\n");
     }
 
     async function copyMarkdown() {
         try {
             await navigator.clipboard.writeText(markdown);
-            showMessage("已复制 Markdown");
+            showMessage(tx("syncResultCopiedMarkdown", "已复制 Markdown"));
         } catch {
-            showMessage("复制失败，请检查剪贴板权限");
+            showMessage(tx("uiCopyFailed", "复制失败，请检查剪贴板权限"));
         }
     }
 </script>
 
 <div class="reading-page">
     <div class="page-header">
-        <button class="back-btn" on:click={() => dispatch("back")}>返回总览</button>
+        <button class="back-btn" on:click={() => dispatch("back")}>{tx("uiBackOverview", "返回总览")}</button>
         <div>
-            <h2>阅读周报 / 月报</h2>
-            <p>基于阅读统计和本地缓存生成非 AI 统计报告</p>
+            <h2>{tx("digestTitle", "阅读周报 / 月报")}</h2>
+            <p>{tx("digestDesc", "基于阅读统计和本地缓存生成非 AI 统计报告")}</p>
         </div>
     </div>
 
     <div class="subpage-toolbar">
         <div class="subpage-toolbar-group">
-            <button class:active={mode === "week"} on:click={() => (mode = "week")}>周报</button>
-            <button class:active={mode === "month"} on:click={() => (mode = "month")}>月报</button>
-            <button on:click={copyMarkdown}>复制 Markdown</button>
+            <button class:active={mode === "week"} on:click={() => (mode = "week")}>{tx("digestWeek", "周报")}</button>
+            <button class:active={mode === "month"} on:click={() => (mode = "month")}>{tx("digestMonth", "月报")}</button>
+            <button on:click={copyMarkdown}>{tx("syncResultCopyMarkdown", "复制 Markdown")}</button>
         </div>
     </div>
 

@@ -43,9 +43,9 @@
         const percent = Math.round(item.radarValue || 0);
         return [
             title,
-            `阅读时长：${formatReadingDuration(item.readingTime || 0)}`,
-            `阅读数量：${item.readingCount || 0}本`,
-            `偏好强度：${percent}%`,
+            `${i18nText("digestReadingDuration", "阅读时长：")}${formatReadingDuration(item.readingTime || 0, i18n)}`,
+            i18nText("statsRadarBookCount", "阅读数量：{count}本").replace("{count}", String(item.readingCount || 0)),
+            i18nText("statsRadarStrength", "偏好强度：{percent}%").replace("{percent}", String(percent)),
         ];
     }
 

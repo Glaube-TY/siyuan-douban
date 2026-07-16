@@ -1,15 +1,18 @@
 <script lang="ts">
     import { createEventDispatcher } from "svelte";
     import { getImage } from "../../utils/core/getImg";
+    import { t } from "../../utils/i18n";
 
     export let bookInfo: any;
     export let customRatings: string[] = [];
     export let customCategories: string[] = [];
     export let customReadingStatuses: string[] = [];
     export let mobile = false;
+    export let i18n: any = {};
     export let close: () => void = () => {};
 
     const dispatch = createEventDispatcher<{ confirm: any }>();
+    const tx = (key: string, fallback: string) => t(i18n, key, fallback);
 
     let coverData = "";
     let showCover = false;
@@ -63,64 +66,64 @@
         <div class="douban-detail-body douban-detail-mobile-body">
             <section class="mobile-book-summary">
                 {#if bookInfo?.cover && showCover}
-                    <img src={coverData} alt="封面" class="mobile-book-cover" on:error={handleCoverError} />
+                    <img src={coverData} alt={tx("bookCover", "封面")} class="mobile-book-cover" on:error={handleCoverError} />
                 {:else}
-                    <div class="mobile-book-cover mobile-book-cover-placeholder">暂无封面</div>
+                    <div class="mobile-book-cover mobile-book-cover-placeholder">{tx("bookNoCover", "暂无封面")}</div>
                 {/if}
                 <div class="mobile-book-identity">
-                    <span>豆瓣图书</span>
-                    <strong>{bookInfo.title || "未知书名"}</strong>
-                    <em>{Array.isArray(bookInfo.authors) ? bookInfo.authors.join("、") : bookInfo.authors || "未知作者"}</em>
-                    <small>{bookInfo.publisher || "出版社待补充"}{bookInfo.publishDate ? ` · ${bookInfo.publishDate}` : ""}</small>
+                    <span>{tx("bookDouban", "豆瓣图书")}</span>
+                    <strong>{bookInfo.title || tx("bookUnknownTitle", "未知书名")}</strong>
+                    <em>{Array.isArray(bookInfo.authors) ? bookInfo.authors.join(", ") : bookInfo.authors || tx("bookUnknownAuthor", "未知作者")}</em>
+                    <small>{bookInfo.publisher || tx("bookPublisherPending", "出版社待补充")}{bookInfo.publishDate ? ` · ${bookInfo.publishDate}` : ""}</small>
                 </div>
             </section>
 
             <details class="mobile-detail-section" open>
-                <summary><span>基本信息</span><small>书名、作者与译者</small></summary>
+                <summary><span>{tx("bookBasicInfo", "基本信息")}</span><small>{tx("bookBasicInfoDesc", "书名、作者与译者")}</small></summary>
                 <div class="mobile-detail-fields">
-                    <label><span>书名</span><input class="b3-text-field" bind:value={bookInfo.title} /></label>
-                    <label><span>副标题</span><input class="b3-text-field" bind:value={bookInfo.subtitle} /></label>
-                    <label><span>原作名</span><input class="b3-text-field" bind:value={bookInfo.originalTitle} /></label>
-                    <label><span>作者</span><input class="b3-text-field" bind:value={bookInfo.authors} /></label>
-                    <label><span>译者</span><input class="b3-text-field" bind:value={bookInfo.translators} /></label>
+                    <label><span>{tx("bookTitle", "书名")}</span><input class="b3-text-field" bind:value={bookInfo.title} /></label>
+                    <label><span>{tx("bookSubtitle", "副标题")}</span><input class="b3-text-field" bind:value={bookInfo.subtitle} /></label>
+                    <label><span>{tx("bookOriginalTitle", "原作名")}</span><input class="b3-text-field" bind:value={bookInfo.originalTitle} /></label>
+                    <label><span>{tx("bookAuthor", "作者")}</span><input class="b3-text-field" bind:value={bookInfo.authors} /></label>
+                    <label><span>{tx("bookTranslator", "译者")}</span><input class="b3-text-field" bind:value={bookInfo.translators} /></label>
                 </div>
             </details>
 
             <details class="mobile-detail-section">
-                <summary><span>出版信息</span><small>评分、版本与装帧</small></summary>
+                <summary><span>{tx("bookPublicationInfo", "出版信息")}</span><small>{tx("bookPublicationInfoDesc", "评分、版本与装帧")}</small></summary>
                 <div class="mobile-detail-fields mobile-detail-fields-grid">
-                    <label class="mobile-field-wide"><span>出版社</span><input class="b3-text-field" bind:value={bookInfo.publisher} /></label>
-                    <label><span>出版年</span><input class="b3-text-field" bind:value={bookInfo.publishDate} /></label>
-                    <label><span>出品方</span><input class="b3-text-field" bind:value={bookInfo.producer} /></label>
-                    <label class="mobile-field-wide"><span>丛书</span><input class="b3-text-field" bind:value={bookInfo.series} /></label>
-                    <label><span>豆瓣评分</span><input class="b3-text-field" bind:value={bookInfo.rating} /></label>
-                    <label><span>评分人数</span><input class="b3-text-field" bind:value={bookInfo.ratingCount} /></label>
-                    <label><span>定价</span><input class="b3-text-field" bind:value={bookInfo.price} /></label>
-                    <label><span>页数</span><input class="b3-text-field" bind:value={bookInfo.pages} /></label>
-                    <label class="mobile-field-wide"><span>装帧</span><input class="b3-text-field" bind:value={bookInfo.binding} /></label>
+                    <label class="mobile-field-wide"><span>{tx("bookPublisher", "出版社")}</span><input class="b3-text-field" bind:value={bookInfo.publisher} /></label>
+                    <label><span>{tx("bookPublishYear", "出版年")}</span><input class="b3-text-field" bind:value={bookInfo.publishDate} /></label>
+                    <label><span>{tx("bookProducer", "出品方")}</span><input class="b3-text-field" bind:value={bookInfo.producer} /></label>
+                    <label class="mobile-field-wide"><span>{tx("bookSeries", "丛书")}</span><input class="b3-text-field" bind:value={bookInfo.series} /></label>
+                    <label><span>{tx("bookDoubanRating", "豆瓣评分")}</span><input class="b3-text-field" bind:value={bookInfo.rating} /></label>
+                    <label><span>{tx("bookRatingCount", "评分人数")}</span><input class="b3-text-field" bind:value={bookInfo.ratingCount} /></label>
+                    <label><span>{tx("bookPrice", "定价")}</span><input class="b3-text-field" bind:value={bookInfo.price} /></label>
+                    <label><span>{tx("bookPages", "页数")}</span><input class="b3-text-field" bind:value={bookInfo.pages} /></label>
+                    <label class="mobile-field-wide"><span>{tx("bookBinding", "装帧")}</span><input class="b3-text-field" bind:value={bookInfo.binding} /></label>
                 </div>
             </details>
 
             <details class="mobile-detail-section" open>
-                <summary><span>我的阅读记录</span><small>分类、状态与日期</small></summary>
+                <summary><span>{tx("bookMyReading", "我的阅读记录")}</span><small>{tx("bookMyReadingDesc", "分类、状态与日期")}</small></summary>
                 <div class="mobile-note-toggle">
-                    <span><strong>生成读书笔记</strong><small>添加书籍后创建对应笔记文档</small></span>
+                    <span><strong>{tx("bookGenerateNote", "生成读书笔记")}</strong><small>{tx("bookGenerateNoteDesc", "添加书籍后创建对应笔记文档")}</small></span>
                     <input type="checkbox" bind:checked={bookInfo.addNotes} />
                 </div>
                 <div class="mobile-detail-fields">
-                    <label><span>我的评分</span><select class="b3-select" bind:value={myRatingIndex}>{#each customRatings as rating, index}<option value={index}>{rating}</option>{/each}</select></label>
-                    <label><span>书籍分类</span><select class="b3-select" bind:value={bookCategoryIndex}>{#each customCategories as category, index}<option value={index}>{category}</option>{/each}</select></label>
-                    <label><span>阅读状态</span><select class="b3-select" bind:value={readingStatusIndex}>{#each customReadingStatuses as status, index}<option value={index}>{status}</option>{/each}</select></label>
-                    <label><span>开始日期</span><input type="date" class="b3-text-field" bind:value={bookInfo.startDate} /></label>
-                    <label><span>读完日期</span><input type="date" class="b3-text-field" bind:value={bookInfo.finishDate} /></label>
+                    <label><span>{tx("bookMyRating", "我的评分")}</span><select class="b3-select" bind:value={myRatingIndex}>{#each customRatings as rating, index}<option value={index}>{rating}</option>{/each}</select></label>
+                    <label><span>{tx("bookCategory", "书籍分类")}</span><select class="b3-select" bind:value={bookCategoryIndex}>{#each customCategories as category, index}<option value={index}>{category}</option>{/each}</select></label>
+                    <label><span>{tx("bookReadingStatus", "阅读状态")}</span><select class="b3-select" bind:value={readingStatusIndex}>{#each customReadingStatuses as status, index}<option value={index}>{status}</option>{/each}</select></label>
+                    <label><span>{tx("bookStartDate", "开始日期")}</span><input type="date" class="b3-text-field" bind:value={bookInfo.startDate} /></label>
+                    <label><span>{tx("bookFinishDate", "读完日期")}</span><input type="date" class="b3-text-field" bind:value={bookInfo.finishDate} /></label>
                 </div>
             </details>
 
             <details class="mobile-detail-section">
-                <summary><span>内容简介</span><small>展开查看和修改长文本</small></summary>
+                <summary><span>{tx("bookContentIntro", "内容简介")}</span><small>{tx("bookContentIntroDesc", "展开查看和修改长文本")}</small></summary>
                 <div class="mobile-detail-fields">
-                    <label><span>书籍简介</span><textarea class="b3-text-field book-textarea" bind:value={bookInfo.description} rows="7"></textarea></label>
-                    <label><span>作者简介</span><textarea class="b3-text-field book-textarea" bind:value={bookInfo.authorBio} rows="7"></textarea></label>
+                    <label><span>{tx("bookDescription", "书籍简介")}</span><textarea class="b3-text-field book-textarea" bind:value={bookInfo.description} rows="7"></textarea></label>
+                    <label><span>{tx("bookAuthorBio", "作者简介")}</span><textarea class="b3-text-field book-textarea" bind:value={bookInfo.authorBio} rows="7"></textarea></label>
                 </div>
             </details>
         </div>
@@ -135,73 +138,73 @@
                                 {#if bookInfo?.cover && showCover}
                                     <img
                                         src={coverData}
-                                        alt="封面"
+                                        alt={tx("bookCover", "封面")}
                                         class="book-cover"
                                         on:error={handleCoverError}
                                     />
                                 {:else}
-                                    <div class="book-cover book-cover-placeholder">暂无封面</div>
+                                    <div class="book-cover book-cover-placeholder">{tx("bookNoCover", "暂无封面")}</div>
                                 {/if}
                                 <label class="book-cover-note-toggle">
-                                    <span>生成读书笔记</span>
+                                    <span>{tx("bookGenerateNote", "生成读书笔记")}</span>
                                     <input type="checkbox" class="book-note-checkbox" bind:checked={bookInfo.addNotes} />
                                 </label>
                             </div>
                             <div class="book-title-panel">
                                 <div class="field field-full">
-                                    <label><span>书名</span><input class="b3-text-field" bind:value={bookInfo.title} /></label>
+                                    <label><span>{tx("bookTitle", "书名")}</span><input class="b3-text-field" bind:value={bookInfo.title} /></label>
                                 </div>
                                 <div class="field field-full">
-                                    <label><span>副标题</span><input class="b3-text-field" bind:value={bookInfo.subtitle} /></label>
+                                    <label><span>{tx("bookSubtitle", "副标题")}</span><input class="b3-text-field" bind:value={bookInfo.subtitle} /></label>
                                 </div>
                                 <div class="field field-full">
-                                    <label><span>原作名</span><input class="b3-text-field" bind:value={bookInfo.originalTitle} /></label>
+                                    <label><span>{tx("bookOriginalTitle", "原作名")}</span><input class="b3-text-field" bind:value={bookInfo.originalTitle} /></label>
                                 </div>
                             </div>
                         </div>
                         <div class="book-meta-bottom">
                             <div class="field field-half">
-                                <label><span>作者</span><input class="b3-text-field" bind:value={bookInfo.authors} /></label>
+                                <label><span>{tx("bookAuthor", "作者")}</span><input class="b3-text-field" bind:value={bookInfo.authors} /></label>
                             </div>
                             <div class="field field-half">
-                                <label><span>译者</span><input class="b3-text-field" bind:value={bookInfo.translators} /></label>
+                                <label><span>{tx("bookTranslator", "译者")}</span><input class="b3-text-field" bind:value={bookInfo.translators} /></label>
                             </div>
                             <div class="field field-third">
-                                <label><span>出版社</span><input class="b3-text-field" bind:value={bookInfo.publisher} /></label>
+                                <label><span>{tx("bookPublisher", "出版社")}</span><input class="b3-text-field" bind:value={bookInfo.publisher} /></label>
                             </div>
                             <div class="field field-third">
-                                <label><span>出版年</span><input class="b3-text-field" bind:value={bookInfo.publishDate} /></label>
+                                <label><span>{tx("bookPublishYear", "出版年")}</span><input class="b3-text-field" bind:value={bookInfo.publishDate} /></label>
                             </div>
                             <div class="field field-third">
-                                <label><span>出品方</span><input class="b3-text-field" bind:value={bookInfo.producer} /></label>
+                                <label><span>{tx("bookProducer", "出品方")}</span><input class="b3-text-field" bind:value={bookInfo.producer} /></label>
                             </div>
                             <div class="field field-half">
-                                <label><span>丛书</span><input class="b3-text-field" bind:value={bookInfo.series} /></label>
+                                <label><span>{tx("bookSeries", "丛书")}</span><input class="b3-text-field" bind:value={bookInfo.series} /></label>
                             </div>
                             <div class="field field-quarter">
-                                <label><span>豆瓣评分</span><input class="b3-text-field" bind:value={bookInfo.rating} /></label>
+                                <label><span>{tx("bookDoubanRating", "豆瓣评分")}</span><input class="b3-text-field" bind:value={bookInfo.rating} /></label>
                             </div>
                             <div class="field field-quarter">
-                                <label><span>评分人数</span><input class="b3-text-field" bind:value={bookInfo.ratingCount} /></label>
+                                <label><span>{tx("bookRatingCount", "评分人数")}</span><input class="b3-text-field" bind:value={bookInfo.ratingCount} /></label>
                             </div>
                             <div class="field field-quarter">
-                                <label><span>定价</span><input class="b3-text-field" bind:value={bookInfo.price} /></label>
+                                <label><span>{tx("bookPrice", "定价")}</span><input class="b3-text-field" bind:value={bookInfo.price} /></label>
                             </div>
                             <div class="field field-quarter">
-                                <label><span>装帧</span><input class="b3-text-field" bind:value={bookInfo.binding} /></label>
+                                <label><span>{tx("bookBinding", "装帧")}</span><input class="b3-text-field" bind:value={bookInfo.binding} /></label>
                             </div>
                             <div class="field field-quarter">
-                                <label><span>页数</span><input class="b3-text-field" bind:value={bookInfo.pages} /></label>
+                                <label><span>{tx("bookPages", "页数")}</span><input class="b3-text-field" bind:value={bookInfo.pages} /></label>
                             </div>
                         </div>
                     </div>
 
                     <div class="book-section">
-                        <div class="book-section-title">个人记录</div>
+                        <div class="book-section-title">{tx("bookPersonalRecord", "个人记录")}</div>
                         <div class="book-info-grid">
                             <div class="field field-third">
                                 <label>
-                                    <span>我的评分</span>
+                                    <span>{tx("bookMyRating", "我的评分")}</span>
                                     <select class="b3-select" bind:value={myRatingIndex}>
                                         {#each customRatings as rating, index}<option value={index}>{rating}</option>{/each}
                                     </select>
@@ -209,7 +212,7 @@
                             </div>
                             <div class="field field-third">
                                 <label>
-                                    <span>书籍分类</span>
+                                    <span>{tx("bookCategory", "书籍分类")}</span>
                                     <select class="b3-select" bind:value={bookCategoryIndex}>
                                         {#each customCategories as category, index}<option value={index}>{category}</option>{/each}
                                     </select>
@@ -217,28 +220,28 @@
                             </div>
                             <div class="field field-third">
                                 <label>
-                                    <span>阅读状态</span>
+                                    <span>{tx("bookReadingStatus", "阅读状态")}</span>
                                     <select class="b3-select" bind:value={readingStatusIndex}>
                                         {#each customReadingStatuses as status, index}<option value={index}>{status}</option>{/each}
                                     </select>
                                 </label>
                             </div>
                             <div class="field field-half">
-                                <label><span>开始日期</span><input type="date" class="b3-text-field" bind:value={bookInfo.startDate} /></label>
+                                <label><span>{tx("bookStartDate", "开始日期")}</span><input type="date" class="b3-text-field" bind:value={bookInfo.startDate} /></label>
                             </div>
                             <div class="field field-half">
-                                <label><span>读完日期</span><input type="date" class="b3-text-field" bind:value={bookInfo.finishDate} /></label>
+                                <label><span>{tx("bookFinishDate", "读完日期")}</span><input type="date" class="b3-text-field" bind:value={bookInfo.finishDate} /></label>
                             </div>
                         </div>
                     </div>
 
                     <div class="book-section">
-                        <div class="book-section-title">书籍简介</div>
+                        <div class="book-section-title">{tx("bookDescription", "书籍简介")}</div>
                         <textarea class="b3-text-field book-textarea" bind:value={bookInfo.description} rows="5"></textarea>
                     </div>
 
                     <div class="book-section">
-                        <div class="book-section-title">作者简介</div>
+                        <div class="book-section-title">{tx("bookAuthorBio", "作者简介")}</div>
                         <textarea class="b3-text-field book-textarea" bind:value={bookInfo.authorBio} rows="5"></textarea>
                     </div>
                 </div>
@@ -248,9 +251,9 @@
     {/if}
 
     <div class="douban-detail-footer">
-        <button class="b3-button b3-button--outline" on:click={close}>取消</button>
+        <button class="b3-button b3-button--outline" on:click={close}>{tx("cancel", "取消")}</button>
         <button class="b3-button b3-button--primary" on:click={handleAdd} disabled={isAdding}>
-            {isAdding ? "添加中..." : "添加书籍"}
+            {isAdding ? tx("bookAdding", "添加中...") : tx("bookAdd", "添加书籍")}
         </button>
     </div>
 </div>

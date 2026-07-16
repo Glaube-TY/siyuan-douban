@@ -30,6 +30,7 @@
     import SyncOptionsDialog from "../settings/SyncOptionsDialog.svelte";
     import AboutPluginDialog from "../settings/AboutPluginDialog.svelte";
     import WereadBookManagementDialog from "../common/WereadBookManagementDialog.svelte";
+    import { localizeKnownUiText, t } from "../../utils/i18n";
 
     export let i18n: I18N;
     export let plugin: any;
@@ -55,6 +56,7 @@
     let isWorkbenchSyncing = false;
     let syncResultInitialView: "todo" | "records" = "todo";
     let syncResultFocus: "new" | "issues" | "diagnostics" | "changes" = "new";
+    const tx = (key: string, fallback: string, params: Record<string, string | number> = {}) => t(plugin, key, fallback, params);
 
     // 同步进度弹窗相关
     let progressDialogRef: WereadSyncProgressDialog | null = null;
@@ -125,28 +127,28 @@
     }
 
     function openDatabaseSettings() {
-        openComponentDialog(DatabaseSettingsDialog, { title: "本地数据库设置", width: "min(560px, 92vw)" });
+        openComponentDialog(DatabaseSettingsDialog, { title: tx("centerDatabaseSettings", "本地数据库设置"), width: "min(560px, 92vw)" });
     }
 
     function openBookPreferences() {
-        openComponentDialog(BookPreferenceSettingsDialog, { title: "书籍偏好设置", width: "min(620px, 92vw)" });
+        openComponentDialog(BookPreferenceSettingsDialog, { title: tx("centerBookPreferences", "书籍偏好设置"), width: "min(620px, 92vw)" });
     }
 
     function openTemplateSettings() {
-        openComponentDialog(TemplateSettingsDialog, { title: "模板设置", width: "min(760px, 92vw)", height: "min(680px, 86vh)" });
+        openComponentDialog(TemplateSettingsDialog, { title: tx("centerTemplateSettings", "模板设置"), width: "min(760px, 92vw)", height: "min(680px, 86vh)" });
     }
 
     function openWereadAuth() {
-        openComponentDialog(WereadApiKeyDialog, { title: "微信读书授权", width: "min(580px, 92vw)" });
+        openComponentDialog(WereadApiKeyDialog, { title: tx("centerWereadAuth", "微信读书授权"), width: "min(580px, 92vw)" });
     }
 
     function openSyncOptions() {
-        openComponentDialog(SyncOptionsDialog, { title: "同步选项", width: "min(600px, 92vw)" });
+        openComponentDialog(SyncOptionsDialog, { title: tx("settingsSyncOptionsTitle", "同步选项"), width: "min(600px, 92vw)" });
     }
 
     function openAbout() {
         openComponentDialog(AboutPluginDialog, {
-            title: "关于插件",
+            title: tx("centerAbout", "关于插件"),
             width: "min(720px, 92vw)",
             height: "min(620px, 86vh)",
         });
@@ -161,9 +163,9 @@
         }
         // 对成功和失败的项目显示简短提示
         if (event.stage === "item_success") {
-            showMessage(event.message, 3000);
+            showMessage(localizeKnownUiText(plugin, event.message), 3000);
         } else if (event.stage === "item_failed") {
-            showMessage(event.message, 5000);
+            showMessage(localizeKnownUiText(plugin, event.message), 5000);
         }
     }
 
@@ -172,7 +174,7 @@
         return new Promise((resolve) => {
             let dialogRef: any;
             dialogRef = svelteDialog({
-                title: "确认微信读书同步",
+                title: tx("centerSyncConfirm", "确认微信读书同步"),
                 width: mobile ? "100vw" : "min(560px, 92vw)",
                 height: mobile ? "100dvh" : "min(500px, 80vh)",
                 disableClose: true,
@@ -181,6 +183,7 @@
                     target: container,
                     props: {
                         payload,
+                        plugin,
                         onConfirm: () => {
                             dialogRef.close();
                             resolve(true);
@@ -204,7 +207,7 @@
 
         let dialogRef: any;
         dialogRef = svelteDialog({
-            title: "微信读书同步进度",
+            title: tx("centerSyncProgress", "微信读书同步进度"),
             width: mobile ? "100vw" : "min(560px, 92vw)",
             height: mobile ? "100dvh" : "min(500px, 80vh)",
             disableClose: true,
@@ -213,6 +216,7 @@
                 const component = new WereadSyncProgressDialog({
                     target: container,
                     props: {
+                        plugin,
                         onClose: () => {
                             dialogRef.close();
                         },
@@ -242,7 +246,7 @@
         } else if (action === "sync-weread-update") {
             if (isWorkbenchSyncing) {
                 openProgressDialog();
-                showMessage("同步仍在进行，已重新打开进度窗口");
+                showMessage(tx("centerSyncStillRunning", "同步仍在进行，已重新打开进度窗口"));
                 return;
             }
             isWorkbenchSyncing = true;
@@ -254,14 +258,16 @@
                     confirmPlan: handleSyncPlanConfirm,
                 });
                 if (result.message) {
-                    showMessage(result.message);
+                    showMessage(localizeKnownUiText(plugin, result.message));
                 } else if (result.totalPlanned > 0) {
-                    showMessage(`更新同步完成：成功 ${result.totalSuccess}，失败 ${result.totalFailed}，共 ${result.totalPlanned} 项`);
+                    showMessage(tx("centerUpdateFinished", "更新同步完成：成功 {success}，失败 {failed}，共 {total} 项", {
+                        success: result.totalSuccess, failed: result.totalFailed, total: result.totalPlanned,
+                    }));
                 } else {
-                    showMessage("更新同步完成，无需处理的来源");
+                    showMessage(tx("centerUpdateNoWork", "更新同步完成，无需处理的来源"));
                 }
             } catch (e) {
-                showMessage(`更新同步失败：${e?.message || "未知错误"}`);
+                showMessage(tx("centerUpdateFailed", "更新同步失败：{error}", { error: e?.message || tx("uiUnknownError", "未知错误") }));
             } finally {
                 isWorkbenchSyncing = false;
                 await refreshAll();
@@ -269,7 +275,7 @@
         } else if (action === "sync-weread-all") {
             if (isWorkbenchSyncing) {
                 openProgressDialog();
-                showMessage("同步仍在进行，已重新打开进度窗口");
+                showMessage(tx("centerSyncStillRunning", "同步仍在进行，已重新打开进度窗口"));
                 return;
             }
             isWorkbenchSyncing = true;
@@ -281,14 +287,16 @@
                     confirmPlan: handleSyncPlanConfirm,
                 });
                 if (result.message) {
-                    showMessage(result.message);
+                    showMessage(localizeKnownUiText(plugin, result.message));
                 } else if (result.totalPlanned > 0) {
-                    showMessage(`全部同步完成：成功 ${result.totalSuccess}，失败 ${result.totalFailed}，共 ${result.totalPlanned} 项`);
+                    showMessage(tx("centerFullFinished", "全部同步完成：成功 {success}，失败 {failed}，共 {total} 项", {
+                        success: result.totalSuccess, failed: result.totalFailed, total: result.totalPlanned,
+                    }));
                 } else {
-                    showMessage("全部同步完成，无需处理的来源");
+                    showMessage(tx("centerFullNoWork", "全部同步完成，无需处理的来源"));
                 }
             } catch (e) {
-                showMessage(`全部同步失败：${e?.message || "未知错误"}`);
+                showMessage(tx("centerFullFailed", "全部同步失败：{error}", { error: e?.message || tx("uiUnknownError", "未知错误") }));
             } finally {
                 isWorkbenchSyncing = false;
                 await refreshAll();
@@ -334,7 +342,7 @@
         } else if (action === "open-weread-book-management") {
             let dialogRef: any;
             dialogRef = svelteDialog({
-                title: "微信读书书籍管理",
+                title: tx("centerBookManagement", "微信读书书籍管理"),
                 width: "min(720px, 92vw)",
                 height: "min(560px, 80vh)",
                 constructor: (container: HTMLElement) => new WereadBookManagementDialog({
@@ -352,7 +360,7 @@
                 }),
             });
         } else if (action === "add-book") {
-            showMessage("请在豆瓣读书搜索导入中搜索并添加书籍");
+            showMessage(tx("centerAddBookHint", "请在豆瓣读书搜索导入中搜索并添加书籍"));
         } else if (action === "search") {
             switchToDashboard();
         }
@@ -368,8 +376,8 @@
 <div class="reading-center-container" class:reading-center-container-mobile={mobile}>
     {#if mobile}
         <header class="reading-center-mobile-header">
-            <div><span>读书笔记</span><small>{currentView === "dashboard" ? "移动工作台" : "功能详情"}</small></div>
-            <button type="button" on:click={onClose} aria-label="关闭读书笔记工作台">关闭</button>
+            <div><span>{tx("centerMobileTitle", "读书笔记")}</span><small>{currentView === "dashboard" ? tx("centerMobileWorkspace", "移动工作台") : tx("centerFeatureDetail", "功能详情")}</small></div>
+            <button type="button" on:click={onClose} aria-label={tx("centerCloseLabel", "关闭读书笔记工作台")}>{tx("uiClose", "关闭")}</button>
         </header>
     {/if}
     <main
@@ -381,7 +389,7 @@
             {#if isLoading && !overviewData}
                 <div class="reading-center-loading">
                     <div class="reading-center-spinner"></div>
-                    <p>加载阅读工作台...</p>
+                    <p>{tx("centerLoadingWorkspace", "加载阅读工作台...")}</p>
                 </div>
             {:else}
                 <ReadingWorkbench
@@ -395,8 +403,9 @@
         </div>
     {:else if currentView === "sync-panel"}
         <ReadingFeatureShell
-            title="微信读书同步"
-            subtitle="沿用原同步主链路，在这里手动触发同步或更新缓存"
+            {plugin}
+            title={tx("centerSyncFeatureTitle", "微信读书同步")}
+            subtitle={tx("centerSyncFeatureDesc", "沿用原同步主链路，在这里手动触发同步或更新缓存")}
             tabs={[]}
             activeTab=""
             on:back={switchToDashboard}

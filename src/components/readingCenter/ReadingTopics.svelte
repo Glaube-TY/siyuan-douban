@@ -5,11 +5,13 @@
     import type { ReadingInboxItem } from "../../types/readingInbox";
     import { createReadingId, getReadingInboxItems, getReadingTopicItems, getReadingTopics, saveReadingTopicItems, saveReadingTopics } from "../../utils/storage/readingStorage";
     import { openDoc } from "../../utils/openDoc";
+    import { t } from "../../utils/i18n";
 
     export let plugin: any;
     export let pendingInboxItem: ReadingInboxItem | null = null;
 
     const dispatch = createEventDispatcher();
+    const tx = (key: string, fallback: string, params: Record<string, string | number> = {}) => t(plugin, key, fallback, params);
 
     let topics: ReadingTopic[] = [];
     let topicItems: ReadingTopicItem[] = [];
@@ -52,7 +54,7 @@
         const topic = topics.find((item) => item.id === selectedTopicId);
         const inbox = inboxItems.find((item) => item.id === selectedInboxItemId) || pendingInboxItem;
         if (!topic || !inbox) {
-            showMessage("请选择主题和新增笔记");
+            showMessage(tx("topicsSelectRequired", "请选择主题和新增笔记"));
             return;
         }
         const item: ReadingTopicItem = {
@@ -72,12 +74,12 @@
             await saveReadingTopicItems(plugin, topicItems);
         }
         pendingInboxItem = null;
-        showMessage("已加入主题");
+        showMessage(tx("topicsAdded", "已加入主题"));
     }
 
     function openTopicItem(item: ReadingTopicItem) {
         if (!item.noteDocId) {
-            showMessage("该摘录暂无可打开的本地笔记");
+            showMessage(tx("topicsNoLocalNote", "该摘录暂无可打开的本地笔记"));
             return;
         }
         openDoc(plugin, item.noteDocId, 1);
@@ -88,13 +90,13 @@
         const text = [
             `# ${topic.name}`,
             topic.description || "",
-            ...items.map((item) => `- ${item.content}\n  来源：${item.title}`),
+            ...items.map((item) => `- ${item.content}\n  ${tx("topicsSource", "来源：")}${item.title}`),
         ].filter(Boolean).join("\n\n");
         try {
             await navigator.clipboard.writeText(text);
-            showMessage("已复制主题内容");
+            showMessage(tx("topicsCopied", "已复制主题内容"));
         } catch {
-            showMessage("复制失败，请检查剪贴板权限");
+            showMessage(tx("uiCopyFailed", "复制失败，请检查剪贴板权限"));
         }
     }
 
@@ -104,26 +106,26 @@
 
 <div class="reading-page">
     <div class="page-header">
-        <button class="back-btn" on:click={() => dispatch("back")}>返回总览</button>
+        <button class="back-btn" on:click={() => dispatch("back")}>{tx("uiBackOverview", "返回总览")}</button>
         <div>
-            <h2>主题阅读</h2>
-            <p>手动创建主题，把不同书里的摘录和想法聚合到一起</p>
+            <h2>{tx("topicsTitle", "主题阅读")}</h2>
+            <p>{tx("topicsDesc", "手动创建主题，把不同书里的摘录和想法聚合到一起")}</p>
         </div>
     </div>
 
     <div class="topic-layout">
         <aside class="topic-sidebar">
             <div class="topic-form">
-                <input bind:value={newTopicName} placeholder="新主题名称" />
-                <textarea bind:value={newTopicDesc} placeholder="主题说明"></textarea>
-                <button on:click={createTopic}>创建主题</button>
+                <input bind:value={newTopicName} placeholder={tx("topicsNewName", "新主题名称")} />
+                <textarea bind:value={newTopicDesc} placeholder={tx("topicsDescription", "主题说明")}></textarea>
+                <button on:click={createTopic}>{tx("topicsCreate", "创建主题")}</button>
             </div>
 
             <div class="topic-list">
                 {#each topics as topic (topic.id)}
                     <button class:active={selectedTopicId === topic.id} on:click={() => (selectedTopicId = topic.id)}>
                         <span>{topic.name}</span>
-                        <small>{topicItems.filter((item) => item.topicId === topic.id).length} 条</small>
+                        <small>{tx("topicsItemCount", "{count} 条", { count: topicItems.filter((item) => item.topicId === topic.id).length })}</small>
                     </button>
                 {/each}
             </div>
@@ -134,23 +136,23 @@
                 <div class="topic-card">
                     <div>
                         <h3>{selectedTopic.name}</h3>
-                        <p>{selectedTopic.description || "暂无说明"}</p>
+                        <p>{selectedTopic.description || tx("topicsNoDescription", "暂无说明")}</p>
                     </div>
-                    <button on:click={() => copyTopic(selectedTopic)}>复制主题</button>
+                    <button on:click={() => copyTopic(selectedTopic)}>{tx("topicsCopy", "复制主题")}</button>
                 </div>
 
                 <div class="add-row">
                     <select bind:value={selectedInboxItemId}>
-                        <option value="">选择新增笔记</option>
+                        <option value="">{tx("topicsSelectNote", "选择新增笔记")}</option>
                         {#each inboxItems as item (item.id)}
                             <option value={item.id}>{item.title} - {item.content || item.reviewContent}</option>
                         {/each}
                     </select>
-                    <button on:click={addInboxItemToTopic}>加入主题</button>
+                    <button on:click={addInboxItemToTopic}>{tx("topicsAdd", "加入主题")}</button>
                 </div>
 
                 {#if selectedTopicItems.length === 0}
-                    <div class="empty">这个主题还没有摘录</div>
+                    <div class="empty">{tx("topicsEmpty", "这个主题还没有摘录")}</div>
                 {:else}
                     <div class="topic-items">
                         {#each selectedTopicItems as item (item.id)}
@@ -159,14 +161,14 @@
                                 {#if item.comment}<div class="comment">{item.comment}</div>{/if}
                                 <div class="meta">
                                     <span>{item.title}</span>
-                                    <button on:click={() => openTopicItem(item)}>打开原笔记</button>
+                                    <button on:click={() => openTopicItem(item)}>{tx("uiOpenOriginalNote", "打开原笔记")}</button>
                                 </div>
                             </article>
                         {/each}
                     </div>
                 {/if}
             {:else}
-                <div class="empty">请先创建主题</div>
+                <div class="empty">{tx("topicsCreateFirst", "请先创建主题")}</div>
             {/if}
         </main>
     </div>

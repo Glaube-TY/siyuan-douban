@@ -16,6 +16,7 @@
         type ReadingStatsDashboardView,
     } from "../../utils/readingCenter/readingStatsDashboardData";
     import ReadingStatsChart from "./ReadingStatsChart.svelte";
+    import { t } from "../../utils/i18n";
 
     export let plugin: any;
     export let refreshKey = 0;
@@ -23,6 +24,7 @@
     export let showBack = true;
 
     const dispatch = createEventDispatcher<{ back: void; action: WorkbenchAction }>();
+    const tx = (key: string, fallback: string, params: Record<string, string | number> = {}) => t(plugin, key, fallback, params);
     const periodModes: ReadingPeriodMode[] = ["weekly", "monthly", "annually", "overall"];
     const categoryPeriodModes: ReadingPeriodMode[] = ["annually", "overall"];
     const longestBooksPeriodModes: ReadingPeriodMode[] = ["monthly", "annually", "overall"];
@@ -76,7 +78,7 @@
             hasApiKey = !!auth?.apiKey;
         } catch (error: any) {
             console.error("[ReadingStatsCenter] load failed:", error);
-            errorText = error?.message || "加载数据中心失败";
+            errorText = error?.message || tx("statsLoadFailed", "加载数据中心失败");
             view = null;
         } finally {
             loading = false;
@@ -105,16 +107,16 @@
             const auth = await loadWereadAuthState(plugin);
             hasApiKey = !!auth.apiKey;
             if (!auth.apiKey) {
-                showMessage("未配置 API Key，请先完成微信读书授权设置");
+                showMessage(tx("statsApiKeyRequired", "未配置 API Key，请先完成微信读书授权设置"));
                 return;
             }
             const stats = await buildWereadApiReadingStats(auth.apiKey);
             await plugin.saveData("weread_reading_stats_cache", stats);
-            showMessage("阅读统计已刷新");
+            showMessage(tx("statsRefreshed", "阅读统计已刷新"));
             await loadDashboard();
         } catch (error: any) {
             console.error("[ReadingStatsCenter] refresh failed:", error);
-            showMessage(`刷新阅读统计失败：${error?.message || "未知错误"}`);
+            showMessage(tx("statsRefreshFailed", "刷新阅读统计失败：{error}", { error: error?.message || tx("uiUnknownError", "未知错误") }));
         } finally {
             refreshing = false;
         }
@@ -125,9 +127,9 @@
     }
 
     function formatLoadedAt(ms?: number): string {
-        if (!ms) return "尚未生成";
+        if (!ms) return tx("statsNotGenerated", "尚未生成");
         const date = new Date(ms);
-        return date.toLocaleString("zh-CN", {
+        return date.toLocaleString([], {
             year: "numeric",
             month: "2-digit",
             day: "2-digit",
@@ -137,8 +139,8 @@
     }
 
     function formatSyncTime(ms?: number): string {
-        if (!ms) return "暂无同步报告";
-        return new Date(ms).toLocaleString("zh-CN", {
+        if (!ms) return tx("statsNoSyncReport", "暂无同步报告");
+        return new Date(ms).toLocaleString([], {
             month: "2-digit",
             day: "2-digit",
             hour: "2-digit",
@@ -147,8 +149,8 @@
     }
 
     function shortBookMeta(book: { author: string; category?: string; isAudio?: boolean }): string {
-        const parts = [book.author, book.category || (book.isAudio ? "听书" : "")].filter(Boolean);
-        return parts.join(" · ") || (book.isAudio ? "听书" : "未知作者");
+        const parts = [book.author, book.category || (book.isAudio ? tx("statsAudioBook", "听书") : "")].filter(Boolean);
+        return parts.join(" · ") || (book.isAudio ? tx("statsAudioBook", "听书") : tx("bookUnknownAuthor", "未知作者"));
     }
 
     function formatAxisDuration(seconds: number): string {
@@ -168,7 +170,7 @@
     $: longestBooksPeriod = view?.periods?.[longestBooksMode] || null;
     $: periodTrendOption = buildPeriodTrendOption(readingOverviewPeriod);
     $: radarOption = buildRadarOption(categoryPeriod?.categoryRadar || []);
-    $: calendarDays = view ? buildMonthCalendarDays(view.dailyReadTimes, activeCalendarMonth || view.currentMonth) : [];
+    $: calendarDays = view ? buildMonthCalendarDays(view.dailyReadTimes, activeCalendarMonth || view.currentMonth, plugin) : [];
     $: calendarMonthKey = activeCalendarMonth || view?.currentMonth || "";
     $: calendarWeekCount = Math.max(...calendarDays.map((item) => item.weekIndex), 0) + 1;
     $: calendarMaxSeconds = Math.max(
@@ -201,7 +203,7 @@
                 trigger: "axis",
                 formatter: (params: any) => {
                     const item = Array.isArray(params) ? params[0] : params;
-                    return `${item?.name || ""}<br/>阅读时长：${formatReadingDuration(item?.value || 0)}`;
+                    return `${item?.name || ""}<br/>${tx("digestReadingDuration", "阅读时长：")}${formatReadingDuration(item?.value || 0, plugin)}`;
                 },
             },
             grid: baseGrid(),
@@ -230,7 +232,7 @@
                 formatter: (params: any) => {
                     const item = Array.isArray(params) ? params[0] : params;
                     const row = rows[item?.dataIndex || 0];
-                    return `${row?.label || item?.name || ""}<br/>阅读时长：${row?.duration || formatReadingDuration(item?.value || 0)}`;
+                    return `${row?.label || item?.name || ""}<br/>${tx("digestReadingDuration", "阅读时长：")}${row?.duration || formatReadingDuration(item?.value || 0, plugin)}`;
                 },
             },
             grid: baseGrid(),
@@ -265,7 +267,7 @@
                 trigger: "axis",
                 formatter: (params: any) => {
                     const item = Array.isArray(params) ? params[0] : params;
-                    return `${item?.name || ""}<br/>阅读时长：${formatReadingDuration(item?.value || 0)}`;
+                    return `${item?.name || ""}<br/>${tx("digestReadingDuration", "阅读时长：")}${formatReadingDuration(item?.value || 0, plugin)}`;
                 },
             },
             grid: baseGrid(),
@@ -293,7 +295,7 @@
                 trigger: "axis",
                 formatter: (params: any) => {
                     const item = Array.isArray(params) ? params[0] : params;
-                    return `${item?.name || ""}<br/>阅读时长：${formatReadingDuration(item?.value || 0)}`;
+                    return `${item?.name || ""}<br/>${tx("digestReadingDuration", "阅读时长：")}${formatReadingDuration(item?.value || 0, plugin)}`;
                 },
             },
             grid: baseGrid(),
@@ -314,14 +316,14 @@
             },
             series: [
                 {
-                    name: "日阅读",
+                    name: tx("statsDailyReading", "日阅读"),
                     type: "bar",
                     data: rows.map((item) => item.seconds),
                     barMaxWidth: 10,
                     itemStyle: { borderRadius: [4, 4, 0, 0] },
                 },
                 {
-                    name: "节奏",
+                    name: tx("statsRhythm", "节奏"),
                     type: "line",
                     data: rows.map((item) => item.seconds),
                     smooth: true,
@@ -347,7 +349,7 @@
             },
             series: [{
                 type: "radar",
-                data: [{ value: rows.map((item) => item.value), name: "偏好强度" }],
+                data: [{ value: rows.map((item) => item.value), name: tx("statsPreferenceStrength", "偏好强度") }],
                 areaStyle: { opacity: 0.16 },
             }],
         };
@@ -364,8 +366,8 @@
 
     function formatCalendarMonth(monthKey: string): string {
         const matched = String(monthKey || "").match(/^(\d{4})-(\d{2})$/);
-        if (!matched) return "本月";
-        return `${matched[1]}年${Number(matched[2])}月`;
+        if (!matched) return tx("statsThisMonth", "本月");
+        return new Date(Number(matched[1]), Number(matched[2]) - 1, 1).toLocaleDateString(undefined, { year: "numeric", month: "long" });
     }
 
     function currentMonthKey(): string {
@@ -398,17 +400,17 @@
 <div class="reading-stats-center" class:embedded>
     <header class="reading-stats-header">
         {#if showBack}
-            <button class="reading-stats-back" type="button" on:click={() => dispatch("back")}>返回</button>
+            <button class="reading-stats-back" type="button" on:click={() => dispatch("back")}>{tx("uiBack", "返回")}</button>
         {/if}
         <div class="reading-stats-title-area">
-            <h1>微信读书数据中心</h1>
-            <p>从本地缓存汇总阅读统计、笔记资产和最近同步覆盖情况</p>
-            <span>更新时间：{formatLoadedAt(view?.loadedAt)}</span>
+            <h1>{tx("statsCenterTitle", "微信读书数据中心")}</h1>
+            <p>{tx("statsCenterDesc", "从本地缓存汇总阅读统计、笔记资产和最近同步覆盖情况")}</p>
+            <span>{tx("statsUpdatedAt", "更新时间：")}{formatLoadedAt(view?.loadedAt)}</span>
         </div>
         <div class="reading-stats-actions">
-            <button class="reading-stats-secondary" type="button" on:click={() => emitAction("open-weread-auth")}>授权设置</button>
+            <button class="reading-stats-secondary" type="button" on:click={() => emitAction("open-weread-auth")}>{tx("statsAuthSettings", "授权设置")}</button>
             <button class="reading-stats-primary" type="button" disabled={refreshing} on:click={refreshReadingStats}>
-                {refreshing ? "刷新中..." : "刷新阅读统计"}
+                {refreshing ? tx("statsRefreshing", "刷新中...") : tx("statsRefresh", "刷新阅读统计")}
             </button>
         </div>
     </header>
@@ -416,49 +418,49 @@
     {#if loading}
         <div class="reading-stats-loading">
             <div class="reading-stats-spinner"></div>
-            <span>加载数据中心...</span>
+            <span>{tx("statsLoading", "加载数据中心...")}</span>
         </div>
     {:else if errorText}
         <div class="reading-stats-empty">
-            <strong>数据中心加载失败</strong>
+            <strong>{tx("statsLoadFailed", "数据中心加载失败")}</strong>
             <span>{errorText}</span>
-            <button type="button" on:click={loadDashboard}>重新加载</button>
+            <button type="button" on:click={loadDashboard}>{tx("statsReload", "重新加载")}</button>
         </div>
     {:else if !view?.hasStats}
         <div class="reading-stats-empty">
-            <strong>暂无阅读统计缓存</strong>
-            <span>{hasApiKey ? "点击刷新阅读统计后，将只更新阅读统计缓存，不会触发笔记同步。" : "当前未配置 API Key，请先进入授权设置后再刷新阅读统计。"}</span>
+            <strong>{tx("statsNoCache", "暂无阅读统计缓存")}</strong>
+            <span>{hasApiKey ? tx("statsNoCacheWithKey", "点击刷新阅读统计后，将只更新阅读统计缓存，不会触发笔记同步。") : tx("statsNoCacheWithoutKey", "当前未配置 API Key，请先进入授权设置后再刷新阅读统计。")}</span>
             <div class="reading-stats-empty-actions">
-                <button type="button" on:click={refreshReadingStats} disabled={refreshing}>{refreshing ? "刷新中..." : "刷新阅读统计"}</button>
-                <button type="button" on:click={() => emitAction("open-weread-auth")}>授权设置</button>
+                <button type="button" on:click={refreshReadingStats} disabled={refreshing}>{refreshing ? tx("statsRefreshing", "刷新中...") : tx("statsRefresh", "刷新阅读统计")}</button>
+                <button type="button" on:click={() => emitAction("open-weread-auth")}>{tx("statsAuthSettings", "授权设置")}</button>
             </div>
         </div>
     {:else if view && metrics}
-        <section class="reading-stats-metrics" aria-label="阅读指标">
+        <section class="reading-stats-metrics" aria-label={tx("statsMetrics", "阅读指标")}>
             <div class="metric-card">
-                <span>笔记数</span>
+                <span>{tx("statsNoteCount", "笔记数")}</span>
                 <strong>{metrics.noteCount}</strong>
-                <em>本地缓存</em>
+                <em>{tx("statsLocalCache", "本地缓存")}</em>
             </div>
             <div class="metric-card">
-                <span>书架数量</span>
+                <span>{tx("statsShelfCount", "书架数量")}</span>
                 <strong>{metrics.shelfTotal}</strong>
-                <em>{metrics.normalBooks} 本书 / {metrics.mpAccounts} 公众号</em>
+                <em>{tx("statsShelfSummary", "{books} 本书 / {accounts} 公众号", { books: metrics.normalBooks, accounts: metrics.mpAccounts })}</em>
             </div>
             <button class="metric-card" type="button" on:click={() => emitAction("open-inbox")}>
-                <span>未处理新增</span>
+                <span>{tx("statsPendingNew", "未处理新增")}</span>
                 <strong>{metrics.pendingInbox}</strong>
-                <em>查看待处理</em>
+                <em>{tx("statsViewPending", "查看待处理")}</em>
             </button>
         </section>
 
-        <section class="stats-panel stats-panel-full reading-overview-panel" aria-label="阅读概况">
+        <section class="stats-panel stats-panel-full reading-overview-panel" aria-label={tx("statsOverview", "阅读概况")}>
             <div class="stats-panel-head">
                 <div>
-                    <h2>阅读概况</h2>
-                    <span>{readingOverviewPeriod?.label || "当前"}统计、分布与近期记录</span>
+                    <h2>{tx("statsOverview", "阅读概况")}</h2>
+                    <span>{tx("statsOverviewDesc", "{period}统计、分布与近期记录", { period: readingOverviewPeriod?.label || tx("statsCurrent", "当前") })}</span>
                 </div>
-                <div class="period-switch" aria-label="阅读概况口径">
+                <div class="period-switch" aria-label={tx("statsOverviewPeriod", "阅读概况口径")}>
                     {#each periodModes as mode}
                         <button
                             type="button"
@@ -472,19 +474,19 @@
             {#if readingOverviewPeriod}
                 <div class="period-overview-grid">
                     <div>
-                        <span>总阅读时长</span>
+                        <span>{tx("statsTotalReading", "总阅读时长")}</span>
                         <strong>{readingOverviewPeriod.totalReadTimeText}</strong>
                     </div>
                     <div>
-                        <span>阅读天数</span>
-                        <strong>{readingOverviewPeriod.readDays} 天</strong>
+                        <span>{tx("statsReadingDays", "阅读天数")}</span>
+                        <strong>{tx("statsDays", "{count} 天", { count: readingOverviewPeriod.readDays })}</strong>
                     </div>
                     <div>
-                        <span>日均阅读</span>
+                        <span>{tx("statsDailyAverage", "日均阅读")}</span>
                         <strong>{readingOverviewPeriod.dayAverageReadTimeText}</strong>
                     </div>
                     <div>
-                        <span>今日阅读</span>
+                        <span>{tx("statsTodayReading", "今日阅读")}</span>
                         <strong>{metrics.todayReadTimeText}</strong>
                     </div>
                 </div>
@@ -493,7 +495,7 @@
                 {/if}
                 <div class="overview-detail-grid">
                     <div>
-                        <div class="sub-panel-title">阅读分布</div>
+                        <div class="sub-panel-title">{tx("statsDistribution", "阅读分布")}</div>
                         {#if readingOverviewPeriod.readDistribution.length}
                             <div class="period-list">
                                 {#each readingOverviewPeriod.readDistribution as item}
@@ -504,11 +506,11 @@
                                 {/each}
                             </div>
                         {:else}
-                            <div class="panel-empty panel-empty-compact">暂无阅读分布</div>
+                            <div class="panel-empty panel-empty-compact">{tx("statsNoDistribution", "暂无阅读分布")}</div>
                         {/if}
                     </div>
                     <div>
-                        <div class="sub-panel-title">近期阅读记录</div>
+                        <div class="sub-panel-title">{tx("statsRecentRecords", "近期阅读记录")}</div>
                         {#if readingOverviewPeriod.recentReadTimes.length}
                             <div class="period-list">
                                 {#each readingOverviewPeriod.recentReadTimes as item}
@@ -519,66 +521,62 @@
                                 {/each}
                             </div>
                         {:else}
-                            <div class="panel-empty panel-empty-compact">暂无近期阅读记录</div>
+                            <div class="panel-empty panel-empty-compact">{tx("statsNoRecentRecords", "暂无近期阅读记录")}</div>
                         {/if}
                     </div>
                 </div>
             {:else}
-                <div class="panel-empty">当前概况口径暂无数据</div>
+                <div class="panel-empty">{tx("statsNoOverviewData", "当前概况口径暂无数据")}</div>
             {/if}
         </section>
 
         <main class="reading-stats-grid">
             <section class="stats-panel stats-panel-wide">
                 <div class="stats-panel-head">
-                    <h2>{readingOverviewPeriod?.label || "当前"}趋势</h2>
-                    <span>跟随阅读概况口径</span>
+                    <h2>{tx("statsPeriodTrend", "{period}趋势", { period: readingOverviewPeriod?.label || tx("statsCurrent", "当前") })}</h2>
+                    <span>{tx("statsFollowOverview", "跟随阅读概况口径")}</span>
                 </div>
                 {#if periodTrendOption}
-                    <ReadingStatsChart option={periodTrendOption} height={220} />
+                    <ReadingStatsChart {plugin} option={periodTrendOption} height={220} />
                 {:else}
-                    <div class="panel-empty">暂无阅读明细趋势数据</div>
+                    <div class="panel-empty">{tx("statsNoDetailTrend", "暂无阅读明细趋势数据")}</div>
                 {/if}
             </section>
 
             <section class="stats-panel stats-panel-wide">
                 <div class="stats-panel-head">
-                    <h2>年度阅读趋势</h2>
-                    <span>按年份汇总总阅读时长</span>
+                    <h2>{tx("statsYearlyTrend", "年度阅读趋势")}</h2>
+                    <span>{tx("statsYearlyTrendDesc", "按年份汇总总阅读时长")}</span>
                 </div>
                 {#if yearlyTrendOption}
-                    <ReadingStatsChart option={yearlyTrendOption} height={220} />
+                    <ReadingStatsChart {plugin} option={yearlyTrendOption} height={220} />
                 {:else}
-                    <div class="panel-empty">暂无年度趋势数据</div>
+                    <div class="panel-empty">{tx("statsNoYearlyTrend", "暂无年度趋势数据")}</div>
                 {/if}
             </section>
 
             <section class="stats-panel">
                 <div class="stats-panel-head">
-                    <h2>月度阅读热力</h2>
-                    <span>阅读热力日历</span>
+                    <h2>{tx("statsMonthlyHeat", "月度阅读热力")}</h2>
+                    <span>{tx("statsHeatCalendar", "阅读热力日历")}</span>
                 </div>
                 {#if calendarDays.length > 0}
-                    <div class="reading-calendar-heatmap" aria-label="月度阅读热力图">
+                    <div class="reading-calendar-heatmap" aria-label={tx("statsMonthlyHeatmap", "月度阅读热力图")}>
                         <div class="calendar-heatmap-toolbar">
-                            <button type="button" aria-label="上个月" on:click={() => shiftCalendarMonth(-1)}>‹</button>
+                            <button type="button" aria-label={tx("statsPreviousMonth", "上个月")} on:click={() => shiftCalendarMonth(-1)}>‹</button>
                             <strong>{formatCalendarMonth(calendarMonthKey)}</strong>
                             <button
                                 type="button"
-                                aria-label="下个月"
+                                aria-label={tx("statsNextMonth", "下个月")}
                                 disabled={isCurrentOrFutureMonth(calendarMonthKey)}
                                 on:click={() => shiftCalendarMonth(1)}
                             >›</button>
                         </div>
 
                         <div class="calendar-heatmap-weekdays" aria-hidden="true">
-                            <span>日</span>
-                            <span>一</span>
-                            <span>二</span>
-                            <span>三</span>
-                            <span>四</span>
-                            <span>五</span>
-                            <span>六</span>
+                            {#each [0, 1, 2, 3, 4, 5, 6] as weekday}
+                                <span>{new Intl.DateTimeFormat(undefined, { weekday: "short" }).format(new Date(2024, 0, 7 + weekday))}</span>
+                            {/each}
                         </div>
 
                         <div class="calendar-heatmap-grid" style={`--calendar-weeks: ${calendarWeekCount};`}>
@@ -590,8 +588,8 @@
                                     class:today={item.isToday}
                                     class:selected={selectedCalendarDate === item.date}
                                     style={`grid-column: ${item.weekday + 1}; grid-row: ${item.weekIndex + 1};`}
-                                    title={`${item.date}：阅读 ${item.label}`}
-                                    aria-label={`${item.date}：阅读 ${item.label}`}
+                                    title={tx("statsCalendarReading", "{date}：阅读 {duration}", { date: item.date, duration: item.label })}
+                                    aria-label={tx("statsCalendarReading", "{date}：阅读 {duration}", { date: item.date, duration: item.label })}
                                     on:click={() => selectCalendarDay(item)}
                                 >
                                     <span>{item.day}</span>
@@ -603,54 +601,54 @@
                             <div class="calendar-heatmap-summary">
                                 {#if selectedCalendarDay}
                                     <strong>{selectedCalendarDay.date}</strong>
-                                    <span>阅读 {selectedCalendarDay.label}</span>
+                                    <span>{tx("statsReadingDurationValue", "阅读 {duration}", { duration: selectedCalendarDay.label })}</span>
                                 {:else}
-                                    <strong>本月累计 {formatReadingDuration(calendarMonthTotalSeconds)}</strong>
-                                    <span>阅读 {calendarMonthActiveDays} 天</span>
+                                    <strong>{tx("statsMonthTotal", "本月累计 {duration}", { duration: formatReadingDuration(calendarMonthTotalSeconds, plugin) })}</strong>
+                                    <span>{tx("statsDays", "{count} 天", { count: calendarMonthActiveDays })}</span>
                                 {/if}
                             </div>
                             <div class="calendar-heatmap-legend" aria-hidden="true">
-                                <span>低</span>
+                                <span>{tx("statsLow", "低")}</span>
                                 {#each [0, 1, 2, 3, 4] as level}
                                     <i class={`calendar-heatmap-swatch heat-level-${level}`}></i>
                                 {/each}
-                                <span>高</span>
+                                <span>{tx("statsHigh", "高")}</span>
                             </div>
                         </div>
                     </div>
                 {:else}
-                    <div class="panel-empty">暂无月度阅读记录</div>
+                    <div class="panel-empty">{tx("statsNoMonthlyRecords", "暂无月度阅读记录")}</div>
                 {/if}
             </section>
 
             <section class="stats-panel">
                 <div class="stats-panel-head">
-                    <h2>年度月份</h2>
-                    <span>1-12 月阅读时长</span>
+                    <h2>{tx("statsAnnualMonths", "年度月份")}</h2>
+                    <span>{tx("statsAnnualMonthsDesc", "1-12 月阅读时长")}</span>
                 </div>
                 {#if monthlyTrendOption}
-                    <ReadingStatsChart option={monthlyTrendOption} height={230} />
+                    <ReadingStatsChart {plugin} option={monthlyTrendOption} height={230} />
                 {:else}
-                    <div class="panel-empty">暂无年度月份数据</div>
+                    <div class="panel-empty">{tx("statsNoAnnualMonths", "暂无年度月份数据")}</div>
                 {/if}
             </section>
 
             <section class="stats-panel">
                 <div class="stats-panel-head">
-                    <h2>阅读节奏</h2>
-                    <span>最近阅读的日变化</span>
+                    <h2>{tx("statsRhythm", "阅读节奏")}</h2>
+                    <span>{tx("statsRhythmDesc", "最近阅读的日变化")}</span>
                 </div>
                 {#if rhythmOption}
-                    <ReadingStatsChart option={rhythmOption} height={230} />
+                    <ReadingStatsChart {plugin} option={rhythmOption} height={230} />
                 {:else}
-                    <div class="panel-empty">暂无节奏数据</div>
+                    <div class="panel-empty">{tx("statsNoRhythm", "暂无节奏数据")}</div>
                 {/if}
             </section>
 
             <section class="stats-panel">
                 <div class="stats-panel-head">
-                    <h2>分类雷达</h2>
-                    <div class="period-switch" aria-label="分类雷达范围">
+                    <h2>{tx("statsCategoryRadar", "分类雷达")}</h2>
+                    <div class="period-switch" aria-label={tx("statsCategoryRadarRange", "分类雷达范围")}>
                         {#each categoryPeriodModes as mode}
                             <button
                                 type="button"
@@ -662,16 +660,16 @@
                     </div>
                 </div>
                 {#if radarOption}
-                    <ReadingStatsChart option={radarOption} height={250} />
+                    <ReadingStatsChart {plugin} option={radarOption} height={250} />
                 {:else}
-                    <div class="panel-empty">暂无分类雷达数据</div>
+                    <div class="panel-empty">{tx("statsNoCategoryRadar", "暂无分类雷达数据")}</div>
                 {/if}
             </section>
 
             <section class="stats-panel stats-panel-books">
                 <div class="stats-panel-head">
-                    <h2>阅读时间较长的书</h2>
-                    <div class="period-switch" aria-label="阅读时间较长的书口径">
+                    <h2>{tx("statsLongestBooks", "阅读时间较长的书")}</h2>
+                    <div class="period-switch" aria-label={tx("statsLongestBooksRange", "阅读时间较长的书口径")}>
                         {#each longestBooksPeriodModes as mode}
                             <button
                                 type="button"
@@ -689,7 +687,7 @@
                                 {#if book.cover}
                                     <img src={secureExternalImageUrl(book.cover)} alt="" />
                                 {:else}
-                                    <div class="book-cover-placeholder" aria-hidden="true">书</div>
+                                    <div class="book-cover-placeholder" aria-hidden="true">{tx("uiBook", "书")}</div>
                                 {/if}
                                 <div>
                                     <strong>{book.title}</strong>
@@ -703,45 +701,45 @@
                         {/each}
                     </div>
                 {:else}
-                    <div class="panel-empty">暂无书籍阅读时长数据</div>
+                    <div class="panel-empty">{tx("statsNoLongestBooks", "暂无书籍阅读时长数据")}</div>
                 {/if}
             </section>
 
             <section class="stats-panel stats-panel-coverage">
                 <div class="stats-panel-head">
-                    <h2>同步覆盖</h2>
-                    <span>最近同步与本地索引</span>
+                    <h2>{tx("statsSyncCoverage", "同步覆盖")}</h2>
+                    <span>{tx("statsSyncCoverageDesc", "最近同步与本地索引")}</span>
                 </div>
                 <div class="coverage-grid">
                     <button type="button" on:click={() => emitAction("open-sync-changes")}>
-                        <span>最近同步</span>
+                        <span>{tx("statsLatestSync", "最近同步")}</span>
                         <strong>{formatSyncTime(view.syncCoverage.latestSyncTime)}</strong>
-                        <em>成功 {view.syncCoverage.successCount} / 失败 {view.syncCoverage.failedCount} / 跳过 {view.syncCoverage.skippedCount}</em>
+                        <em>{tx("workbenchSyncSummary", "成功 {success} / 失败 {failed} / 跳过 {skipped}", { success: view.syncCoverage.successCount, failed: view.syncCoverage.failedCount, skipped: view.syncCoverage.skippedCount })}</em>
                     </button>
                     <div>
-                        <span>块级新增</span>
+                        <span>{tx("statsBlockAdded", "块级新增")}</span>
                         <strong>{view.syncCoverage.latestAdded}</strong>
-                        <em>最近报告</em>
+                        <em>{tx("statsLatestReport", "最近报告")}</em>
                     </div>
                     <div>
-                        <span>块级更新</span>
+                        <span>{tx("statsBlockUpdated", "块级更新")}</span>
                         <strong>{view.syncCoverage.latestChanged}</strong>
-                        <em>最近报告</em>
+                        <em>{tx("statsLatestReport", "最近报告")}</em>
                     </div>
                     <div>
-                        <span>块级删除</span>
+                        <span>{tx("statsBlockDeleted", "块级删除")}</span>
                         <strong>{view.syncCoverage.latestDeleted}</strong>
-                        <em>最近报告</em>
+                        <em>{tx("statsLatestReport", "最近报告")}</em>
                     </div>
                     <button type="button" on:click={() => emitAction("open-maintenance")}>
-                        <span>索引覆盖</span>
+                        <span>{tx("statsIndexCoverage", "索引覆盖")}</span>
                         <strong>{metrics.indexedSources}</strong>
-                        <em>{metrics.indexedItems} 个同步单元</em>
+                        <em>{tx("statsIndexedUnits", "{count} 个同步单元", { count: metrics.indexedItems })}</em>
                     </button>
                     <button type="button" on:click={() => emitAction("open-unbound-books")}>
-                        <span>需要处理</span>
+                        <span>{tx("statsNeedsAction", "需要处理")}</span>
                         <strong>{metrics.actionableIssues}</strong>
-                        <em>查看问题</em>
+                        <em>{tx("statsViewIssues", "查看问题")}</em>
                     </button>
                 </div>
             </section>

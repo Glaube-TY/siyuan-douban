@@ -3,6 +3,7 @@ import { attachWereadApiLocalNoteDocs } from "../weread/api/findWereadApiBookTar
 import { createNotebooksDialog, createWereadReadingStatsDialog } from "../weread/wereadDialogs";
 import { countNotebookNotes, safeLoadNotebookCache, safeLoadReadingStatsCache } from "../readingCenter/readingCenterData";
 import type { WorkbenchSearchResult } from "../../types/workbench";
+import { t } from "../i18n";
 
 type PluginLike = {
     loadData: (key: string) => Promise<any>;
@@ -10,17 +11,17 @@ type PluginLike = {
     i18n: any;
 };
 
-function toResult(book: any): WorkbenchSearchResult {
+function toResult(book: any, plugin: PluginLike): WorkbenchSearchResult {
     return {
         id: book.bookID || book.title || book.name,
         source: "weread",
-        title: book.title || book.name || "未命名微信读书书籍",
+        title: book.title || book.name || t(plugin, "wereadUnnamedBook", "未命名微信读书书籍"),
         author: book.author,
         isbn: book.isbn || book.ISBN,
         cover: book.cover,
         bookID: book.bookID,
         noteDocId: book.localDocBlockID,
-        description: `${book.totalNoteCount ?? book.noteCount ?? 0} 条笔记`,
+        description: t(plugin, "wereadNoteCount", "{count} 条笔记", { count: book.totalNoteCount ?? book.noteCount ?? 0 }),
         raw: book,
     };
 }
@@ -61,13 +62,13 @@ export async function searchWereadCachedBooks(plugin: PluginLike, query: string)
                 .toLowerCase();
             return haystack.includes(keyword);
         });
-    return matched.slice(0, 20).map(toResult);
+    return matched.slice(0, 20).map((book) => toResult(book, plugin));
 }
 
 export async function openWereadCachedNotebooks(plugin: PluginLike): Promise<number> {
     const books = await loadWereadCachedBooks(plugin);
     if (books.length === 0) {
-        showMessage("暂无微信读书有笔记书籍缓存，请先进入同步面板获取缓存");
+        showMessage(t(plugin, "wereadNoNotebookCache", "暂无微信读书有笔记书籍缓存，请先进入同步面板获取缓存"));
         return 0;
     }
 
@@ -83,7 +84,7 @@ export async function openWereadCachedNotebooks(plugin: PluginLike): Promise<num
 export async function openCachedReadingStats(plugin: PluginLike): Promise<boolean> {
     const stats = await safeLoadReadingStatsCache(plugin);
     if (!stats) {
-        showMessage("暂无阅读统计缓存，请先进入同步面板更新统计");
+        showMessage(t(plugin, "wereadNoStatsCache", "暂无阅读统计缓存，请先进入同步面板更新统计"));
         return false;
     }
     createWereadReadingStatsDialog(plugin, stats)();

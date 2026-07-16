@@ -7,6 +7,7 @@
     import { addEditedDoubanBookToDatabase, loadDoubanBookDetail, loadDoubanBookPreferences, searchDoubanBook } from "../../utils/bookSearch/doubanSearchService";
     import { getImage } from "../../utils/core/getImg";
     import { svelteDialog } from "../../libs/dialog";
+    import { t } from "../../utils/i18n";
 
     export let plugin: any;
     export let mobile = false;
@@ -17,7 +18,9 @@
     let searchInput: HTMLInputElement;
     let results: WorkbenchSearchResult[] = [];
     let selectedResult: WorkbenchSearchResult | null = null;
-    let statusText = "搜索豆瓣书名、ISBN 或作者后导入本地数据库";
+    const tx = (key: string, fallback: string, params: Record<string, string | number> = {}) =>
+        t(plugin, key, fallback, params);
+    let statusText = tx("searchIntro", "搜索豆瓣书名、ISBN 或作者后导入本地数据库");
     let isSearching = false;
     let isDoubanDetailOpen = false;
     let previewCovers: Record<string, string> = {};
@@ -37,7 +40,9 @@
         selectedResult = null;
         try {
             results = await searchDoubanBook(plugin, query);
-            statusText = results.length ? `找到 ${results.length} 条结果` : "暂无匹配结果";
+            statusText = results.length
+                ? tx("searchFound", "找到 {count} 条结果", { count: results.length })
+                : tx("searchNoResult", "暂无匹配结果");
             previewCovers = {};
             void loadResultCoverPreviews(results);
             if (results.length === 1 && (results[0].raw as any)?.detailLoaded) {
@@ -45,7 +50,7 @@
             }
         } catch (error: any) {
             results = [];
-            statusText = error?.message || "搜索失败";
+            statusText = error?.message || tx("searchFailed", "搜索失败");
             showMessage(statusText);
         } finally {
             isSearching = false;
@@ -56,7 +61,7 @@
         if (!result || !result.raw) return;
         selectedResult = result;
         isDoubanDetailOpen = true;
-        statusText = "正在加载豆瓣书籍详情...";
+        statusText = tx("searchLoadingDetail", "正在加载豆瓣书籍详情...");
 
         try {
             result = await loadDoubanBookDetail(result);
@@ -67,10 +72,10 @@
                 addNotes: bookRaw.addNotes ?? true,
             };
 
-            statusText = "已打开豆瓣图书详情，请确认修改后添加";
+            statusText = tx("searchDetailOpened", "已打开豆瓣图书详情，请确认修改后添加");
 
             const dialogRef = svelteDialog({
-                title: `确认添加：${bookInfo.title || "豆瓣图书"}`,
+                title: tx("searchConfirmTitle", "确认添加：{title}", { title: bookInfo.title || tx("searchDoubanBook", "豆瓣图书") }),
                 width: mobile ? "100vw" : "min(780px, 94vw)",
                 height: mobile ? "100dvh" : "min(780px, 88vh)",
                 constructor: (container: HTMLElement) =>
@@ -81,6 +86,7 @@
                             customRatings: preferences.ratings,
                             customCategories: preferences.categories,
                             customReadingStatuses: preferences.statuses,
+                            i18n: plugin.i18n,
                             mobile,
                             close: () => dialogRef.close(),
                         },
@@ -99,22 +105,24 @@
                 const editedBookInfo = event.detail;
                 try {
                     const saveResult = await addEditedDoubanBookToDatabase(plugin, editedBookInfo);
-                    showMessage(saveResult?.msg || (saveResult?.code === 0 ? "书籍添加成功" : "书籍添加失败"));
+                    showMessage(saveResult?.msg || (saveResult?.code === 0
+                        ? tx("searchAddSuccess", "书籍添加成功")
+                        : tx("searchAddFailed", "书籍添加失败")));
                     if (saveResult?.code === 0) {
                         results = [];
                         selectedResult = null;
                         isDoubanDetailOpen = false;
-                        statusText = "书籍添加成功";
+                        statusText = tx("searchAddSuccess", "书籍添加成功");
                         dispatch("refresh");
                         dialogRef.close();
                     }
                 } catch (e) {
-                    showMessage(`添加失败：${e?.message || "未知错误"}`);
+                    showMessage(tx("searchAddFailedDetail", "添加失败：{error}", { error: e?.message || tx("uiUnknownError", "未知错误") }));
                 }
             });
         } catch (error: any) {
             isDoubanDetailOpen = false;
-            statusText = error?.message || "详情加载失败";
+            statusText = error?.message || tx("searchDetailFailed", "详情加载失败");
             showMessage(statusText);
         }
     }
@@ -130,8 +138,8 @@
 <section class="workbench-search" class:workbench-search-mobile={mobile}>
     <div class="workbench-search-head">
         <div>
-            <h2>豆瓣读书书籍搜索导入</h2>
-            <p>从豆瓣读书搜索书籍，确认详情后导入本地阅读数据库。</p>
+            <h2>{tx("searchPanelTitle", "豆瓣读书书籍搜索导入")}</h2>
+            <p>{tx("searchPanelDesc", "从豆瓣读书搜索书籍，确认详情后导入本地阅读数据库。")}</p>
         </div>
     </div>
 
@@ -153,7 +161,7 @@
                 class="b3-text-field"
                 bind:this={searchInput}
                 bind:value={query}
-                placeholder="搜索书名、ISBN 或作者"
+                placeholder={tx("searchInputPlaceholder", "搜索书名、ISBN 或作者")}
                 on:keydown={(event) => event.key === "Enter" && runSearch()}
                 on:click|stopPropagation
                 on:mousedown|stopPropagation
@@ -161,7 +169,7 @@
         </div>
         <button class="workbench-button workbench-button-primary" on:click={runSearch} disabled={isSearching}>
             <SiYuanIcon name="search" size={15} />
-            <span>{isSearching ? "搜索中" : "搜索"}</span>
+            <span>{isSearching ? tx("searchSearching", "搜索中") : t(plugin, "searchButton", "搜索")}</span>
         </button>
     </div>
 
@@ -184,9 +192,9 @@
                     {/if}
                     <span class="workbench-search-result-main">
                         <strong>{result.title}</strong>
-                        <em>{result.author || result.isbn || result.description || "暂无摘要"}</em>
+                        <em>{result.author || result.isbn || result.description || tx("searchNoSummary", "暂无摘要")}</em>
                     </span>
-                    <span class="workbench-search-result-source">豆瓣图书</span>
+                    <span class="workbench-search-result-source">{tx("searchDoubanBook", "豆瓣图书")}</span>
                 </button>
             {/each}
         </div>

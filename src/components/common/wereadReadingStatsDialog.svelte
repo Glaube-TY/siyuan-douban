@@ -42,9 +42,7 @@
 
     function formatLoadedAt(ms: number): string {
         const d = new Date(ms);
-        const h = String(d.getHours()).padStart(2, "0");
-        const m = String(d.getMinutes()).padStart(2, "0");
-        return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日 ${h}:${m}`;
+        return d.toLocaleString();
     }
 
     function formatReadTimeLabel(mode: ReadingPeriodMode, timestampKey: string): string {
@@ -55,29 +53,29 @@
         const d = new Date(ms);
 
         if (mode === "annually") {
-            return `${d.getMonth() + 1}月`;
+            return d.toLocaleDateString(undefined, { month: "short" });
         }
 
         if (mode === "overall") {
-            return `${d.getFullYear()}年`;
+            return d.toLocaleDateString(undefined, { year: "numeric" });
         }
 
-        return `${d.getMonth() + 1}月${d.getDate()}日`;
+        return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
     }
 
     function formatBookMeta(author: string, category: string, isAudio?: boolean): string {
         const a = author || (isAudio ? "" : i18nText("wereadReadingStatsUnknownAuthor", "未知作者"));
         const c = category || "";
-        if (isAudio && !a) return c || "听书";
+        if (isAudio && !a) return c || i18nText("statsAudioBook", "听书");
         return c ? `${a} · ${c}` : a;
     }
 
     function formatReadStatName(stat: string): string {
         const lower = stat.toLowerCase();
-        if (lower === "read" || lower === "reading") return "阅读";
-        if (lower === "finished" || lower === "finish") return "读完";
-        if (lower === "note" || lower === "notes") return "笔记";
-        if (lower === "readbook" || lower === "book") return "读过";
+        if (lower === "read" || lower === "reading") return i18nText("statsRead", "阅读");
+        if (lower === "finished" || lower === "finish") return i18nText("statsFinished", "读完");
+        if (lower === "note" || lower === "notes") return i18nText("statsNotes", "笔记");
+        if (lower === "readbook" || lower === "book") return i18nText("statsReadBooks", "读过");
         return stat;
     }
 
@@ -87,7 +85,7 @@
         const recent = sorted.slice(0, limit);
         return recent.map(([key, value]) => ({
             date: formatReadTimeLabel(mode, key),
-            duration: formatReadingDuration(value),
+            duration: formatReadingDuration(value, i18n),
         }));
     }
 
@@ -143,8 +141,8 @@
                 on:click={() => selectPeriod(mode)}
             >
                 <div class="weread-reading-summary-label">{getPeriodLabel(mode)}</div>
-                <div class="weread-reading-summary-value">{formatReadingDuration(getPeriod(mode)?.totalReadTime || 0)}</div>
-                <div class="weread-reading-summary-sub">{getPeriod(mode)?.readDays || 0} 天</div>
+                <div class="weread-reading-summary-value">{formatReadingDuration(getPeriod(mode)?.totalReadTime || 0, i18n)}</div>
+                <div class="weread-reading-summary-sub">{i18nText("statsDays", "{count} 天").replace("{count}", String(getPeriod(mode)?.readDays || 0))}</div>
             </button>
         {/each}
     </div>
@@ -153,23 +151,23 @@
         <section class="weread-reading-current-period">
             <div class="weread-reading-current-title">
                 {getPeriodLabel(selectedMode)}
-                {#if formatReadingCompare(selectedPeriod?.compare)}
-                    <span class="weread-reading-compare">{formatReadingCompare(selectedPeriod?.compare)}</span>
+                {#if formatReadingCompare(selectedPeriod?.compare, i18n)}
+                    <span class="weread-reading-compare">{formatReadingCompare(selectedPeriod?.compare, i18n)}</span>
                 {/if}
             </div>
 
             <div class="weread-reading-metric-grid">
                 <div class="weread-reading-metric-card">
                     <span class="weread-reading-metric-label">{i18nText("wereadReadingStatsTotalTime", "总阅读时长")}</span>
-                    <span class="weread-reading-metric-value">{formatReadingDuration(selectedPeriod.totalReadTime || 0)}</span>
+                    <span class="weread-reading-metric-value">{formatReadingDuration(selectedPeriod.totalReadTime || 0, i18n)}</span>
                 </div>
                 <div class="weread-reading-metric-card">
                     <span class="weread-reading-metric-label">{i18nText("wereadReadingStatsReadDays", "阅读天数")}</span>
-                    <span class="weread-reading-metric-value">{selectedPeriod.readDays || 0} 天</span>
+                    <span class="weread-reading-metric-value">{i18nText("statsDays", "{count} 天").replace("{count}", String(selectedPeriod.readDays || 0))}</span>
                 </div>
                 <div class="weread-reading-metric-card">
                     <span class="weread-reading-metric-label">{i18nText("wereadReadingStatsDailyAverage", "日均阅读")}</span>
-                    <span class="weread-reading-metric-value">{formatReadingDuration(selectedPeriod.dayAverageReadTime || 0)}</span>
+                    <span class="weread-reading-metric-value">{formatReadingDuration(selectedPeriod.dayAverageReadTime || 0, i18n)}</span>
                 </div>
             </div>
 
@@ -216,7 +214,7 @@
                                     <span class="weread-reading-book-title">
                                         {book.title || i18nText("unnamedBook", "未命名书籍")}
                                         {#if book.isAudio}
-                                            <span class="weread-reading-audio-badge">听书</span>
+                                            <span class="weread-reading-audio-badge">{i18nText("statsAudioBook", "听书")}</span>
                                         {/if}
                                     </span>
                                     <span class="weread-reading-book-meta">
@@ -226,7 +224,7 @@
                                         {/if}
                                     </span>
                                 </div>
-                                <span class="weread-reading-book-time">{formatReadingDuration(book.readTime)}</span>
+                                <span class="weread-reading-book-time">{formatReadingDuration(book.readTime, i18n)}</span>
                             </div>
                         {/each}
                     {:else}

@@ -1,14 +1,17 @@
 <script lang="ts">
   import type { WereadSyncPlanConfirmPayload } from "../../utils/weread/api/wereadSyncProgress";
+  import { t } from "../../utils/i18n";
 
+  export let plugin: any;
   export let payload: WereadSyncPlanConfirmPayload;
   export let onConfirm: () => void;
   export let onCancel: () => void;
 
   const MAX_DISPLAY_ITEMS = 30;
+  const tx = (key: string, fallback: string, params: Record<string, string | number> = {}) => t(plugin, key, fallback, params);
 
-  $: modeLabel = payload.mode === "all" ? "全部同步" : "更新同步";
-  $: sourceTypeLabel = payload.sourceType === "book" ? "普通书籍" : "公众号";
+  $: modeLabel = payload.mode === "all" ? tx("planModeAll", "全部同步") : tx("planModeUpdate", "更新同步");
+  $: sourceTypeLabel = payload.sourceType === "book" ? tx("planNormalBooks", "普通书籍") : tx("planMpAccounts", "公众号");
   $: displayItems = payload.plannedItems.slice(0, MAX_DISPLAY_ITEMS);
   $: remainingCount = Math.max(0, payload.plannedItems.length - MAX_DISPLAY_ITEMS);
   $: isAllMode = payload.mode === "all";
@@ -16,26 +19,26 @@
 
 <div class="sync-plan-confirm">
   <div class="confirm-header">
-    <p class="confirm-title">确认微信读书同步</p>
+    <p class="confirm-title">{tx("planTitle", "确认微信读书同步")}</p>
   </div>
 
   <div class="confirm-info">
     <div class="info-row">
-      <span class="info-label">同步模式：</span>
+      <span class="info-label">{tx("planMode", "同步模式：")}</span>
       <span class="info-value" class:all-mode={isAllMode}>{modeLabel}</span>
     </div>
     <div class="info-row">
-      <span class="info-label">来源类型：</span>
+      <span class="info-label">{tx("planSourceType", "来源类型：")}</span>
       <span class="info-value">{sourceTypeLabel}</span>
     </div>
     <div class="info-row">
-      <span class="info-label">本次将同步：</span>
-      <span class="info-value highlight">{payload.plannedItems.length} 项</span>
+      <span class="info-label">{tx("planWillSync", "本次将同步：")}</span>
+      <span class="info-value highlight">{tx("planItemCount", "{count} 项", { count: payload.plannedItems.length })}</span>
     </div>
     {#if payload.skippedCount && payload.skippedCount > 0}
       <div class="info-row">
-        <span class="info-label">跳过：</span>
-        <span class="info-value skipped">{payload.skippedCount} 项（无变化或未就绪）</span>
+        <span class="info-label">{tx("planSkipped", "跳过：")}</span>
+        <span class="info-value skipped">{tx("planSkippedCount", "{count} 项（无变化或未就绪）", { count: payload.skippedCount })}</span>
       </div>
     {/if}
   </div>
@@ -43,12 +46,12 @@
   {#if isAllMode}
     <div class="warning-banner">
       <span class="warning-icon">⚠</span>
-      <span>全部同步可能会重建较多内容，请确认后继续</span>
+      <span>{tx("planFullSyncWarning", "全部同步可能会重建较多内容，请确认后继续")}</span>
     </div>
   {/if}
 
   <div class="items-list">
-    <div class="items-header">本次将同步的{sourceTypeLabel}：</div>
+    <div class="items-header">{tx("planItemsHeader", "本次将同步的{sourceType}：", { sourceType: sourceTypeLabel })}</div>
     <div class="items-scroll">
       {#each displayItems as item}
         <div class="item-row">
@@ -59,15 +62,15 @@
         </div>
       {/each}
       {#if remainingCount > 0}
-        <div class="item-remaining">还有 {remainingCount} 条...</div>
+        <div class="item-remaining">{tx("planRemaining", "还有 {count} 条...", { count: remainingCount })}</div>
       {/if}
     </div>
   </div>
 
   <div class="confirm-actions">
-    <button class="b3-button b3-button--cancel" on:click={onCancel}>取消</button>
+    <button class="b3-button b3-button--cancel" on:click={onCancel}>{t(plugin, "cancel", "取消")}</button>
     <div class="fn__space"></div>
-    <button class="b3-button b3-button--text" on:click={onConfirm}>确认同步</button>
+    <button class="b3-button b3-button--text" on:click={onConfirm}>{tx("planConfirm", "确认同步")}</button>
   </div>
 </div>
 

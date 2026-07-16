@@ -7,6 +7,7 @@
         loadWereadAuthState,
         verifyAndSaveWereadApiKey,
     } from "../../utils/settings/wereadSettingsService";
+    import { t } from "../../utils/i18n";
 
     export let plugin: any;
     export let close: () => void = () => {};
@@ -19,6 +20,7 @@
     let lastError = "";
     let isLoading = true;
     let isVerifying = false;
+    const tx = (key: string, fallback: string) => t(plugin, key, fallback);
 
     onMount(async () => {
         const state = await loadWereadAuthState(plugin);
@@ -32,7 +34,7 @@
 
     async function verify() {
         if (!apiKey.trim()) {
-            showMessage("请输入微信读书 API Key");
+            showMessage(tx("settingsApiKeyRequired", "请输入微信读书 API Key"));
             return;
         }
         isVerifying = true;
@@ -43,7 +45,7 @@
             verified = state.verified;
             verifiedAt = state.verifiedAt;
             lastError = state.lastError;
-            showMessage(state.verified ? "API Key 验证成功" : "API Key 验证失败");
+            showMessage(state.verified ? tx("settingsApiKeyVerifySuccess", "API Key 验证成功") : tx("settingsApiKeyVerifyFailed", "API Key 验证失败"));
             onSaved();
         } finally {
             isVerifying = false;
@@ -57,7 +59,7 @@
         verified = state.verified;
         verifiedAt = state.verifiedAt;
         lastError = state.lastError;
-        showMessage("API Key 已清除");
+        showMessage(tx("settingsApiKeyCleared", "API Key 已清除"));
         onSaved();
     }
 </script>
@@ -66,36 +68,36 @@
     <header class="settings-dialog-header">
         <div class="settings-dialog-icon"><SiYuanIcon name="apiKey" size={20} /></div>
         <div>
-            <h2>微信读书授权</h2>
-            <p>配置用于同步划线、想法、书评和阅读统计的 API Key。</p>
+            <h2>{tx("settingsWereadAuthTitle", "微信读书授权")}</h2>
+            <p>{tx("settingsWereadAuthDesc", "配置用于同步划线、想法、书评和阅读统计的 API Key。")}</p>
         </div>
     </header>
 
     {#if isLoading}
-        <div class="settings-dialog-loading">加载中...</div>
+        <div class="settings-dialog-loading">{tx("uiLoading", "加载中...")}</div>
     {:else}
         <div class="settings-dialog-body">
             <label class="settings-dialog-field">
                 <span>API Key</span>
-                <input class="b3-text-field" type="password" bind:value={apiKey} placeholder="请输入 API Key" />
+                <input class="b3-text-field" type="password" bind:value={apiKey} placeholder={tx("settingsApiKeyPlaceholder", "请输入 API Key")} />
             </label>
             <div class:settings-dialog-status-ok={verified} class:settings-dialog-status-warn={!verified} class="settings-dialog-status">
                 <SiYuanIcon name={verified ? "success" : "warning"} size={16} />
                 {#if verified}
-                    <span>已验证：{maskedApiKey} {verifiedAt ? ` / ${new Date(verifiedAt).toLocaleString()}` : ""}</span>
+                    <span>{tx("settingsApiKeyVerified", "已验证")}：{maskedApiKey} {verifiedAt ? ` / ${new Date(verifiedAt).toLocaleString()}` : ""}</span>
                 {:else if lastError}
                     <span>{lastError}</span>
                 {:else}
-                    <span>尚未验证</span>
+                    <span>{tx("settingsApiKeyUnverified", "尚未验证")}</span>
                 {/if}
             </div>
         </div>
     {/if}
 
     <footer class="settings-dialog-actions">
-        <button class="b3-button b3-button--outline" on:click={close}>关闭</button>
-        <button class="b3-button b3-button--outline" on:click={clearKey} disabled={isVerifying}>清除</button>
-        <button class="b3-button b3-button--primary" on:click={verify} disabled={isVerifying}>验证</button>
+        <button class="b3-button b3-button--outline" on:click={close}>{tx("uiClose", "关闭")}</button>
+        <button class="b3-button b3-button--outline" on:click={clearKey} disabled={isVerifying}>{tx("settingsApiKeyClear", "清除")}</button>
+        <button class="b3-button b3-button--primary" on:click={verify} disabled={isVerifying}>{tx("uiValidate", "验证")}</button>
     </footer>
 </div>
 

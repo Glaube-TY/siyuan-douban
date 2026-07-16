@@ -4,11 +4,13 @@
     import type { ReadingReviewItem } from "../../types/readingReview";
     import { createReadingId, getReadingInboxItems, getReadingReviewItems, saveReadingReviewItems } from "../../utils/storage/readingStorage";
     import { openDoc } from "../../utils/openDoc";
+    import { t } from "../../utils/i18n";
 
     export let plugin: any;
 
     const dispatch = createEventDispatcher();
     const DAY = 24 * 60 * 60 * 1000;
+    const tx = (key: string, fallback: string, params: Record<string, string | number> = {}) => t(plugin, key, fallback, params);
 
     let reviewItems: ReadingReviewItem[] = [];
 
@@ -55,14 +57,14 @@
 
     function openItem(item: ReadingReviewItem) {
         if (!item.noteDocId) {
-            showMessage("该复习条目暂无可打开的本地笔记");
+            showMessage(tx("reviewItemNoLocalNote", "该复习条目暂无可打开的本地笔记"));
             return;
         }
         openDoc(plugin, item.noteDocId, 1);
     }
 
     function formatDate(ts?: number) {
-        return ts ? new Date(ts).toLocaleDateString("zh-CN") : "--";
+        return ts ? new Date(ts).toLocaleDateString() : "--";
     }
 
     $: dueItems = reviewItems.filter((item) => item.status === "active" && item.nextReviewAt <= Date.now());
@@ -70,15 +72,15 @@
 
 <div class="reading-page">
     <div class="page-header">
-        <button class="back-btn" on:click={() => dispatch("back")}>返回总览</button>
+        <button class="back-btn" on:click={() => dispatch("back")}>{tx("uiBackOverview", "返回总览")}</button>
         <div>
-            <h2>今日复习</h2>
-            <p>{dueItems.length} 条待复习，来自 {new Set(dueItems.map((item) => item.sourceKey)).size} 个来源</p>
+            <h2>{tx("reviewTodayTitle", "今日复习")}</h2>
+            <p>{tx("reviewTodaySummary", "{count} 条待复习，来自 {sources} 个来源", { count: dueItems.length, sources: new Set(dueItems.map((item) => item.sourceKey)).size })}</p>
         </div>
     </div>
 
     {#if dueItems.length === 0}
-        <div class="empty">今天没有到期复习内容</div>
+        <div class="empty">{tx("reviewTodayEmpty", "今天没有到期复习内容")}</div>
     {:else}
         <div class="review-list">
             {#each dueItems as item (item.id)}
@@ -86,14 +88,14 @@
                     <div class="title">{item.title}</div>
                     <p>{item.content}</p>
                     <div class="meta">
-                        <span>复习 {item.reviewCount} 次</span>
-                        <span>上次：{formatDate(item.lastReviewAt)}</span>
+                        <span>{tx("reviewTimes", "复习 {count} 次", { count: item.reviewCount })}</span>
+                        <span>{tx("reviewLastTime", "上次：")}{formatDate(item.lastReviewAt)}</span>
                     </div>
                     <div class="actions">
-                        <button on:click={() => updateItem(item, "remember")}>记住了</button>
-                        <button on:click={() => updateItem(item, "later")}>稍后再看</button>
-                        <button on:click={() => openItem(item)}>打开原笔记</button>
-                        <button on:click={() => updateItem(item, "ignore")}>忽略</button>
+                        <button on:click={() => updateItem(item, "remember")}>{tx("reviewRemember", "记住了")}</button>
+                        <button on:click={() => updateItem(item, "later")}>{tx("reviewLater", "稍后再看")}</button>
+                        <button on:click={() => openItem(item)}>{tx("uiOpenOriginalNote", "打开原笔记")}</button>
+                        <button on:click={() => updateItem(item, "ignore")}>{tx("uiIgnore", "忽略")}</button>
                     </div>
                 </article>
             {/each}

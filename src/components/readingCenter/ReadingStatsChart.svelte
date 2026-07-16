@@ -13,6 +13,7 @@
     } from "echarts/components";
     import { CanvasRenderer } from "echarts/renderers";
     import type { ECharts, EChartsCoreOption } from "echarts/core";
+    import { t } from "../../utils/i18n";
 
     use([
         BarChart,
@@ -33,6 +34,7 @@
     export let option: EChartsCoreOption | null = null;
     export let height = 260;
     export let className = "";
+    export let plugin: any;
 
     let el: HTMLDivElement;
     let chart: ECharts | null = null;
@@ -168,7 +170,7 @@
 
 <div class={`reading-stats-chart ${className}`} style={`height: ${height}px;`}>
     {#if failed}
-        <div class="reading-stats-chart-empty">图表加载失败</div>
+        <div class="reading-stats-chart-empty">{t(plugin, "statsChartFailed", "图表加载失败")}</div>
     {/if}
     <div bind:this={el} class="reading-stats-chart-canvas" class:hidden={failed}></div>
 </div>

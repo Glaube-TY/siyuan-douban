@@ -4,6 +4,7 @@
     import type { WorkbenchAction } from "../../types/workbench";
     import type { ReadingManagementSummary } from "../../utils/readingManagement/types";
     import { buildReadingManagementSummary } from "../../utils/readingManagement/managementData";
+    import { t } from "../../utils/i18n";
 
     export let plugin: any;
     export let refreshKey = 0;
@@ -11,13 +12,15 @@
     const dispatch = createEventDispatcher<{ action: WorkbenchAction }>();
     let summary: ReadingManagementSummary | null = null;
     let lastRefreshKey = refreshKey;
+    const tx = (key: string, fallback: string, params: Record<string, string | number> = {}) =>
+        t(plugin, key, fallback, params);
 
     async function load() {
         summary = await buildReadingManagementSummary(plugin);
     }
 
     function formatTime(timestamp?: number): string {
-        if (!timestamp) return "尚无同步记录";
+        if (!timestamp) return tx("reviewNoSyncRecord", "尚无同步记录");
         return new Date(timestamp).toLocaleString("zh-CN", {
             month: "2-digit",
             day: "2-digit",
@@ -27,12 +30,12 @@
     }
 
     function getStatusText(status?: string): string {
-        if (!status || status === "unknown") return "尚未同步";
-        if (status === "success") return "最近同步正常";
-        if (status === "partial" || status === "partial_success") return "最近同步部分完成";
-        if (status === "cancelled") return "最近同步已取消";
-        if (status === "running") return "同步正在进行";
-        return "最近同步失败";
+        if (!status || status === "unknown") return tx("reviewNotSynced", "尚未同步");
+        if (status === "success") return tx("reviewSyncNormal", "最近同步正常");
+        if (status === "partial" || status === "partial_success") return tx("reviewSyncPartial", "最近同步部分完成");
+        if (status === "cancelled") return tx("reviewSyncCancelled", "最近同步已取消");
+        if (status === "running") return tx("reviewSyncRunning", "同步正在进行");
+        return tx("reviewSyncFailed", "最近同步失败");
     }
 
     onMount(load);
@@ -48,42 +51,42 @@
         <div class="panel-title">
             <SiYuanIcon name="review" size={18} />
             <div>
-                <h2>同步结果与待办</h2>
+                <h2>{tx("workbenchSyncTodo", "同步结果与待办")}</h2>
                 <p>{getStatusText(summary?.lastSyncStatus)}</p>
             </div>
         </div>
-        <button class="records-link" type="button" on:click={() => dispatch("action", "open-sync-changes")}>查看同步记录</button>
+        <button class="records-link" type="button" on:click={() => dispatch("action", "open-sync-changes")}>{tx("reviewViewRecords", "查看同步记录")}</button>
     </div>
 
     {#if summary}
         <div class="sync-summary">
             <span>{formatTime(summary.lastSyncTime)}</span>
-            <span>成功 {summary.latestSuccessCount} 本</span>
-            <span>新增 {summary.latestAddedItemCount}</span>
-            <span>更新 {summary.latestChangedItemCount}</span>
+            <span>{tx("reviewSuccessBooks", "成功 {count} 本", { count: summary.latestSuccessCount })}</span>
+            <span>{tx("reviewAdded", "新增 {count}", { count: summary.latestAddedItemCount })}</span>
+            <span>{tx("reviewUpdated", "更新 {count}", { count: summary.latestChangedItemCount })}</span>
         </div>
 
         {#if summary.pendingContentCount > 0 || summary.actionableIssueCount > 0}
             <div class="todo-summary">
-                {#if summary.pendingContentCount > 0}<strong>{summary.pendingContentCount} 条新增内容待查看</strong>{/if}
-                {#if summary.actionableIssueCount > 0}<strong class="problem">{summary.actionableIssueCount} 项需要处理</strong>{/if}
+                {#if summary.pendingContentCount > 0}<strong>{tx("reviewPendingContent", "{count} 条新增内容待查看", { count: summary.pendingContentCount })}</strong>{/if}
+                {#if summary.actionableIssueCount > 0}<strong class="problem">{tx("reviewPendingIssues", "{count} 项需要处理", { count: summary.actionableIssueCount })}</strong>{/if}
             </div>
             <div class="primary-actions">
                 {#if summary.pendingContentCount > 0}
-                    <button type="button" on:click={() => dispatch("action", "open-inbox")}>处理新增内容</button>
+                    <button type="button" on:click={() => dispatch("action", "open-inbox")}>{tx("reviewHandleContent", "处理新增内容")}</button>
                 {/if}
                 {#if summary.actionableIssueCount > 0}
-                    <button type="button" class="secondary" on:click={() => dispatch("action", "open-diagnostics")}>查看问题</button>
+                    <button type="button" class="secondary" on:click={() => dispatch("action", "open-diagnostics")}>{tx("reviewViewIssues", "查看问题")}</button>
                 {/if}
             </div>
         {:else}
             <div class="all-clear">
                 <SiYuanIcon name="success" size={16} />
-                <span>当前无需处理</span>
+                <span>{tx("reviewAllClear", "当前无需处理")}</span>
             </div>
         {/if}
     {:else}
-        <div class="loading">正在读取最近同步结果...</div>
+        <div class="loading">{tx("reviewLoading", "正在读取最近同步结果...")}</div>
     {/if}
 </section>
 

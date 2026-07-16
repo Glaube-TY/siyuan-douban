@@ -2,8 +2,11 @@
     import { createEventDispatcher } from "svelte";
     import SiYuanIcon from "../common/SiYuanIcon.svelte";
     import type { WorkbenchAction, WorkbenchLocalAssetSummary } from "../../types/workbench";
+    import { t } from "../../utils/i18n";
 
+    export let plugin: any;
     export let summary: WorkbenchLocalAssetSummary | null = null;
+    const tx = (key: string, fallback: string) => t(plugin, key, fallback);
 
     const dispatch = createEventDispatcher<{ action: WorkbenchAction }>();
 
@@ -12,10 +15,10 @@
     }
 
     $: databaseStatusText = summary?.databaseStatus.valid
-        ? "数据库已连接"
+        ? tx("localAssetsConnected", "数据库已连接")
         : summary?.databaseStatus.configured
-            ? "数据库校验失败"
-            : "数据库未配置";
+            ? tx("localAssetsInvalid", "数据库校验失败")
+            : tx("localAssetsMissing", "数据库未配置");
 
     $: databaseNeedsAttention = !summary?.databaseStatus.valid;
     $: templateNeedsAttention = !summary?.bookTemplateConfigured;
@@ -25,15 +28,15 @@
     <div class="workbench-panel-head">
         <div class="workbench-panel-title">
             <SiYuanIcon name="localShelf" size={18} />
-            <h2>本地阅读资产</h2>
+            <h2>{tx("localAssetsTitle", "本地阅读资产")}</h2>
             <span class="workbench-panel-status">{databaseStatusText}</span>
         </div>
     </div>
 
     <div class="workbench-compact-stats">
         <div class="workbench-compact-stat">
-            <span>本地书籍</span>
-            <strong>{summary?.localBookCount ?? "未加载"}</strong>
+            <span>{tx("localAssetsBooks", "本地书籍")}</span>
+            <strong>{summary?.localBookCount ?? tx("localAssetsNotLoaded", "未加载")}</strong>
         </div>
     </div>
 
@@ -43,18 +46,18 @@
             on:click={() => action("open-database-settings")}
         >
             <SiYuanIcon name="database" size={15} />
-            <span>数据库设置</span>
+            <span>{tx("localAssetsDatabase", "数据库设置")}</span>
         </button>
         <button on:click={() => action("open-book-preferences")}>
             <SiYuanIcon name="settings" size={15} />
-            <span>评分 / 分类 / 状态</span>
+            <span>{tx("localAssetsPreferences", "评分 / 分类 / 状态")}</span>
         </button>
         <button
             class:needs-attention={templateNeedsAttention}
             on:click={() => action("open-template-settings")}
         >
             <SiYuanIcon name="template" size={15} />
-            <span>模板设置</span>
+            <span>{tx("localAssetsTemplates", "模板设置")}</span>
         </button>
     </div>
 </section>

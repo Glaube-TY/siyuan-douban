@@ -18,6 +18,7 @@
     import { loadTemplateSettings } from "../../utils/settings/templateSettingsService";
     import { loadWereadAuthState, loadWereadSyncOptions } from "../../utils/settings/wereadSettingsService";
     import { getLatestWereadSyncReport } from "../../utils/storage/syncReportStorage";
+    import { t } from "../../utils/i18n";
 
     export let plugin: any;
     export let refreshKey = 0;
@@ -32,6 +33,8 @@
     let isLoading = true;
     let lastRefreshKey = refreshKey;
     let activeSection: WorkbenchSection = "overview";
+    const tx = (key: string, fallback: string, params: Record<string, string | number> = {}) =>
+        t(plugin, key, fallback, params);
 
     async function loadSummaries() {
         isLoading = true;
@@ -72,7 +75,11 @@
                 lastSyncStatus: latestReport?.status || "unknown",
                 lastSyncTime: latestReport?.endedAt || latestReport?.startedAt,
                 lastSyncMessage: latestReport
-                    ? `成功 ${latestReport.successCount} / 失败 ${latestReport.failedCount} / 跳过 ${latestReport.skippedCount}`
+                    ? tx("workbenchSyncSummary", "成功 {success} / 失败 {failed} / 跳过 {skipped}", {
+                        success: latestReport.successCount,
+                        failed: latestReport.failedCount,
+                        skipped: latestReport.skippedCount,
+                    })
                     : "",
                 autoSync: syncOptions.autoSync,
                 skipNewBookCheck: syncOptions.skipNewBookCheck,
@@ -115,24 +122,24 @@
         <div class="mobile-workbench-content">
             {#if activeSection === "overview"}
                 <section class="mobile-workbench-intro">
-                    <span>个人阅读中枢</span>
-                    <strong>今天想读点什么？</strong>
-                    <small>搜索书籍，或展开下方分组继续操作。</small>
+                    <span>{tx("workbenchReadingHub", "个人阅读中枢")}</span>
+                    <strong>{tx("workbenchTodayPrompt", "今天想读点什么？")}</strong>
+                    <small>{tx("workbenchMobileHint", "搜索书籍，或展开下方分组继续操作。")}</small>
                 </section>
 
                 <WorkbenchSearch {plugin} {mobile} on:action={action} on:refresh={refresh} />
 
                 <div class="mobile-workbench-groups">
                     <details open>
-                        <summary><span><strong>本地阅读</strong><small>数据库、模板与书架</small></span><em>展开</em></summary>
-                        <div class="mobile-group-content"><WorkbenchLocalAssets summary={localSummary} on:action={action} /></div>
+                        <summary><span><strong>{tx("workbenchLocalReading", "本地阅读")}</strong><small>{tx("workbenchLocalReadingDesc", "数据库、模板与书架")}</small></span><em>{tx("workbenchExpand", "展开")}</em></summary>
+                        <div class="mobile-group-content"><WorkbenchLocalAssets {plugin} summary={localSummary} on:action={action} /></div>
                     </details>
                     <details>
-                        <summary><span><strong>微信读书</strong><small>授权、同步与缓存</small></span><em>展开</em></summary>
-                        <div class="mobile-group-content"><WorkbenchWereadAssets summary={wereadSummary} pluginName={plugin.name} on:action={action} /></div>
+                        <summary><span><strong>{tx("workbenchWeread", "微信读书")}</strong><small>{tx("workbenchWereadDesc", "授权、同步与缓存")}</small></span><em>{tx("workbenchExpand", "展开")}</em></summary>
+                        <div class="mobile-group-content"><WorkbenchWereadAssets {plugin} summary={wereadSummary} pluginName={plugin.name} on:action={action} /></div>
                     </details>
                     <details>
-                        <summary><span><strong>同步结果与待办</strong><small>新增内容、问题与同步记录</small></span><em>展开</em></summary>
+                        <summary><span><strong>{tx("workbenchSyncTodo", "同步结果与待办")}</strong><small>{tx("workbenchSyncTodoDesc", "新增内容、问题与同步记录")}</small></span><em>{tx("workbenchExpand", "展开")}</em></summary>
                         <div class="mobile-group-content">
                             <WorkbenchReviewPanel {plugin} {refreshKey} on:action={action} />
                         </div>
@@ -145,26 +152,26 @@
             {/if}
         </div>
 
-        <nav class="mobile-workbench-nav" aria-label="移动端阅读工作台导航">
-            <button type="button" class:active={activeSection === "overview"} on:click={() => activeSection = "overview"}><span>⌂</span><em>工作台</em></button>
-            <button type="button" class:active={activeSection === "shelf-hub"} on:click={() => activeSection = "shelf-hub"}><span>▤</span><em>书架</em></button>
-            <button type="button" class:active={activeSection === "weread-stats"} on:click={() => activeSection = "weread-stats"}><span>◫</span><em>数据</em></button>
-            <button type="button" on:click={() => triggerAction("open-about")}><span>ⓘ</span><em>关于</em></button>
+        <nav class="mobile-workbench-nav" aria-label={tx("workbenchNavLabel", "移动端阅读工作台导航")}>
+            <button type="button" class:active={activeSection === "overview"} on:click={() => activeSection = "overview"}><span>⌂</span><em>{tx("workbenchNavHome", "工作台")}</em></button>
+            <button type="button" class:active={activeSection === "shelf-hub"} on:click={() => activeSection = "shelf-hub"}><span>▤</span><em>{tx("workbenchNavShelf", "书架")}</em></button>
+            <button type="button" class:active={activeSection === "weread-stats"} on:click={() => activeSection = "weread-stats"}><span>◫</span><em>{tx("workbenchNavData", "数据")}</em></button>
+            <button type="button" on:click={() => triggerAction("open-about")}><span>ⓘ</span><em>{tx("workbenchNavAbout", "关于")}</em></button>
         </nav>
     {:else}
-        <WorkbenchHero on:action={action} />
+        <WorkbenchHero {plugin} on:action={action} />
 
-        <nav class="workbench-section-tabs" aria-label="阅读总控台导航">
-            <button type="button" class:active={activeSection === "overview"} on:click={() => activeSection = "overview"}><span>总控台</span><em>检索、同步与整理</em></button>
-            <button type="button" class:active={activeSection === "shelf-hub"} on:click={() => activeSection = "shelf-hub"}><span>书架中心</span><em>书架资产与笔记入口</em></button>
-            <button type="button" class:active={activeSection === "weread-stats"} on:click={() => activeSection = "weread-stats"}><span>微信读书数据</span><em>阅读统计与同步覆盖</em></button>
+        <nav class="workbench-section-tabs" aria-label={tx("workbenchDesktopNavLabel", "阅读总控台导航")}>
+            <button type="button" class:active={activeSection === "overview"} on:click={() => activeSection = "overview"}><span>{tx("workbenchOverview", "总控台")}</span><em>{tx("workbenchOverviewDesc", "检索、同步与整理")}</em></button>
+            <button type="button" class:active={activeSection === "shelf-hub"} on:click={() => activeSection = "shelf-hub"}><span>{tx("workbenchShelfCenter", "书架中心")}</span><em>{tx("workbenchShelfCenterDesc", "书架资产与笔记入口")}</em></button>
+            <button type="button" class:active={activeSection === "weread-stats"} on:click={() => activeSection = "weread-stats"}><span>{tx("workbenchWereadData", "微信读书数据")}</span><em>{tx("workbenchWereadDataDesc", "阅读统计与同步覆盖")}</em></button>
         </nav>
 
         {#if activeSection === "overview"}
             <WorkbenchSearch {plugin} on:action={action} on:refresh={refresh} />
             <div class="workbench-assets-grid">
-                <WorkbenchLocalAssets summary={localSummary} on:action={action} />
-                <WorkbenchWereadAssets summary={wereadSummary} pluginName={plugin.name} on:action={action} />
+                <WorkbenchLocalAssets {plugin} summary={localSummary} on:action={action} />
+                <WorkbenchWereadAssets {plugin} summary={wereadSummary} pluginName={plugin.name} on:action={action} />
             </div>
             <div class="workbench-operations-grid">
                 <WorkbenchReviewPanel {plugin} {refreshKey} on:action={action} />

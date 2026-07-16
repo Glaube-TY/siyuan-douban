@@ -4,6 +4,7 @@
     import wereadManageISBN from "./wereadManageISBN.svelte";
     import wereadIgnoredBooksDialog from "./wereadIgnoredBooksDialog.svelte";
     import wereadUseBookIDBooksDialog from "./wereadUseBookIDBooksDialog.svelte";
+    import { t } from "../../utils/i18n";
 
     export let plugin: any;
     export let onConfirm: () => void;
@@ -20,10 +21,11 @@
     let validBookNames: string[] = [];
     let isLoading = true;
 
-    const tabs: { key: TabKey; label: string }[] = [
-        { key: "isbn", label: "自定义 ISBN" },
-        { key: "ignored", label: "忽略书籍" },
-        { key: "bookid", label: "bookID 同步" },
+    const tx = (key: string, fallback: string) => t(plugin, key, fallback);
+    $: tabs = [
+        { key: "isbn" as TabKey, label: tx("managementCustomIsbn", "自定义 ISBN") },
+        { key: "ignored" as TabKey, label: tx("managementIgnored", "忽略书籍") },
+        { key: "bookid" as TabKey, label: tx("managementBookId", "bookID 同步") },
     ];
 
     onMount(async () => {
@@ -63,10 +65,10 @@
 
     <div class="management-body">
         {#if isLoading}
-            <div class="management-empty">加载中...</div>
+            <div class="management-empty">{tx("uiLoading", "加载中...")}</div>
         {:else if activeTab === "isbn"}
             {#if customISBNBooks.length === 0}
-                <div class="management-empty">暂无自定义 ISBN 记录</div>
+                <div class="management-empty">{tx("managementNoIsbn", "暂无自定义 ISBN 记录")}</div>
             {:else}
                 <svelte:component
                     this={wereadManageISBN}
@@ -80,7 +82,7 @@
             {/if}
         {:else if activeTab === "ignored"}
             {#if ignoredBooks.length === 0}
-                <div class="management-empty">暂无忽略书籍记录</div>
+                <div class="management-empty">{tx("managementNoIgnored", "暂无忽略书籍记录")}</div>
             {:else}
                 <svelte:component
                     this={wereadIgnoredBooksDialog}
@@ -92,7 +94,7 @@
             {/if}
         {:else if activeTab === "bookid"}
             {#if useBookIDBooks.length === 0}
-                <div class="management-empty">暂无 bookID 同步记录</div>
+                <div class="management-empty">{tx("managementNoBookId", "暂无 bookID 同步记录")}</div>
             {:else}
                 <svelte:component
                     this={wereadUseBookIDBooksDialog}

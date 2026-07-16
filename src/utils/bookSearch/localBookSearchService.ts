@@ -4,6 +4,7 @@ import { createLocalBookShelfDialog } from "../weread/wereadDialogs";
 import { openDoc } from "../openDoc";
 import { loadDatabaseSettings } from "../settings/databaseSettingsService";
 import type { WorkbenchDatabaseStatus, WorkbenchSearchResult } from "../../types/workbench";
+import { t } from "../i18n";
 
 type PluginLike = {
     loadData: (key: string) => Promise<any>;
@@ -18,11 +19,11 @@ export interface LocalBookSearchState {
     books: any[];
 }
 
-function toResult(book: any): WorkbenchSearchResult {
+function toResult(book: any, plugin: PluginLike): WorkbenchSearchResult {
     return {
         id: book.blockID || book.localDocBlockID || book.isbn || book.title,
         source: "local",
-        title: book.title || "未命名书籍",
+        title: book.title || t(plugin, "statsUnnamedBook", "未命名书籍"),
         author: book.author,
         isbn: book.isbn,
         cover: book.cover,
@@ -48,7 +49,7 @@ export async function loadLocalBookSearchState(plugin: PluginLike): Promise<Loca
             databaseStatus: {
                 ...databaseStatus,
                 valid: false,
-                message: error?.message || "本地书架读取失败",
+                message: error?.message || t(plugin, "localShelfReadFailed", "本地书架读取失败"),
             },
             books: [],
         };
@@ -58,7 +59,7 @@ export async function loadLocalBookSearchState(plugin: PluginLike): Promise<Loca
 export async function searchLocalBooks(plugin: PluginLike, query: string): Promise<WorkbenchSearchResult[]> {
     const { books } = await loadLocalBookSearchState(plugin);
     const keyword = String(query || "").trim().toLowerCase();
-    if (!keyword) return books.slice(0, 12).map(toResult);
+    if (!keyword) return books.slice(0, 12).map((book) => toResult(book, plugin));
 
     return books
         .filter((book) => {
@@ -76,13 +77,13 @@ export async function searchLocalBooks(plugin: PluginLike, query: string): Promi
             return haystack.includes(keyword);
         })
         .slice(0, 20)
-        .map(toResult);
+        .map((book) => toResult(book, plugin));
 }
 
 export async function openLocalBookShelf(plugin: PluginLike): Promise<number> {
     const { databaseStatus, books } = await loadLocalBookSearchState(plugin);
     if (!databaseStatus.valid || !databaseStatus.avID) {
-        showMessage(databaseStatus.message || "请先配置本地书籍数据库");
+        showMessage(databaseStatus.message || t(plugin, "localConfigureDatabase", "请先配置本地书籍数据库"));
         return 0;
     }
     if (books.length === 0) {
@@ -95,7 +96,7 @@ export async function openLocalBookShelf(plugin: PluginLike): Promise<number> {
 
 export function openLocalBookResult(plugin: PluginLike, result: WorkbenchSearchResult): boolean {
     if (!result.noteDocId) {
-        showMessage("该书籍暂无可打开的本地笔记文档");
+        showMessage(t(plugin, "localNoOpenNote", "该书籍暂无可打开的本地笔记文档"));
         return false;
     }
     openDoc(plugin, result.noteDocId, 1);

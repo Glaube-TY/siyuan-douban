@@ -4,8 +4,8 @@
     import { showMessage } from "siyuan";
     import { openDoc } from "@/utils/openDoc";
     import type { ReadingBookStatus, ReadingBookReviewStatus } from "@/types/readingStatus";
-    import { READING_BOOK_STATUS_LABELS } from "@/types/readingStatus";
     import { getReadingBookStatuses, getReadingSourceKey, updateReadingBookStatusValue, upsertReadingBookStatus } from "@/utils/storage/readingStorage";
+    import { t } from "@/utils/i18n";
 
     export let plugin: any;
     export let closeDialog: () => void = () => {};
@@ -48,7 +48,15 @@
     let contextX = 0;
     let contextY = 0;
 
-    const statusOptions = Object.entries(READING_BOOK_STATUS_LABELS) as Array<[ReadingBookReviewStatus, string]>;
+    const tx = (key: string, fallback: string, params: Record<string, string | number> = {}) => t(plugin, key, fallback, params);
+    $: statusOptions = ([
+        ["not_started", tx("organizeNotStarted", "未开始整理")],
+        ["reading", tx("shelfReading", "在读")],
+        ["to_review", tx("organizeToReview", "待整理")],
+        ["reviewing", tx("organizeReviewing", "整理中")],
+        ["reviewed", tx("organizeReviewed", "已整理")],
+        ["archived", tx("shelfArchived", "已归档")],
+    ] as Array<[ReadingBookReviewStatus, string]>);
 
     onMount(() => {
         loadStatuses();
@@ -101,7 +109,7 @@
 
     function getStatusLabel(book: typeof books[0]): string {
         const status = getBookStatus(book)?.status;
-        return status ? READING_BOOK_STATUS_LABELS[status] : "未开始";
+        return statusOptions.find(([value]) => value === status)?.[1] || tx("shelfNotStarted", "未开始");
     }
 
     function getStatusDotClass(book: typeof books[0]): string {
@@ -115,18 +123,18 @@
     }
 
     function formatWordCount(words: number | undefined): string {
-        if (!words) return "暂无";
-        if (words >= 10000) return `${(words / 10000).toFixed(1)}万字`;
-        return `${words}字`;
+        if (!words) return tx("uiNoData", "暂无");
+        if (words >= 10000) return tx("shelfTenThousandWords", "{count}万字", { count: (words / 10000).toFixed(1) });
+        return tx("shelfWords", "{count}字", { count: words });
     }
 
     function formatPrice(price: number | undefined): string {
-        if (price === undefined || price === null) return "暂无";
+        if (price === undefined || price === null) return tx("uiNoData", "暂无");
         return `¥${price}`;
     }
 
     function formatStar(star: number | undefined): string {
-        if (star === undefined || star === null) return "暂无";
+        if (star === undefined || star === null) return tx("uiNoData", "暂无");
         return `${(star / 10).toFixed(1)}`;
     }
 
@@ -225,17 +233,17 @@
 
     async function copyBookInfo(book: typeof books[0]) {
         const text = [
-            `书名：${book.title || ""}`,
-            `作者：${book.author || ""}`,
+            `${tx("bookTitle", "书名")}：${book.title || ""}`,
+            `${tx("bookAuthor", "作者")}：${book.author || ""}`,
             `ISBN：${book.isbn || ""}`,
             `BookID：${book.bookID || book.bookId || ""}`,
-            `状态：${getStatusLabel(book)}`,
+            `${tx("shelfStatus", "状态")}：${getStatusLabel(book)}`,
         ].join("\n");
         try {
             await navigator.clipboard.writeText(text);
-            showMessage("已复制书籍信息");
+            showMessage(tx("shelfCopiedBookInfo", "已复制书籍信息"));
         } catch {
-            showMessage("复制失败，请检查剪贴板权限");
+            showMessage(tx("uiCopyFailed", "复制失败，请检查剪贴板权限"));
         }
         hideContextMenu();
     }
@@ -264,35 +272,35 @@
         const statusB = getBookStatus(b);
         if (sortMode === "recentSync") return (statusB?.lastSyncedAt || 0) - (statusA?.lastSyncedAt || 0);
         if (sortMode === "newNotes") return (statusB?.lastNewNoteCount || 0) - (statusA?.lastNewNoteCount || 0);
-        if (sortMode === "author") return (a.author || "").localeCompare(b.author || "", "zh-CN");
-        return (a.title || "").localeCompare(b.title || "", "zh-CN");
+        if (sortMode === "author") return (a.author || "").localeCompare(b.author || "");
+        return (a.title || "").localeCompare(b.title || "");
     });
 </script>
 
 <!-- svelte-ignore a11y-no-static-element-interactions -->
 <div class="weread-bookshelf-view" bind:this={containerEl} on:click={hideContextMenu}>
     <div class="weread-bookshelf-toolbar">
-        <input bind:value={query} placeholder="搜索书名、作者、ISBN、BookID、状态" />
+        <input bind:value={query} placeholder={tx("shelfSearch", "搜索书名、作者、ISBN、BookID、状态")} />
         <select bind:value={filterMode}>
-            <option value="all">全部</option>
-            <option value="reading">在读</option>
-            <option value="to_review">待整理</option>
-            <option value="reviewed">已整理</option>
-            <option value="new">有新增笔记</option>
-            <option value="failed">同步失败</option>
-            <option value="mp">公众号</option>
-            <option value="book">普通书</option>
+            <option value="all">{tx("uiAll", "全部")}</option>
+            <option value="reading">{tx("shelfReading", "在读")}</option>
+            <option value="to_review">{tx("organizeToReview", "待整理")}</option>
+            <option value="reviewed">{tx("organizeReviewed", "已整理")}</option>
+            <option value="new">{tx("organizeHasNew", "有新增笔记")}</option>
+            <option value="failed">{tx("progressFailedState", "同步失败")}</option>
+            <option value="mp">{tx("uiMpAccount", "公众号")}</option>
+            <option value="book">{tx("uiNormalBook", "普通书")}</option>
         </select>
         <select bind:value={sortMode}>
-            <option value="title">书名</option>
-            <option value="author">作者</option>
-            <option value="recentSync">最近同步</option>
-            <option value="newNotes">新增笔记数量</option>
+            <option value="title">{tx("bookTitle", "书名")}</option>
+            <option value="author">{tx("bookAuthor", "作者")}</option>
+            <option value="recentSync">{tx("statsLatestSync", "最近同步")}</option>
+            <option value="newNotes">{tx("shelfNewNoteCount", "新增笔记数量")}</option>
         </select>
         <div class="view-switch">
-            <button class:active={viewMode === "shelf"} on:click={() => (viewMode = "shelf")}>书架</button>
-            <button class:active={viewMode === "list"} on:click={() => (viewMode = "list")}>列表</button>
-            <button class:active={viewMode === "compact"} on:click={() => (viewMode = "compact")}>紧凑</button>
+            <button class:active={viewMode === "shelf"} on:click={() => (viewMode = "shelf")}>{tx("shelfViewShelf", "书架")}</button>
+            <button class:active={viewMode === "list"} on:click={() => (viewMode = "list")}>{tx("shelfViewList", "列表")}</button>
+            <button class:active={viewMode === "compact"} on:click={() => (viewMode = "compact")}>{tx("shelfViewCompact", "紧凑")}</button>
         </div>
     </div>
 
@@ -302,12 +310,12 @@
                 <div class="weread-bookshelf-list-row" on:contextmenu={(event) => showContextMenu(book, event)}>
                     <img src={secureExternalImageUrl(book.cover)} alt="" />
                     <div class="list-title">
-                        <strong>{book.title || "暂无"}</strong>
-                        <span>{book.author || "暂无作者"}</span>
+                        <strong>{book.title || tx("uiNoData", "暂无")}</strong>
+                        <span>{book.author || tx("shelfNoAuthor", "暂无作者")}</span>
                     </div>
                     <span>{getStatusLabel(book)}</span>
                     <span>{getBookStatus(book)?.lastNewNoteCount || 0}</span>
-                    <button disabled={!canOpenBook(book)} on:click={() => handleOpenBook(book)}>打开</button>
+                    <button disabled={!canOpenBook(book)} on:click={() => handleOpenBook(book)}>{tx("shelfOpen", "打开")}</button>
                 </div>
             {/each}
         </div>
@@ -368,91 +376,91 @@
             class="weread-bookshelf-tooltip"
             style="left:{tooltipX}px; top:{tooltipY}px;"
         >
-            <div class="weread-bookshelf-tooltip-title">{hoveredBook.title || "暂无"}</div>
+            <div class="weread-bookshelf-tooltip-title">{hoveredBook.title || tx("uiNoData", "暂无")}</div>
             <div class="weread-bookshelf-tooltip-meta">
                 <div class="weread-bookshelf-tooltip-row">
-                    <span class="label">作者</span>
-                    <span class="value">{hoveredBook.author || "暂无"}</span>
+                    <span class="label">{tx("bookAuthor", "作者")}</span>
+                    <span class="value">{hoveredBook.author || tx("uiNoData", "暂无")}</span>
                 </div>
                 <div class="weread-bookshelf-tooltip-row">
-                    <span class="label">出版社</span>
-                    <span class="value">{hoveredBook.publisher || "暂无"}</span>
+                    <span class="label">{tx("bookPublisher", "出版社")}</span>
+                    <span class="value">{hoveredBook.publisher || tx("uiNoData", "暂无")}</span>
                 </div>
                 <div class="weread-bookshelf-tooltip-row">
-                    <span class="label">出版时间</span>
-                    <span class="value">{hoveredBook.publishTime ? hoveredBook.publishTime.split(" ")[0] : "暂无"}</span>
+                    <span class="label">{tx("shelfPublishTime", "出版时间")}</span>
+                    <span class="value">{hoveredBook.publishTime ? hoveredBook.publishTime.split(" ")[0] : tx("uiNoData", "暂无")}</span>
                 </div>
                 <div class="weread-bookshelf-tooltip-row">
                     <span class="label">ISBN</span>
-                    <span class="value">{hoveredBook.isbn || "暂无"}</span>
+                    <span class="value">{hoveredBook.isbn || tx("uiNoData", "暂无")}</span>
                 </div>
                 <div class="weread-bookshelf-tooltip-row">
-                    <span class="label">字数</span>
+                    <span class="label">{tx("shelfWordCount", "字数")}</span>
                     <span class="value">{formatWordCount(hoveredBook.totalWords)}</span>
                 </div>
                 <div class="weread-bookshelf-tooltip-row">
-                    <span class="label">价格</span>
+                    <span class="label">{tx("shelfPrice", "价格")}</span>
                     <span class="value">{formatPrice(hoveredBook.price)}</span>
                 </div>
                 {#if hoveredBook.noteCount !== undefined}
                     <div class="weread-bookshelf-tooltip-row">
-                        <span class="label">笔记</span>
-                        <span class="value">{hoveredBook.noteCount} 条</span>
+                        <span class="label">{tx("statsNotes", "笔记")}</span>
+                        <span class="value">{tx("topicsItemCount", "{count} 条", { count: hoveredBook.noteCount })}</span>
                     </div>
                 {/if}
                 {#if hoveredBook.reviewCount !== undefined}
                     <div class="weread-bookshelf-tooltip-row">
-                        <span class="label">书评</span>
-                        <span class="value">{hoveredBook.reviewCount} 条</span>
+                        <span class="label">{tx("shelfReviews", "书评")}</span>
+                        <span class="value">{tx("topicsItemCount", "{count} 条", { count: hoveredBook.reviewCount })}</span>
                     </div>
                 {/if}
                 {#if hoveredBook.star !== undefined}
                     <div class="weread-bookshelf-tooltip-row">
-                        <span class="label">评分</span>
+                        <span class="label">{tx("shelfRating", "评分")}</span>
                         <span class="value">{formatStar(hoveredBook.star)}</span>
                     </div>
                 {/if}
                 <div class="weread-bookshelf-tooltip-row">
-                    <span class="label">本地笔记</span>
-                    <span class="value">{canOpenBook(hoveredBook) ? "可打开" : "暂无"}</span>
+                    <span class="label">{tx("shelfLocalNote", "本地笔记")}</span>
+                    <span class="value">{canOpenBook(hoveredBook) ? tx("shelfCanOpen", "可打开") : tx("uiNoData", "暂无")}</span>
                 </div>
                 {#if hoveredBook.pages}
                     <div class="weread-bookshelf-tooltip-row">
-                        <span class="label">页数</span>
+                        <span class="label">{tx("bookPages", "页数")}</span>
                         <span class="value">{hoveredBook.pages}</span>
                     </div>
                 {/if}
                 {#if hoveredBook.category}
                     <div class="weread-bookshelf-tooltip-row">
-                        <span class="label">分类</span>
+                        <span class="label">{tx("shelfCategory", "分类")}</span>
                         <span class="value">{hoveredBook.category}</span>
                     </div>
                 {/if}
                 {#if hoveredBook.readingStatus}
                     <div class="weread-bookshelf-tooltip-row">
-                        <span class="label">状态</span>
+                        <span class="label">{tx("shelfStatus", "状态")}</span>
                         <span class="value">{hoveredBook.readingStatus}</span>
                     </div>
                 {/if}
                 <div class="weread-bookshelf-tooltip-row">
-                    <span class="label">整理状态</span>
+                    <span class="label">{tx("shelfOrganizationStatus", "整理状态")}</span>
                     <span class="value">{getStatusLabel(hoveredBook)}</span>
                 </div>
                 {#if getBookStatus(hoveredBook)?.hasNewNotes}
                     <div class="weread-bookshelf-tooltip-row">
-                        <span class="label">新增笔记</span>
-                        <span class="value">{getBookStatus(hoveredBook)?.lastNewNoteCount || 0} 条</span>
+                        <span class="label">{tx("shelfNewNotes", "新增笔记")}</span>
+                        <span class="value">{tx("topicsItemCount", "{count} 条", { count: getBookStatus(hoveredBook)?.lastNewNoteCount || 0 })}</span>
                     </div>
                 {/if}
                 {#if getBookStatus(hoveredBook)?.syncFailed}
                     <div class="weread-bookshelf-tooltip-row">
-                        <span class="label">同步状态</span>
-                        <span class="value">同步失败</span>
+                        <span class="label">{tx("shelfSyncStatus", "同步状态")}</span>
+                        <span class="value">{tx("progressFailedState", "同步失败")}</span>
                     </div>
                 {/if}
                 <div class="weread-bookshelf-tooltip-row">
-                    <span class="label">类型</span>
-                    <span class="value">{hoveredBook.sourceType === "local_book" ? "本地书籍" : isMpAccount(hoveredBook) ? "公众号" : "普通书"}</span>
+                    <span class="label">{tx("shelfType", "类型")}</span>
+                    <span class="value">{hoveredBook.sourceType === "local_book" ? tx("shelfLocalBook", "本地书籍") : isMpAccount(hoveredBook) ? tx("uiMpAccount", "公众号") : tx("uiNormalBook", "普通书")}</span>
                 </div>
             </div>
         </div>
@@ -460,20 +468,20 @@
 
     {#if contextBook}
         <div class="weread-bookshelf-context-menu" style="left:{contextX}px; top:{contextY}px;" on:click|stopPropagation>
-            <button disabled={!canOpenBook(contextBook)} on:click={openContextBook}>打开笔记</button>
+            <button disabled={!canOpenBook(contextBook)} on:click={openContextBook}>{tx("uiOpenNote", "打开笔记")}</button>
             <div class="context-select">
-                <span>整理状态</span>
+                <span>{tx("shelfOrganizationStatus", "整理状态")}</span>
                 <select value={getBookStatus(contextBook)?.status || "not_started"} on:change={handleContextStatusChange}>
                     {#each statusOptions as [value, label]}
                         <option value={value}>{label}</option>
                     {/each}
                 </select>
             </div>
-            <button on:click={() => actionHint("请从阅读中心新增笔记收件箱查看该书新增内容")}>查看新增笔记</button>
-            <button on:click={() => actionHint("请在微信读书页使用更新同步")}>立即同步此书</button>
-            <button on:click={copyContextBook}>复制书籍信息</button>
-            <button disabled={!canOpenBook(contextBook)} on:click={openContextBook}>在数据库中定位</button>
-            <button on:click={() => actionHint("可在微信读书忽略书籍管理中维护忽略列表")}>忽略微信读书同步</button>
+            <button on:click={() => actionHint(tx("shelfViewNewHint", "请从阅读中心新增笔记收件箱查看该书新增内容"))}>{tx("shelfViewNew", "查看新增笔记")}</button>
+            <button on:click={() => actionHint(tx("shelfSyncNowHint", "请在微信读书页使用更新同步"))}>{tx("shelfSyncNow", "立即同步此书")}</button>
+            <button on:click={copyContextBook}>{tx("shelfCopyInfo", "复制书籍信息")}</button>
+            <button disabled={!canOpenBook(contextBook)} on:click={openContextBook}>{tx("shelfLocateDatabase", "在数据库中定位")}</button>
+            <button on:click={() => actionHint(tx("shelfIgnoreHint", "可在微信读书忽略书籍管理中维护忽略列表"))}>{tx("shelfIgnoreSync", "忽略微信读书同步")}</button>
         </div>
     {/if}
 </div>

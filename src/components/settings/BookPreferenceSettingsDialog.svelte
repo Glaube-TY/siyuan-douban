@@ -6,10 +6,12 @@
         loadBookPreferenceSettings,
         saveBookPreferenceSettings,
     } from "../../utils/settings/bookPreferenceSettingsService";
+    import { t } from "../../utils/i18n";
 
     export let plugin: any;
     export let close: () => void = () => {};
     export let onSaved: () => void = () => {};
+    const tx = (key: string, fallback: string) => t(plugin, key, fallback);
 
     let ratings = "";
     let categories = "";
@@ -33,7 +35,7 @@
                 categories: categories.split(/[,，]/),
                 statuses: statuses.split(/[,，]/),
             });
-            showMessage("书籍偏好设置已保存");
+            showMessage(tx("settingsPreferencesSaved", "书籍偏好设置已保存"));
             onSaved();
             close();
         } finally {
@@ -46,33 +48,33 @@
     <header class="settings-dialog-header">
         <div class="settings-dialog-icon"><SiYuanIcon name="book" size={20} /></div>
         <div>
-            <h2>书籍偏好设置</h2>
-            <p>配置添加书籍时可选的评分、分类和阅读状态。</p>
+            <h2>{tx("settingsPreferencesTitle", "书籍偏好设置")}</h2>
+            <p>{tx("settingsPreferencesDesc", "配置添加书籍时可选的评分、分类和阅读状态。")}</p>
         </div>
     </header>
 
     {#if isLoading}
-        <div class="settings-dialog-loading">加载中...</div>
+        <div class="settings-dialog-loading">{tx("uiLoading", "加载中...")}</div>
     {:else}
         <div class="settings-dialog-body">
             <label class="settings-dialog-field">
-                <span>评分等级</span>
-                <input class="b3-text-field" bind:value={ratings} placeholder="示例：五星, 四星, 三星" />
+                <span>{tx("settingsRatings", "评分等级")}</span>
+                <input class="b3-text-field" bind:value={ratings} placeholder={tx("settingsRatingsExample", "示例：五星, 四星, 三星")} />
             </label>
             <label class="settings-dialog-field">
-                <span>书籍分类</span>
-                <input class="b3-text-field" bind:value={categories} placeholder="示例：文学, 商业, 技术" />
+                <span>{tx("settingsCategories", "书籍分类")}</span>
+                <input class="b3-text-field" bind:value={categories} placeholder={tx("settingsCategoriesExample", "示例：文学, 商业, 技术")} />
             </label>
             <label class="settings-dialog-field">
-                <span>阅读状态</span>
-                <input class="b3-text-field" bind:value={statuses} placeholder="示例：未读, 在读, 已读" />
+                <span>{tx("settingsStatuses", "阅读状态")}</span>
+                <input class="b3-text-field" bind:value={statuses} placeholder={tx("settingsStatusesExample", "示例：未读, 在读, 已读")} />
             </label>
         </div>
     {/if}
 
     <footer class="settings-dialog-actions">
-        <button class="b3-button b3-button--outline" on:click={close}>取消</button>
-        <button class="b3-button b3-button--primary" on:click={save} disabled={isSaving}>保存</button>
+        <button class="b3-button b3-button--outline" on:click={close}>{t(plugin, "cancel", "取消")}</button>
+        <button class="b3-button b3-button--primary" on:click={save} disabled={isSaving}>{tx("uiSave", "保存")}</button>
     </footer>
 </div>
 

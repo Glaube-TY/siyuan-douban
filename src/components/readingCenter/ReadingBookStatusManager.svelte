@@ -1,7 +1,6 @@
 <script lang="ts">
     import { onMount, createEventDispatcher } from "svelte";
     import type { ReadingBookStatus, ReadingBookReviewStatus } from "../../types/readingStatus";
-    import { READING_BOOK_STATUS_LABELS } from "../../types/readingStatus";
     import { getReadingBookStatuses, getWereadSourceKey, normalizeReadingBookStatusSource, saveReadingBookStatuses, updateReadingBookStatusValue } from "../../utils/storage/readingStorage";
     import { safeLoadNotebookCache } from "../../utils/readingCenter/readingCenterData";
     import { openDoc } from "../../utils/openDoc";
@@ -9,9 +8,9 @@
     import SiYuanIcon from "../common/SiYuanIcon.svelte";
     import {
         getNoteDocumentBinding,
-        getNoteDocumentBindingLabel,
         validateNoteDocumentBindings,
     } from "../../utils/readingManagement/noteDocumentBinding";
+    import { t } from "../../utils/i18n";
 
     export let plugin: any;
 
@@ -21,7 +20,13 @@
     let filter: ReadingBookReviewStatus | "all" | "new" | "failed" = "all";
     let query = "";
 
-    const statusOptions = Object.entries(READING_BOOK_STATUS_LABELS) as Array<[ReadingBookReviewStatus, string]>;
+    const tx = (key: string, fallback: string) => t(plugin, key, fallback);
+    $: statusOptions = ([
+        ["not_started", tx("organizeNotStarted", "未开始整理")],
+        ["to_review", tx("organizeToReview", "待整理")],
+        ["reviewing", tx("organizeReviewing", "整理中")],
+        ["reviewed", tx("organizeReviewed", "已整理")],
+    ] as Array<[ReadingBookReviewStatus, string]>);
 
     onMount(loadStatuses);
 
@@ -116,18 +121,25 @@
 
     function openBook(item: ReadingBookStatus) {
         if (!item.noteDocId) {
-            showMessage("该书暂无可打开的本地笔记");
+            showMessage(tx("bookNoLocalNote", "该书暂无可打开的本地笔记"));
             return;
         }
         openDoc(plugin, item.noteDocId, 1);
     }
 
     function formatTime(ts?: number): string {
-        return ts ? new Date(ts).toLocaleString("zh-CN", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "--";
+        return ts ? new Date(ts).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "--";
     }
 
     function getBindingLabel(item: ReadingBookStatus): string {
-        return getNoteDocumentBindingLabel(item.noteDocumentBindingState || (item.noteDocId ? "bound" : "not_created"));
+        const state = item.noteDocumentBindingState || (item.noteDocId ? "bound" : "not_created");
+        const labels: Record<string, string> = {
+            bound: tx("bindingBound", "已绑定文档"),
+            not_created: tx("bindingNotCreated", "未创建文档"),
+            missing: tx("bindingMissing", "文档不存在"),
+            invalid: tx("bindingInvalid", "文档绑定异常"),
+        };
+        return labels[state] || labels.not_created;
     }
 
     $: visibleStatuses = statuses.filter((item) => {
@@ -142,25 +154,25 @@
 
 <div class="reading-page">
     <div class="page-header">
-        <button class="back-btn" on:click={() => dispatch("back")}>返回总览</button>
+        <button class="back-btn" on:click={() => dispatch("back")}>{tx("uiBackOverview", "返回总览")}</button>
         <div>
-            <h2>书籍整理状态</h2>
-            <p>维护每本书的整理进度，新增笔记和同步失败标签会自动更新</p>
+            <h2>{tx("organizeTitle", "书籍整理状态")}</h2>
+            <p>{tx("organizeDesc", "维护每本书的整理进度，新增笔记和同步失败标签会自动更新")}</p>
         </div>
     </div>
 
     <div class="subpage-toolbar">
         <div class="subpage-toolbar-group">
-            <input bind:value={query} placeholder="搜索书名 / ISBN / BookID" />
+            <input bind:value={query} placeholder={tx("organizeSearch", "搜索书名 / ISBN / BookID")} />
         </div>
         <div class="subpage-toolbar-extra">
             <select bind:value={filter}>
-                <option value="all">全部</option>
+                <option value="all">{tx("uiAll", "全部")}</option>
                 {#each statusOptions as [value, label]}
                     <option value={value}>{label}</option>
                 {/each}
-                <option value="new">有新增笔记</option>
-                <option value="failed">同步失败</option>
+                <option value="new">{tx("organizeHasNew", "有新增笔记")}</option>
+                <option value="failed">{tx("progressFailedState", "同步失败")}</option>
             </select>
         </div>
     </div>
@@ -175,14 +187,14 @@
                             <span>
                                 {#if item.sourceType === "weread-mp"}
                                     <SiYuanIcon name="officialAccount" pluginName={plugin.name} size={12} />
-                                    <span>公众号</span>
+                                    <span>{tx("uiMpAccount", "公众号")}</span>
                                 {:else if item.sourceType === "local-book"}
-                                    本地书
+                                    {tx("uiLocalBook", "本地书")}
                                 {:else}
-                                    普通书
+                                    {tx("uiNormalBook", "普通书")}
                                 {/if}
                             </span>
-                            <span>{item.bookID || item.isbn || "无来源 ID"}</span>
+                            <span>{item.bookID || item.isbn || tx("organizeNoSourceId", "无来源 ID")}</span>
                         </div>
                     </div>
                     <select value={item.status} on:change={(event) => handleStatusChange(item, event)}>
@@ -192,13 +204,13 @@
                     </select>
                 </div>
                 <div class="badges">
-                    {#if item.hasNewNotes}<span>有新增笔记 {item.lastNewNoteCount || ""}</span>{/if}
-                    {#if item.syncFailed}<span class="failed">同步失败</span>{/if}
+                    {#if item.hasNewNotes}<span>{tx("organizeHasNew", "有新增笔记")} {item.lastNewNoteCount || ""}</span>{/if}
+                    {#if item.syncFailed}<span class="failed">{tx("progressFailedState", "同步失败")}</span>{/if}
                     <span class:unbound={!item.noteDocId && !item.syncFailed}>{getBindingLabel(item)}</span>
                 </div>
                 <div class="footer">
-                    <span>最近同步：{formatTime(item.lastSyncedAt)}</span>
-                    <button disabled={!item.noteDocId} on:click={() => openBook(item)}>打开笔记</button>
+                    <span>{tx("organizeLatestSync", "最近同步：")}{formatTime(item.lastSyncedAt)}</span>
+                    <button disabled={!item.noteDocId} on:click={() => openBook(item)}>{tx("uiOpenNote", "打开笔记")}</button>
                 </div>
             </article>
         {/each}

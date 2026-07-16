@@ -10,10 +10,12 @@ import {
     decryptWereadApiKey,
     isEncryptedWereadApiKey,
 } from "./wereadApiKeyCrypto";
+import { localizeKnownUiText, t } from "../i18n";
 
 type PluginLike = {
     loadData: (key: string) => Promise<any>;
     saveData: (key: string, value: any) => Promise<void>;
+    i18n?: Record<string, unknown>;
 };
 
 export interface WereadAuthState {
@@ -43,7 +45,7 @@ export async function loadWereadAuthState(plugin: PluginLike): Promise<WereadAut
                 maskedApiKey: "",
                 verified: false,
                 verifiedAt: auth.verifiedAt || 0,
-                lastError: "API Key 解密失败，请重新验证",
+                lastError: t(plugin, "wereadApiKeyDecryptFailed", "API Key 解密失败，请重新验证"),
             };
         }
         // 兜底：解密成功但旧明文仍残留时，清空明文
@@ -96,7 +98,7 @@ export async function verifyAndSaveWereadApiKey(plugin: PluginLike, apiKey: stri
         verified: !!result.success,
         verifiedAt: result.success ? result.verifiedAt || Date.now() : 0,
         apiProtocolVersion: WEREAD_API_PROTOCOL_VERSION,
-        lastError: result.success ? "" : result.message,
+        lastError: result.success ? "" : localizeKnownUiText(plugin, result.message),
     };
     await plugin.saveData("weread_auth_settings", next);
     return {

@@ -3,13 +3,16 @@
     import ReadingFeatureNav from "./ReadingFeatureNav.svelte";
     import type { FeatureTab } from "../../types/readingCenter";
     import SiYuanIcon from "../common/SiYuanIcon.svelte";
+    import { t } from "../../utils/i18n";
 
+    export let plugin: any;
     export let title: string = "";
     export let subtitle: string = "";
     export let tabs: FeatureTab[] = [];
     export let activeTab: string = "";
 
     const dispatch = createEventDispatcher();
+    const tx = (key: string, fallback: string) => t(plugin, key, fallback);
 
     function handleBack() {
         dispatch("back");
@@ -25,10 +28,10 @@
         <div class="reading-feature-header-top">
             <button class="reading-feature-back" on:click={handleBack}>
                 <SiYuanIcon name="back" size={16} className="reading-feature-back-icon" />
-                <span>返回总览</span>
+                <span>{tx("uiBackOverview", "返回总览")}</span>
             </button>
             <div class="reading-feature-breadcrumb">
-                <span class="breadcrumb-root">阅读总控制台</span>
+                <span class="breadcrumb-root">{tx("workbenchHeroTitle", "阅读总控制台")}</span>
                 <span class="breadcrumb-separator">/</span>
                 <span class="breadcrumb-current">{title}</span>
             </div>

@@ -7,18 +7,21 @@
     import { secureExternalImageUrl } from "../../utils/core/externalImageUrl";
     import { loadWereadAuthState } from "../../utils/settings/wereadSettingsService";
     import { attachWereadApiLocalNoteDocs } from "../../utils/weread/api/findWereadApiBookTargetDoc";
-    import { getNoteDocumentBindingLabel, type NoteDocumentBindingState } from "../../utils/readingManagement/noteDocumentBinding";
+    import type { NoteDocumentBindingState } from "../../utils/readingManagement/noteDocumentBinding";
     import { buildApiBookShelf } from "../../utils/weread/api/buildApiBookShelf";
     import { openDoc } from "../../utils/openDoc";
+    import { t } from "../../utils/i18n";
 
     export let plugin: any;
     export let refreshKey = 0;
 
     type ShelfType = "local" | "weread-notes" | "weread-shelf";
-    const tabs: Array<{ key: ShelfType; label: string; icon: string }> = [
-        { key: "local", label: "本地书架", icon: "localShelf" },
-        { key: "weread-notes", label: "有笔记书籍", icon: "weread" },
-        { key: "weread-shelf", label: "微信读书书架", icon: "weread" },
+    const tx = (key: string, fallback: string, params: Record<string, string | number> = {}) => t(plugin, key, fallback, params);
+    let tabs: Array<{ key: ShelfType; label: string; icon: string }> = [];
+    $: tabs = [
+        { key: "local" as ShelfType, label: tx("shelfLocal", "本地书架"), icon: "localShelf" },
+        { key: "weread-notes" as ShelfType, label: tx("shelfWereadNotes", "有笔记书籍"), icon: "weread" },
+        { key: "weread-shelf" as ShelfType, label: tx("shelfWeread", "微信读书书架"), icon: "weread" },
     ];
 
     let activeTab: ShelfType = "local";
@@ -53,9 +56,9 @@
     }
 
     function getEmptyMessage(tab: ShelfType): string {
-        if (tab === "local") return "暂无本地书籍，请先配置数据库或添加书籍";
-        if (tab === "weread-notes") return "暂无有笔记书籍缓存，请先执行微信读书同步";
-        return "暂无微信读书书架缓存，可点击刷新获取";
+        if (tab === "local") return tx("shelfEmptyLocal", "暂无本地书籍，请先配置数据库或添加书籍");
+        if (tab === "weread-notes") return tx("shelfEmptyNotes", "暂无有笔记书籍缓存，请先执行微信读书同步");
+        return tx("shelfEmptyWeread", "暂无微信读书书架缓存，可点击刷新获取");
     }
 
     function getLocalDocId(book: any): string {
@@ -70,7 +73,13 @@
 
     function getBindingLabel(book: any): string {
         const state = (book.noteDocumentBindingState || (canOpenLocalDoc(book) ? "bound" : "not_created")) as NoteDocumentBindingState;
-        return getNoteDocumentBindingLabel(state);
+        const labels: Record<NoteDocumentBindingState, string> = {
+            bound: tx("bindingBound", "已绑定"),
+            not_created: tx("bindingNotCreated", "未创建笔记"),
+            missing: tx("bindingMissing", "笔记已失效"),
+            invalid: tx("bindingInvalid", "绑定异常"),
+        };
+        return labels[state];
     }
 
     async function loadLocal() {
@@ -93,7 +102,7 @@
     async function refreshShelf() {
         const auth = await loadWereadAuthState(plugin);
         if (!auth.verified || !auth.apiKey) {
-            showMessage("请先验证微信读书 API Key");
+            showMessage(tx("shelfVerifyApiKey", "请先验证微信读书 API Key"));
             return;
         }
         isLoading = true;
@@ -111,7 +120,7 @@
             shelfLoaded = true;
             await plugin.saveData("weread_api_bookshelf_cache", enhanced);
         } catch (e) {
-            showMessage(`刷新微信读书书架失败：${e?.message || "未知错误"}`);
+            showMessage(tx("shelfRefreshFailed", "刷新微信读书书架失败：{error}", { error: e?.message || tx("uiUnknownError", "未知错误") }));
         } finally {
             isLoading = false;
         }
@@ -135,7 +144,7 @@
         if (shelfLoaded && shelfBooks.length > 0) return;
         const auth = await loadWereadAuthState(plugin);
         if (!auth.verified || !auth.apiKey) {
-            showMessage("请先验证微信读书 API Key");
+            showMessage(tx("shelfVerifyApiKey", "请先验证微信读书 API Key"));
             return;
         }
         isLoading = true;
@@ -152,7 +161,7 @@
             shelfLoaded = true;
             await plugin.saveData("weread_api_bookshelf_cache", enhanced);
         } catch (e) {
-            showMessage(`获取微信读书书架失败：${e?.message || "未知错误"}`);
+            showMessage(tx("shelfLoadFailed", "获取微信读书书架失败：{error}", { error: e?.message || tx("uiUnknownError", "未知错误") }));
         } finally {
             isLoading = false;
         }
@@ -171,7 +180,7 @@
         if (docId) {
             openDoc(plugin, docId, 1);
         } else {
-            showMessage(`${getBindingLabel(book)}，暂无可打开的本地笔记文档`);
+            showMessage(tx("shelfNoOpenDoc", "{state}，暂无可打开的本地笔记文档", { state: getBindingLabel(book) }));
         }
     }
 
@@ -201,13 +210,13 @@
     <div class="workbench-panel-head">
         <div class="workbench-panel-title">
             <SiYuanIcon name="localShelf" size={18} />
-            <h2>书架中心</h2>
+            <h2>{tx("workbenchShelfCenter", "书架中心")}</h2>
         </div>
         <div class="shelf-hub-actions">
             {#if activeTab === "weread-shelf"}
                 <button class="workbench-panel-link" on:click={refreshShelf} disabled={isLoading}>
                     <SiYuanIcon name="sync" size={14} />
-                    <span>刷新微信读书书架</span>
+                    <span>{tx("shelfRefreshWeread", "刷新微信读书书架")}</span>
                 </button>
             {/if}
         </div>
@@ -238,18 +247,18 @@
             <input
                 class="b3-text-field"
                 bind:value={query}
-                placeholder="搜索书名、作者、ISBN"
+                placeholder={tx("shelfSearchPlaceholder", "搜索书名、作者、ISBN")}
             />
         </div>
         <button class="workbench-panel-link" on:click={activeTab === "weread-shelf" ? refreshShelf : init} disabled={isLoading}>
             <SiYuanIcon name="refresh" size={14} />
-            <span>{activeTab === "weread-shelf" ? "刷新书架" : "刷新"}</span>
+            <span>{activeTab === "weread-shelf" ? tx("shelfRefreshShelf", "刷新书架") : tx("uiRefresh", "刷新")}</span>
         </button>
     </div>
 
     <div class="shelf-hub-content">
         {#if isLoading}
-            <div class="shelf-hub-empty">加载中...</div>
+            <div class="shelf-hub-empty">{tx("uiLoading", "加载中...")}</div>
         {:else if filteredBooks.length === 0}
             <div class="shelf-hub-empty">{emptyMessage}</div>
         {:else}
@@ -264,11 +273,11 @@
                             </div>
                         {/if}
                         <div class="shelf-hub-card-info">
-                            <strong class="shelf-hub-card-title">{book.title || "未命名书籍"}</strong>
+                            <strong class="shelf-hub-card-title">{book.title || t(plugin, "unnamedBook", "未命名书籍")}</strong>
                             <em class="shelf-hub-card-author">{book.author || ""}</em>
                             <div class="shelf-hub-card-badges">
                                 {#if book.noteCount || book.totalNoteCount}
-                                    <span class="shelf-hub-card-badge">{book.totalNoteCount ?? book.noteCount} 笔记</span>
+                                    <span class="shelf-hub-card-badge">{tx("shelfNotesCount", "{count} 笔记", { count: book.totalNoteCount ?? book.noteCount })}</span>
                                 {/if}
                                 {#if canOpenLocalDoc(book)}
                                     <span class="shelf-hub-card-badge shelf-hub-card-badge--ok">{getBindingLabel(book)}</span>
@@ -276,11 +285,11 @@
                                     <span class="shelf-hub-card-badge">{getBindingLabel(book)}</span>
                                 {/if}
                                 {#if activeTab === "weread-shelf" && book.sourceType}
-                                    <span class="shelf-hub-card-badge">{book.sourceType === "weread_mp_account" ? "公众号" : "书籍"}</span>
+                                    <span class="shelf-hub-card-badge">{book.sourceType === "weread_mp_account" ? tx("uiMpAccount", "公众号") : tx("uiBook", "书籍")}</span>
                                 {/if}
                             </div>
                             {#if canOpenLocalDoc(book)}
-                                <button class="shelf-hub-card-open-btn" on:click={(e) => openBookBtn(book, e)}>打开笔记</button>
+                                <button class="shelf-hub-card-open-btn" on:click={(e) => openBookBtn(book, e)}>{tx("uiOpenNote", "打开笔记")}</button>
                             {/if}
                         </div>
                     </div>

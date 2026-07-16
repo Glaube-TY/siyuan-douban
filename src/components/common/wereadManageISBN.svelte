@@ -60,7 +60,7 @@
 
 <div class="custom-ISBN-dialog">
     {#if localStaleBooks.length > 0}
-    <div class="stale-notice">⚠️ 以下为已失效历史项（对应本地书籍已删除，不会再阻止该书重新出现在新书列表）</div>
+    <div class="stale-notice">⚠️ {plugin.i18n.managementStaleNotice || "以下为已失效历史项（对应本地书籍已删除，不会再阻止该书重新出现在新书列表）"}</div>
     <div class="table-container stale-table">
         <table class="isbn-table">
             <thead>
@@ -98,7 +98,7 @@
     </div>
     <div class="stale-actions">
         <button class="clear-stale-btn" on:click={handleClearStale}>
-            一键清理失效项（{localStaleBooks.length}）
+            {(plugin.i18n.managementClearStale || "一键清理失效项（{count}）").replace("{count}", String(localStaleBooks.length))}
         </button>
     </div>
     {/if}

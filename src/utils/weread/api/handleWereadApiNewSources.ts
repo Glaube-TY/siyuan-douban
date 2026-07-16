@@ -13,6 +13,7 @@ import { detectWereadApiNewSources, type WereadApiNewSourceItem } from "./detect
 import { findWereadApiBookTargetDoc } from "./findWereadApiBookTargetDoc";
 import WereadNewBooks from "@/components/common/wereadNewBooksDialog.svelte";
 import type { WereadSyncProgressCallback } from "./wereadSyncProgress";
+import { t } from "@/utils/i18n";
 
 interface WereadPluginLike {
   loadData: (key: string) => Promise<any>;
@@ -40,7 +41,7 @@ export async function showWereadApiNewSourcesDialogAndSync(
     try {
       onProgress?.({
         stage: "planning",
-        message: "正在比对本地数据库并检查新书籍和公众号...",
+        message: t(plugin, "newSourcesChecking", "正在比对本地数据库并检查新书籍和公众号..."),
         status: "running",
       });
       const result = await detectWereadApiNewSources(plugin, apiKey);
@@ -53,7 +54,7 @@ export async function showWereadApiNewSourcesDialogAndSync(
     if (newSources.length === 0) {
       onProgress?.({
         stage: "planning",
-        message: "没有待处理的新来源，正在生成同步计划...",
+        message: t(plugin, "newSourcesNoPending", "没有待处理的新来源，正在生成同步计划..."),
         status: "running",
       });
       await runSync();
@@ -63,7 +64,7 @@ export async function showWereadApiNewSourcesDialogAndSync(
     onProgress?.({
       stage: "confirming",
       total: newSources.length,
-      message: `发现 ${newSources.length} 个新来源，等待确认处理方式...`,
+      message: t(plugin, "newSourcesFound", "发现 {count} 个新来源，等待确认处理方式...", { count: newSources.length }),
       status: "running",
     });
 
@@ -102,7 +103,7 @@ export async function showWereadApiNewSourcesDialogAndSync(
                 onProgress?.({
                   stage: "confirming",
                   total: newSources.length,
-                  message: "已确认新来源，正在导入所选来源并准备同步...",
+                  message: t(plugin, "newSourcesConfirmed", "已确认新来源，正在导入所选来源并准备同步..."),
                   status: "running",
                 });
 
@@ -145,11 +146,11 @@ export async function showWereadApiNewSourcesDialogAndSync(
                   await runSync({ forceBookIDs, forceMpBookIDs });
                   resolve("synced");
                 } catch (e) {
-                  showMessage(`同步失败：${e?.message || "未知错误"}`);
+                  showMessage(t(plugin, "wereadSyncFailedWithError", "同步失败：{error}", { error: e?.message || t(plugin, "uiUnknownError", "未知错误") }));
                   resolve("cancelled");
                 }
               } catch (e) {
-                showMessage(`处理新来源失败：${e?.message || "未知错误"}`);
+                showMessage(t(plugin, "newSourcesProcessFailed", "处理新来源失败：{error}", { error: e?.message || t(plugin, "uiUnknownError", "未知错误") }));
                 try { dialog.close(); } catch {}
                 resolve("cancelled");
               }
@@ -158,7 +159,7 @@ export async function showWereadApiNewSourcesDialogAndSync(
               try {
                 onProgress?.({
                   stage: "planning",
-                  message: "已跳过新来源导入，正在生成已有来源同步计划...",
+                  message: t(plugin, "newSourcesSkippedPlanning", "已跳过新来源导入，正在生成已有来源同步计划..."),
                   status: "running",
                 });
                 showMessage(
@@ -179,11 +180,11 @@ export async function showWereadApiNewSourcesDialogAndSync(
                   await runSync();
                   resolve("synced");
                 } catch (e) {
-                  showMessage(`继续同步失败：${e?.message || "未知错误"}`);
+                  showMessage(t(plugin, "newSourcesContinueFailed", "继续同步失败：{error}", { error: e?.message || t(plugin, "uiUnknownError", "未知错误") }));
                   resolve("cancelled");
                 }
               } catch (e) {
-                showMessage(`继续同步失败：${e?.message || "未知错误"}`);
+                showMessage(t(plugin, "newSourcesContinueFailed", "继续同步失败：{error}", { error: e?.message || t(plugin, "uiUnknownError", "未知错误") }));
                 try { dialog.close(); } catch {}
                 resolve("cancelled");
               }
@@ -201,7 +202,7 @@ export async function showWereadApiNewSourcesDialogAndSync(
     }
   });
   } catch (e) {
-    showMessage(`同步失败：${e?.message || "未知错误"}`);
+    showMessage(t(plugin, "wereadSyncFailedWithError", "同步失败：{error}", { error: e?.message || t(plugin, "uiUnknownError", "未知错误") }));
     throw e;
   }
 }
@@ -327,11 +328,11 @@ async function handleNewSourcesConfirm(
         if (avID) {
           const result = await addUseBookIDsToDatabase(plugin, avID, bookDetail);
           if (result?.code !== 0) {
-            showMessage(`bookID 导入失败: ${bookItem.title || bookItem.bookID}：${result?.msg || ""}`);
+            showMessage(t(plugin, "newSourcesBookIdImportFailed", "bookID 导入失败：{title}：{error}", { title: bookItem.title || bookItem.bookID, error: result?.msg || "" }));
           }
         }
       } catch (e) {
-        showMessage(`bookID 导入失败: ${bookItem.title || bookItem.bookID}：${e?.message || "未知错误"}`);
+        showMessage(t(plugin, "newSourcesBookIdImportFailed", "bookID 导入失败：{title}：{error}", { title: bookItem.title || bookItem.bookID, error: e?.message || t(plugin, "uiUnknownError", "未知错误") }));
       }
     }
   }
@@ -360,13 +361,13 @@ async function handleNewSourcesConfirm(
           finishDate: ""
         }, plugin);
         if (result?.code !== 0) {
-          showMessage(`普通书导入失败: ${book.title || book.bookID}：${result?.msg || ""}`);
+          showMessage(t(plugin, "newSourcesBookImportFailed", "普通书导入失败：{title}：{error}", { title: book.title || book.bookID, error: result?.msg || "" }));
         } else {
-          showMessage(`成功导入《${book.title || doubanBook.title || isbn}》`);
+          showMessage(t(plugin, "newSourcesBookImported", "成功导入《{title}》", { title: book.title || doubanBook.title || isbn }));
         }
       }
     } catch {
-      showMessage(`普通书导入失败: ${book.title || book.bookID}`);
+      showMessage(t(plugin, "newSourcesBookImportFailedShort", "普通书导入失败：{title}", { title: book.title || book.bookID }));
     }
   }
 
@@ -383,7 +384,7 @@ async function handleNewSourcesConfirm(
         await ensureMpAccountInDatabase(plugin, avID, record);
       }
     } catch (e) {
-      showMessage(`公众号导入失败: ${mp.title || mp.bookID}`);
+      showMessage(t(plugin, "newSourcesMpImportFailed", "公众号导入失败：{title}", { title: mp.title || mp.bookID }));
     }
   }
 

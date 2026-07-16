@@ -6,6 +6,7 @@
     import SiYuanIcon from "../common/SiYuanIcon.svelte";
     import { createWereadNotesTemplateDialog } from "../../utils/weread/wereadDialogs";
     import { loadTemplateSettings, saveTemplateSettings } from "../../utils/settings/templateSettingsService";
+    import { t } from "../../utils/i18n";
 
     export let plugin: any;
     export let i18n: any = {};
@@ -20,6 +21,7 @@
     let wereadPositionMark = "";
     let isLoading = true;
     let isSaving = false;
+    const tx = (key: string, fallback: string) => t(plugin, key, fallback);
 
     onMount(async () => {
         const data = await loadTemplateSettings(plugin);
@@ -34,7 +36,7 @@
 
     function editNoteTemplate() {
         const dialog = svelteDialog({
-            title: i18n.customNoteTemplate || "书籍笔记模板",
+            title: tx("settingsLocalBookTemplate", "书籍笔记模板"),
             width: "800px",
             height: "520px",
             constructor: (containerEl: HTMLElement) => new TemplateEditorDialog({
@@ -61,7 +63,7 @@
                 }
             },
             isBook ? wereadTemplates : wereadMpTemplates,
-            isBook ? i18n.setBookNotesTemplateTitle || "微信读书书籍模板" : i18n.setMpNotesTemplateTitle || "微信公众号模板",
+            isBook ? tx("settingsWereadBookTemplate", "微信读书书籍模板") : tx("settingsWereadMpTemplate", "微信公众号模板"),
         );
         opener();
     }
@@ -77,7 +79,7 @@
                 wereadMpTemplates,
                 wereadPositionMark,
             });
-            showMessage("模板设置已保存");
+            showMessage(tx("settingsTemplatesSaved", "模板设置已保存"));
             onSaved();
             close();
         } finally {
@@ -90,27 +92,27 @@
     <header class="settings-dialog-header">
         <div class="settings-dialog-icon"><SiYuanIcon name="template" size={20} /></div>
         <div>
-            <h2>模板设置</h2>
-            <p>维护本地书籍笔记、微信读书书籍和公众号模板。</p>
+            <h2>{tx("settingsTemplatesTitle", "模板设置")}</h2>
+            <p>{tx("settingsTemplatesDesc", "维护本地书籍笔记、微信读书书籍和公众号模板。")}</p>
         </div>
     </header>
 
     {#if isLoading}
-        <div class="settings-dialog-loading">加载中...</div>
+        <div class="settings-dialog-loading">{tx("uiLoading", "加载中...")}</div>
     {:else}
         <div class="settings-dialog-body">
             <label class="settings-dialog-switch-row">
                 <span>
-                    <strong>添加书籍时生成读书笔记</strong>
-                    <em>关闭后只添加书籍属性视图记录。</em>
+                    <strong>{tx("settingsGenerateNotes", "添加书籍时生成读书笔记")}</strong>
+                    <em>{tx("settingsGenerateNotesDesc", "关闭后只添加书籍属性视图记录。")}</em>
                 </span>
                 <input type="checkbox" class="settings-switch" bind:checked={addNotes} />
                 <span class="settings-switch-track"><span class="settings-switch-thumb"></span></span>
             </label>
             <label class="settings-dialog-switch-row">
                 <span>
-                    <strong>使用思源模板渲染</strong>
-                    <em>保持旧模板渲染开关，不改变模板占位符。</em>
+                    <strong>{tx("settingsSiyuanRender", "使用思源模板渲染")}</strong>
+                    <em>{tx("settingsSiyuanRenderDesc", "保持旧模板渲染开关，不改变模板占位符。")}</em>
                 </span>
                 <input type="checkbox" class="settings-switch" bind:checked={isSYTemplateRender} />
                 <span class="settings-switch-track"><span class="settings-switch-thumb"></span></span>
@@ -119,31 +121,31 @@
             <div class="settings-dialog-template-grid">
                 <button class="settings-dialog-template-card" on:click={editNoteTemplate}>
                     <SiYuanIcon name="book" size={18} />
-                    <span>书籍笔记模板</span>
-                    <em>{noteTemplate.trim() ? "已配置" : "未配置"}</em>
+                    <span>{tx("settingsLocalBookTemplate", "书籍笔记模板")}</span>
+                    <em>{noteTemplate.trim() ? tx("uiConfigured", "已配置") : tx("uiNotConfigured", "未配置")}</em>
                 </button>
                 <button class="settings-dialog-template-card" on:click={() => editWereadTemplate("book")}>
                     <SiYuanIcon name="weread" pluginName={plugin.name} size={18} />
-                    <span>微信读书书籍模板</span>
-                    <em>{wereadTemplates.trim() ? "已配置" : "未配置"}</em>
+                    <span>{tx("settingsWereadBookTemplate", "微信读书书籍模板")}</span>
+                    <em>{wereadTemplates.trim() ? tx("uiConfigured", "已配置") : tx("uiNotConfigured", "未配置")}</em>
                 </button>
                 <button class="settings-dialog-template-card" on:click={() => editWereadTemplate("mp")}>
                     <SiYuanIcon name="officialAccount" pluginName={plugin.name} size={18} />
-                    <span>公众号模板</span>
-                    <em>{wereadMpTemplates.trim() ? "已配置" : "未配置"}</em>
+                    <span>{tx("settingsWereadMpTemplate", "公众号模板")}</span>
+                    <em>{wereadMpTemplates.trim() ? tx("uiConfigured", "已配置") : tx("uiNotConfigured", "未配置")}</em>
                 </button>
             </div>
 
             <label class="settings-dialog-field">
-                <span>同步位置标记</span>
+                <span>{tx("settingsPositionMark", "同步位置标记")}</span>
                 <input class="b3-text-field" bind:value={wereadPositionMark} />
             </label>
         </div>
     {/if}
 
     <footer class="settings-dialog-actions">
-        <button class="b3-button b3-button--outline" on:click={close}>取消</button>
-        <button class="b3-button b3-button--primary" on:click={save} disabled={isSaving}>保存</button>
+        <button class="b3-button b3-button--outline" on:click={close}>{t(plugin, "cancel", "取消")}</button>
+        <button class="b3-button b3-button--primary" on:click={save} disabled={isSaving}>{tx("uiSave", "保存")}</button>
     </footer>
 </div>
 

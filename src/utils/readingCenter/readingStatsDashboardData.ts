@@ -5,6 +5,7 @@ import { getLatestWereadSyncReport } from "../storage/syncReportStorage";
 import { loadWereadNoteUnitBlockIndex } from "../weread/incremental/blockIndexStorage";
 import { buildSyncOutcomeData } from "../readingManagement/managementData";
 import { countNotebookNotes, safeLoadNotebookCache, safeLoadReadingStatsCache } from "./readingCenterData";
+import { t } from "../i18n";
 
 export interface ReadingRecentDay {
     date: string;
@@ -127,15 +128,15 @@ export async function getReadingStatsDashboardView(plugin: any): Promise<Reading
     const dailyReadTimes = buildDailyReadTimesRecord(dashboard);
     const todayReadSeconds = Number(dailyReadTimes[toDateKey(Date.now())] || 0);
     const currentMonth = toMonthKey(new Date());
-    const periods = buildPeriodViews(dashboard);
+    const periods = buildPeriodViews(dashboard, plugin);
 
     return {
         loadedAt: dashboard?.loadedAt,
         hasStats,
         metrics: {
-            overallReadTimeText: hasStats ? formatReadingDuration(overall?.totalReadTime || 0) : "暂无",
-            annualReadTimeText: hasStats ? formatReadingDuration(annually?.totalReadTime || 0) : "暂无",
-            monthlyReadTimeText: hasStats ? formatReadingDuration(monthly?.totalReadTime || 0) : "暂无",
+            overallReadTimeText: hasStats ? formatReadingDuration(overall?.totalReadTime || 0, plugin) : t(plugin, "uiNoData", "暂无"),
+            annualReadTimeText: hasStats ? formatReadingDuration(annually?.totalReadTime || 0, plugin) : t(plugin, "uiNoData", "暂无"),
+            monthlyReadTimeText: hasStats ? formatReadingDuration(monthly?.totalReadTime || 0, plugin) : t(plugin, "uiNoData", "暂无"),
             readDays: overall?.readDays || annually?.readDays || 0,
             annualFinished: countFinishedBooks(annually),
             noteCount,
@@ -147,19 +148,19 @@ export async function getReadingStatsDashboardView(plugin: any): Promise<Reading
             pendingInbox,
             actionableIssues,
             todayReadSeconds,
-            todayReadTimeText: formatReadingDuration(todayReadSeconds),
+            todayReadTimeText: formatReadingDuration(todayReadSeconds, plugin),
         },
-        annualMonthlyTrend: buildAnnualMonthlyTrend(annually?.readTimes || {}),
-        yearlyTrend: buildYearlyTrend(overall?.readTimes || {}, annually),
+        annualMonthlyTrend: buildAnnualMonthlyTrend(annually?.readTimes || {}, plugin),
+        yearlyTrend: buildYearlyTrend(overall?.readTimes || {}, annually, plugin),
         periods,
         defaultPeriodMode: getDefaultPeriodMode(periods),
         dailyReadTimes,
         calendarAvailableMonths: buildCalendarAvailableMonths(dailyReadTimes, currentMonth),
         currentMonth,
-        categoryRanking: buildCategoryRanking(dashboard),
-        categoryRadar: buildCategoryRadar(buildCategoryRanking(dashboard)),
-        rhythm: buildLast30Days(dashboard),
-        longestBooks: buildLongestBooks(dashboard),
+        categoryRanking: buildCategoryRanking(dashboard, plugin),
+        categoryRadar: buildCategoryRadar(buildCategoryRanking(dashboard, plugin)),
+        rhythm: buildLast30Days(dashboard, plugin),
+        longestBooks: buildLongestBooks(dashboard, plugin),
         syncCoverage: {
             latestSyncTime: latestReport?.endedAt || latestReport?.startedAt,
             latestAdded: syncChanges.added,
@@ -206,12 +207,13 @@ function parseMonthKey(monthKey: string): Date {
     return new Date(year, month - 1, 1);
 }
 
-function formatMonthLabel(index: number): string {
-    return `${index + 1}月`;
+function formatMonthLabel(index: number, source?: Record<string, unknown>): string {
+    return t(source, "statsMonthNumber", "{month}月", { month: index + 1 });
 }
 
-function getPeriodLabel(mode: ReadingPeriodMode): string {
-    return PERIOD_LABELS[mode] || mode;
+function getPeriodLabel(mode: ReadingPeriodMode, source?: Record<string, unknown>): string {
+    const keys: Record<ReadingPeriodMode, string> = { weekly: "statsThisWeek", monthly: "statsThisMonth", annually: "statsThisYear", overall: "statsOverall" };
+    return t(source, keys[mode], PERIOD_LABELS[mode] || mode);
 }
 
 function formatReadTimeLabel(mode: ReadingPeriodMode, timestampKey: string): string {
@@ -220,35 +222,35 @@ function formatReadTimeLabel(mode: ReadingPeriodMode, timestampKey: string): str
 
     const date = new Date(ms);
     if (mode === "annually") {
-        return `${date.getMonth() + 1}月`;
+        return date.toLocaleDateString(undefined, { month: "short" });
     }
     if (mode === "overall") {
-        return `${date.getFullYear()}年`;
+        return date.toLocaleDateString(undefined, { year: "numeric" });
     }
-    return `${date.getMonth() + 1}月${date.getDate()}日`;
+    return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
-function formatReadStatName(stat: string): string {
+function formatReadStatName(stat: string, source?: Record<string, unknown>): string {
     const lower = String(stat || "").toLowerCase();
-    if (lower === "read" || lower === "reading") return "阅读";
-    if (lower === "finished" || lower === "finish") return "读完";
-    if (lower === "note" || lower === "notes") return "笔记";
-    if (lower === "readbook" || lower === "book") return "读过";
-    return stat || "未命名";
+    if (lower === "read" || lower === "reading") return t(source, "statsRead", "阅读");
+    if (lower === "finished" || lower === "finish") return t(source, "statsFinished", "读完");
+    if (lower === "note" || lower === "notes") return t(source, "statsNotes", "笔记");
+    if (lower === "readbook" || lower === "book") return t(source, "statsReadBooks", "读过");
+    return stat || t(source, "statsUnnamed", "未命名");
 }
 
-function getRecentReadTimes(mode: ReadingPeriodMode, readTimes: ReadTimes, limit = 12): Array<{ date: string; duration: string }> {
+function getRecentReadTimes(mode: ReadingPeriodMode, readTimes: ReadTimes, source?: Record<string, unknown>, limit = 12): Array<{ date: string; duration: string }> {
     return Object.entries(readTimes || {})
         .filter(([, value]) => Number(value || 0) > 0)
         .sort((a, b) => Number(b[0]) - Number(a[0]))
         .slice(0, limit)
         .map(([key, value]) => ({
             date: formatReadTimeLabel(mode, key),
-            duration: formatReadingDuration(Number(value || 0)),
+            duration: formatReadingDuration(Number(value || 0), source),
         }));
 }
 
-function buildReadTimesTrend(mode: ReadingPeriodMode, readTimes: ReadTimes): Array<{ label: string; seconds: number; duration: string }> {
+function buildReadTimesTrend(mode: ReadingPeriodMode, readTimes: ReadTimes, source?: Record<string, unknown>): Array<{ label: string; seconds: number; duration: string }> {
     return Object.entries(readTimes || {})
         .map(([key, value]) => ({
             key,
@@ -259,29 +261,29 @@ function buildReadTimesTrend(mode: ReadingPeriodMode, readTimes: ReadTimes): Arr
         .map((item) => ({
             label: formatReadTimeLabel(mode, item.key),
             seconds: item.seconds,
-            duration: formatReadingDuration(item.seconds),
+            duration: formatReadingDuration(item.seconds, source),
         }));
 }
 
-function buildPeriodCategoryRanking(period?: WereadReadingStatsPeriod | null): Array<{ name: string; seconds: number; count: number; label: string }> {
+function buildPeriodCategoryRanking(period?: WereadReadingStatsPeriod | null, source?: Record<string, unknown>): Array<{ name: string; seconds: number; count: number; label: string }> {
     return [...(period?.preferCategory || [])]
         .map((item) => ({
-            name: item.title || "未分类",
+            name: item.title || t(source, "statsUncategorized", "未分类"),
             seconds: Number(item.readingTime || 0),
             count: Number(item.readingCount || 0),
-            label: formatReadingDuration(Number(item.readingTime || 0)),
+            label: formatReadingDuration(Number(item.readingTime || 0), source),
         }))
         .filter((item) => item.seconds > 0 || item.count > 0)
         .sort((a, b) => b.seconds - a.seconds)
         .slice(0, 8);
 }
 
-function buildPreferenceRadarItems(period?: WereadReadingStatsPeriod | null): Array<{ name: string; value: number; seconds: number; count: number }> {
+function buildPreferenceRadarItems(period?: WereadReadingStatsPeriod | null, source?: Record<string, unknown>): Array<{ name: string; value: number; seconds: number; count: number }> {
     const categories = period?.preferCategory || [];
     if (categories.length === 0) return [];
 
     const all = categories.map((item) => ({
-        name: item.title || "未分类",
+        name: item.title || t(source, "statsUncategorized", "未分类"),
         seconds: Number(item.readingTime || 0),
         count: Number(item.readingCount || 0),
     }));
@@ -306,46 +308,46 @@ function buildPreferenceRadarItems(period?: WereadReadingStatsPeriod | null): Ar
     }));
 }
 
-function buildPeriodLongestBooks(period?: WereadReadingStatsPeriod | null): ReadingPeriodView["longestBooks"] {
+function buildPeriodLongestBooks(period?: WereadReadingStatsPeriod | null, source?: Record<string, unknown>): ReadingPeriodView["longestBooks"] {
     return [...(period?.readLongest || [])].slice(0, 8).map((item) => ({
-        title: item.title || (item.isAudio ? "未命名听书" : "未命名书籍"),
+        title: item.title || (item.isAudio ? t(source, "statsUnnamedAudio", "未命名听书") : t(source, "statsUnnamedBook", "未命名书籍")),
         author: item.author || "",
         cover: item.cover || "",
-        readTimeText: formatReadingDuration(item.readTime || 0),
+        readTimeText: formatReadingDuration(item.readTime || 0, source),
         isAudio: item.isAudio,
-        category: item.category || (item.isAudio ? "听书" : ""),
+        category: item.category || (item.isAudio ? t(source, "statsAudioBook", "听书") : ""),
         tags: item.tags || [],
     }));
 }
 
-function buildPeriodView(mode: ReadingPeriodMode, period?: WereadReadingStatsPeriod | null): ReadingPeriodView | null {
+function buildPeriodView(mode: ReadingPeriodMode, period?: WereadReadingStatsPeriod | null, source?: Record<string, unknown>): ReadingPeriodView | null {
     if (!period) return null;
 
     return {
         mode,
-        label: getPeriodLabel(mode),
-        totalReadTimeText: formatReadingDuration(period.totalReadTime || 0),
+        label: getPeriodLabel(mode, source),
+        totalReadTimeText: formatReadingDuration(period.totalReadTime || 0, source),
         readDays: period.readDays || 0,
-        dayAverageReadTimeText: formatReadingDuration(period.dayAverageReadTime || 0),
-        compareText: formatReadingCompare(period.compare),
+        dayAverageReadTimeText: formatReadingDuration(period.dayAverageReadTime || 0, source),
+        compareText: formatReadingCompare(period.compare, source),
         readDistribution: (period.readStat || []).map((item) => ({
-            name: formatReadStatName(item.stat),
+            name: formatReadStatName(item.stat, source),
             value: item.counts,
         })),
-        recentReadTimes: getRecentReadTimes(mode, period.readTimes || {}),
-        longestBooks: buildPeriodLongestBooks(period),
-        categoryRanking: buildPeriodCategoryRanking(period),
-        categoryRadar: buildPreferenceRadarItems(period),
-        readTimesTrend: buildReadTimesTrend(mode, period.readTimes || {}),
+        recentReadTimes: getRecentReadTimes(mode, period.readTimes || {}, source),
+        longestBooks: buildPeriodLongestBooks(period, source),
+        categoryRanking: buildPeriodCategoryRanking(period, source),
+        categoryRadar: buildPreferenceRadarItems(period, source),
+        readTimesTrend: buildReadTimesTrend(mode, period.readTimes || {}, source),
     };
 }
 
-function buildPeriodViews(stats: WereadReadingDashboard | null): Record<ReadingPeriodMode, ReadingPeriodView | null> {
+function buildPeriodViews(stats: WereadReadingDashboard | null, source?: Record<string, unknown>): Record<ReadingPeriodMode, ReadingPeriodView | null> {
     return {
-        weekly: buildPeriodView("weekly", stats?.weekly),
-        monthly: buildPeriodView("monthly", stats?.monthly),
-        annually: buildPeriodView("annually", stats?.annually),
-        overall: buildPeriodView("overall", stats?.overall),
+        weekly: buildPeriodView("weekly", stats?.weekly, source),
+        monthly: buildPeriodView("monthly", stats?.monthly, source),
+        annually: buildPeriodView("annually", stats?.annually, source),
+        overall: buildPeriodView("overall", stats?.overall, source),
     };
 }
 
@@ -354,7 +356,7 @@ function getDefaultPeriodMode(periods: Record<ReadingPeriodMode, ReadingPeriodVi
     return PERIOD_KEYS.find((mode) => !!periods[mode]) || "annually";
 }
 
-function buildAnnualMonthlyTrend(readTimes: ReadTimes): Array<{ month: string; seconds: number; label: string }> {
+function buildAnnualMonthlyTrend(readTimes: ReadTimes, source?: Record<string, unknown>): Array<{ month: string; seconds: number; label: string }> {
     const buckets = Array.from({ length: 12 }, () => 0);
     for (const [key, value] of Object.entries(readTimes || {})) {
         const ms = timestampKeyToMs(key);
@@ -363,13 +365,13 @@ function buildAnnualMonthlyTrend(readTimes: ReadTimes): Array<{ month: string; s
         buckets[month] += Number(value || 0);
     }
     return buckets.map((seconds, index) => ({
-        month: formatMonthLabel(index),
+        month: formatMonthLabel(index, source),
         seconds,
-        label: formatReadingDuration(seconds),
+        label: formatReadingDuration(seconds, source),
     }));
 }
 
-function buildYearlyTrend(readTimes: ReadTimes, annually?: WereadReadingStatsPeriod): Array<{ year: string; seconds: number; label: string }> {
+function buildYearlyTrend(readTimes: ReadTimes, annually?: WereadReadingStatsPeriod, source?: Record<string, unknown>): Array<{ year: string; seconds: number; label: string }> {
     const buckets = new Map<string, number>();
     for (const [key, value] of Object.entries(readTimes || {})) {
         const ms = timestampKeyToMs(key);
@@ -393,7 +395,7 @@ function buildYearlyTrend(readTimes: ReadTimes, annually?: WereadReadingStatsPer
         .map(([year, seconds]) => ({
             year,
             seconds,
-            label: formatReadingDuration(seconds),
+            label: formatReadingDuration(seconds, source),
         }));
 }
 
@@ -430,7 +432,7 @@ function buildCalendarAvailableMonths(dailyReadTimes: Record<string, number>, cu
     return Array.from(months).sort();
 }
 
-export function buildMonthCalendarDays(dailyReadTimes: Record<string, number>, monthKey: string): ReadingCalendarDay[] {
+export function buildMonthCalendarDays(dailyReadTimes: Record<string, number>, monthKey: string, source?: Record<string, unknown>): ReadingCalendarDay[] {
     const firstDay = parseMonthKey(monthKey);
     const monthStart = new Date(firstDay);
     monthStart.setHours(0, 0, 0, 0);
@@ -458,7 +460,7 @@ export function buildMonthCalendarDays(dailyReadTimes: Record<string, number>, m
             weekday: date.getDay(),
             weekIndex: Math.floor(i / 7),
             seconds,
-            label: formatReadingDuration(seconds),
+            label: formatReadingDuration(seconds, source),
             isToday: dateKey === todayKey,
             isCurrentMonth: date.getFullYear() === monthStart.getFullYear() && date.getMonth() === monthStart.getMonth(),
         });
@@ -467,7 +469,7 @@ export function buildMonthCalendarDays(dailyReadTimes: Record<string, number>, m
     return result;
 }
 
-function buildLast30Days(stats: WereadReadingDashboard | null): ReadingRecentDay[] {
+function buildLast30Days(stats: WereadReadingDashboard | null, source?: Record<string, unknown>): ReadingRecentDay[] {
     const daily = mergeDailyReadTimes(stats);
 
     const endDate = new Date();
@@ -486,14 +488,14 @@ function buildLast30Days(stats: WereadReadingDashboard | null): ReadingRecentDay
             date: dateKey,
             day: dateKey.slice(5),
             seconds,
-            label: formatReadingDuration(seconds),
+            label: formatReadingDuration(seconds, source),
         });
     }
 
     return result;
 }
 
-function buildCategoryRanking(stats: WereadReadingDashboard | null): Array<{ name: string; seconds: number; count: number; label: string }> {
+function buildCategoryRanking(stats: WereadReadingDashboard | null, source?: Record<string, unknown>): Array<{ name: string; seconds: number; count: number; label: string }> {
     const categories = stats?.annually?.preferCategory?.length
         ? stats.annually.preferCategory
         : stats?.monthly?.preferCategory?.length
@@ -502,10 +504,10 @@ function buildCategoryRanking(stats: WereadReadingDashboard | null): Array<{ nam
 
     return [...categories]
         .map((item) => ({
-            name: item.title || "未分类",
+            name: item.title || t(source, "statsUncategorized", "未分类"),
             seconds: Number(item.readingTime || 0),
             count: Number(item.readingCount || 0),
-            label: formatReadingDuration(Number(item.readingTime || 0)),
+            label: formatReadingDuration(Number(item.readingTime || 0), source),
         }))
         .filter((item) => item.seconds > 0 || item.count > 0)
         .sort((a, b) => b.seconds - a.seconds)
@@ -522,7 +524,7 @@ function buildCategoryRadar(ranking: Array<{ name: string; seconds: number; coun
     }));
 }
 
-function buildLongestBooks(stats: WereadReadingDashboard | null): Array<{ title: string; author: string; cover: string; readTimeText: string; isAudio?: boolean; category?: string }> {
+function buildLongestBooks(stats: WereadReadingDashboard | null, source?: Record<string, unknown>): Array<{ title: string; author: string; cover: string; readTimeText: string; isAudio?: boolean; category?: string }> {
     const sources = [
         ...(stats?.annually?.readLongest || []),
         ...(stats?.monthly?.readLongest || []),
@@ -540,12 +542,12 @@ function buildLongestBooks(stats: WereadReadingDashboard | null): Array<{ title:
     }
 
     return books.map((item) => ({
-        title: item.title || (item.isAudio ? "未命名听书" : "未命名书籍"),
+        title: item.title || (item.isAudio ? t(source, "statsUnnamedAudio", "未命名听书") : t(source, "statsUnnamedBook", "未命名书籍")),
         author: item.author || "",
         cover: item.cover || "",
-        readTimeText: formatReadingDuration(item.readTime || 0),
+        readTimeText: formatReadingDuration(item.readTime || 0, source),
         isAudio: item.isAudio,
-        category: item.category || (item.isAudio ? "听书" : ""),
+        category: item.category || (item.isAudio ? t(source, "statsAudioBook", "听书") : ""),
     }));
 }
 

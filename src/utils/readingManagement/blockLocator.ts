@@ -8,6 +8,7 @@ import type {
     WereadSourceBlockIndex,
 } from "../weread/incremental/types";
 import type { LocatedBlock, ReadingManagementSourceType } from "./types";
+import { t } from "../i18n";
 
 export function toManagedSourceType(sourceType?: string): ReadingManagementSourceType {
     return sourceType === "mp" || sourceType === "weread-mp" || sourceType === "weread_mp_account"
@@ -97,7 +98,7 @@ export function openLocatedBlock(plugin: any, locatedBlock?: LocatedBlock | null
     if (openSiyuanBlock(plugin, blockId)) return true;
     if (openSiyuanDoc(plugin, locatedBlock?.docBlockID)) return true;
 
-    showMessage("该同步块可能已被删除或索引已失效，请重新同步这本书。");
+    showMessage(t(plugin, "blockMissingOrStale", "该同步块可能已被删除或索引已失效，请重新同步这本书。"));
     return false;
 }
 

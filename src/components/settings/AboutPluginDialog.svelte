@@ -1,17 +1,19 @@
 <script lang="ts">
     import SiYuanIcon from "../common/SiYuanIcon.svelte";
     import AboutTab from "../tabs/AboutTab.svelte";
+    import { t } from "../../utils/i18n";
 
     export let i18n: any;
     export let close: () => void = () => {};
+    const tx = (key: string, fallback: string) => t(i18n, key, fallback);
 </script>
 
 <div class="settings-dialog settings-dialog-about">
     <header class="settings-dialog-header">
         <div class="settings-dialog-icon"><SiYuanIcon name="info" size={20} /></div>
         <div>
-            <h2>关于插件</h2>
-            <p>插件信息、教程、反馈渠道和参考项目。</p>
+            <h2>{tx("settingsAboutTitle", "关于插件")}</h2>
+            <p>{tx("settingsAboutDesc", "插件信息、教程、反馈渠道和参考项目。")}</p>
         </div>
     </header>
     <div class="settings-dialog-about-body">
@@ -20,7 +22,7 @@
         </div>
     </div>
     <footer class="settings-dialog-actions">
-        <button class="b3-button b3-button--primary" on:click={close}>关闭</button>
+        <button class="b3-button b3-button--primary" on:click={close}>{tx("uiClose", "关闭")}</button>
     </footer>
 </div>
 

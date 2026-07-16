@@ -2,6 +2,9 @@
     import { createEventDispatcher } from "svelte";
     import SiYuanIcon from "../common/SiYuanIcon.svelte";
     import type { WorkbenchAction } from "../../types/workbench";
+    import { t } from "../../utils/i18n";
+
+    export let plugin: any;
 
     const dispatch = createEventDispatcher<{ action: WorkbenchAction }>();
 
@@ -13,14 +16,14 @@
 <section class="workbench-hero">
     <div class="workbench-hero-main">
         <div>
-            <div class="workbench-hero-kicker">个人阅读中枢</div>
-            <h1>阅读总控制台</h1>
-            <p>管理阅读、同步、整理和回看的入口</p>
+            <div class="workbench-hero-kicker">{t(plugin, "workbenchReadingHub", "个人阅读中枢")}</div>
+            <h1>{t(plugin, "workbenchHeroTitle", "阅读总控制台")}</h1>
+            <p>{t(plugin, "workbenchHeroDesc", "管理阅读、同步、整理和回看的入口")}</p>
         </div>
         <div class="workbench-hero-actions">
             <button class="workbench-button" on:click={() => action("open-about")}>
                 <SiYuanIcon name="info" size={16} />
-                <span>关于</span>
+                <span>{t(plugin, "workbenchNavAbout", "关于")}</span>
             </button>
         </div>
     </div>
