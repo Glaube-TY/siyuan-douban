@@ -224,13 +224,6 @@
             }
             isWorkbenchSyncing = true;
             openProgressDialog();
-            if (progressDialogRef) {
-                progressDialogRef.addEvent({
-                    stage: "checking_sources",
-                    message: "正在检查微信读书来源...",
-                    status: "running",
-                });
-            }
             try {
                 const result = await runWorkbenchManualWereadApiSync(plugin, "update", {
                     onProgress: handleSyncProgress,
@@ -244,11 +237,6 @@
                     showMessage("更新同步完成，无需处理的来源");
                 }
             } catch (e) {
-                handleSyncProgress({
-                    stage: "finished",
-                    message: `同步失败：${e?.message || "未知错误"}`,
-                    status: "failed",
-                });
                 showMessage(`更新同步失败：${e?.message || "未知错误"}`);
             } finally {
                 isWorkbenchSyncing = false;
@@ -261,13 +249,6 @@
             }
             isWorkbenchSyncing = true;
             openProgressDialog();
-            if (progressDialogRef) {
-                progressDialogRef.addEvent({
-                    stage: "checking_sources",
-                    message: "正在检查微信读书来源...",
-                    status: "running",
-                });
-            }
             try {
                 const result = await runWorkbenchManualWereadApiSync(plugin, "all", {
                     onProgress: handleSyncProgress,
@@ -281,11 +262,6 @@
                     showMessage("全部同步完成，无需处理的来源");
                 }
             } catch (e) {
-                handleSyncProgress({
-                    stage: "finished",
-                    message: `同步失败：${e?.message || "未知错误"}`,
-                    status: "failed",
-                });
                 showMessage(`全部同步失败：${e?.message || "未知错误"}`);
             } finally {
                 isWorkbenchSyncing = false;

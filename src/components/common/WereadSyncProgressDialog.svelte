@@ -1,23 +1,45 @@
 <script lang="ts">
-  import type { WereadSyncProgressEvent, WereadSyncStage } from "../../utils/weread/api/wereadSyncProgress";
+  import { tick } from "svelte";
+  import {
+    createWereadSyncProgressViewState,
+    reduceWereadSyncProgressViewState,
+    type WereadSyncProgressEvent,
+    type WereadSyncStage,
+  } from "../../utils/weread/api/wereadSyncProgress";
 
   export let onClose: () => void;
 
   let events: WereadSyncProgressEvent[] = [];
   let currentMessage = "";
-  let currentIndex = 0;
-  let totalItems = 0;
   let isFinished = false;
   let summaryMessage = "";
   let finalStatus: "success" | "failed" | "cancelled" | "" = "";
+  let progressView = createWereadSyncProgressViewState();
+  let eventsScroll: HTMLDivElement;
 
   // 汇总统计
   let successCount = 0;
   let failedCount = 0;
+  let skippedCount = 0;
   let plannedCount = 0;
+  let plannedBySource = { book: 0, mp: 0 };
 
   export function addEvent(event: WereadSyncProgressEvent) {
-    events = [...events, event];
+    const loggedEvent = { ...event, timestamp: event.timestamp || Date.now() };
+    events = [...events, loggedEvent];
+    progressView = reduceWereadSyncProgressViewState(progressView, loggedEvent);
+
+    void tick().then(() => {
+      if (eventsScroll) eventsScroll.scrollTop = eventsScroll.scrollHeight;
+    });
+
+    if (event.sourceType && event.total !== undefined) {
+      plannedBySource = {
+        ...plannedBySource,
+        [event.sourceType]: Math.max(plannedBySource[event.sourceType], event.total),
+      };
+      plannedCount = plannedBySource.book + plannedBySource.mp;
+    }
 
     if (event.stage === "cancelled") {
       // 取消事件直接结束
@@ -28,7 +50,7 @@
       // 只有 sourceType 为空的 finished 才是最终完成
       isFinished = true;
       summaryMessage = event.message;
-      if (event.total) {
+      if (event.total !== undefined) {
         plannedCount = event.total;
       }
       finalStatus = event.status === "failed" ? "failed" : "success";
@@ -37,12 +59,6 @@
       currentMessage = event.message;
     } else {
       currentMessage = event.message;
-      if (event.index) {
-        currentIndex = event.index;
-      }
-      if (event.total) {
-        totalItems = event.total;
-      }
       if (event.stage === "item_success") {
         successCount++;
         plannedCount = Math.max(plannedCount, successCount + failedCount);
@@ -50,6 +66,9 @@
       if (event.stage === "item_failed") {
         failedCount++;
         plannedCount = Math.max(plannedCount, successCount + failedCount);
+      }
+      if (event.stage === "item_skipped") {
+        skippedCount++;
       }
     }
   }
@@ -82,8 +101,8 @@
   }
 
   function getProgressPercent(): number {
-    if (totalItems === 0) return 0;
-    return Math.min(100, Math.round((currentIndex / totalItems) * 100));
+    if (isFinished && finalStatus !== "cancelled") return 100;
+    return progressView.percent;
   }
 
   function handleClose() {
@@ -94,12 +113,20 @@
 <div class="sync-progress">
   <div class="progress-header">
     <p class="progress-title">微信读书同步进度</p>
-    {#if !isFinished}
-      <div class="progress-bar-container">
-        <div class="progress-bar" style="width: {getProgressPercent()}%"></div>
-      </div>
-      <p class="progress-percent">{getProgressPercent()}%</p>
-    {/if}
+    <div class="progress-bar-container">
+      <div
+        class="progress-bar"
+        class:progress-bar-indeterminate={!progressView.determinate && !isFinished}
+        style:width={progressView.determinate || isFinished ? `${getProgressPercent()}%` : undefined}
+      ></div>
+    </div>
+    <p class="progress-percent">
+      {#if !progressView.determinate && !isFinished}
+        {progressView.label}
+      {:else}
+        {getProgressPercent()}%
+      {/if}
+    </p>
   </div>
 
   {#if currentMessage && !isFinished}
@@ -129,6 +156,10 @@
           <span class="stat-label">失败</span>
           <span class="stat-value">{failedCount}</span>
         </div>
+        <div class="stat-item skipped">
+          <span class="stat-label">跳过</span>
+          <span class="stat-value">{skippedCount}</span>
+        </div>
         <div class="stat-item planned">
           <span class="stat-label">计划</span>
           <span class="stat-value">{plannedCount}</span>
@@ -142,9 +173,10 @@
 
   <div class="events-list">
     <div class="events-header">同步详情：</div>
-    <div class="events-scroll">
+    <div class="events-scroll" bind:this={eventsScroll}>
       {#each events as event}
         <div class="event-row {getStageClass(event.stage)}">
+          <span class="event-time">{new Date(event.timestamp || 0).toLocaleTimeString([], { hour12: false })}</span>
           <span class="event-stage">{getStageLabel(event.stage)}</span>
           {#if event.sourceType}
             <span class="event-source">[{event.sourceType === "book" ? "书" : "公"}]</span>
@@ -199,6 +231,16 @@
     height: 100%;
     background: linear-gradient(90deg, var(--b3-theme-primary), var(--b3-theme-primary-light));
     transition: width 0.3s ease;
+  }
+
+  .progress-bar-indeterminate {
+    width: 32%;
+    animation: progress-indeterminate 1.2s ease-in-out infinite;
+  }
+
+  @keyframes progress-indeterminate {
+    0% { transform: translateX(-110%); }
+    100% { transform: translateX(320%); }
   }
 
   .progress-percent {
@@ -286,6 +328,10 @@
     color: var(--b3-theme-error);
   }
 
+  .stat-item.skipped .stat-value {
+    color: var(--b3-theme-on-surface-light);
+  }
+
   .stat-item.planned .stat-value {
     color: var(--b3-theme-primary);
   }
@@ -335,6 +381,13 @@
   .event-stage {
     font-weight: 600;
     min-width: 40px;
+  }
+
+  .event-time {
+    flex: 0 0 auto;
+    color: var(--b3-theme-on-surface-light);
+    font-variant-numeric: tabular-nums;
+    font-size: 10px;
   }
 
   .event-row.success .event-stage {

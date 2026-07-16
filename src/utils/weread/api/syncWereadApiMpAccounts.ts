@@ -84,6 +84,13 @@ export async function syncWereadApiMpAccounts(
     mpTemplate: string,
     options: { mode: "all" | "update"; forceBookIDs?: string[]; onProgress?: WereadSyncProgressCallback; confirmPlan?: WereadSyncPlanConfirmCallback }
 ): Promise<WereadApiMpAccountsSyncResult> {
+    options.onProgress?.({
+        stage: "planning",
+        sourceType: "mp",
+        message: "正在分析公众号缓存、目标文档和变更状态...",
+        status: "running",
+    });
+
     const cache = await plugin.loadData("temporary_weread_notebooksList");
 
     if (!Array.isArray(cache) || cache.length === 0) {
@@ -298,6 +305,37 @@ export async function syncWereadApiMpAccounts(
 
     const plannedItems = Array.from(plannedMap.values());
 
+    for (const item of notReadyItems) {
+      if (forceBookIDSet.has(item.bookID) && readyMap.has(item.bookID)) continue;
+      options.onProgress?.({
+        stage: "item_skipped",
+        sourceType: "mp",
+        bookID: item.bookID,
+        title: item.title,
+        message: `《${item.title || item.bookID}》未就绪，已跳过：${item.message}`,
+        status: "skipped",
+      });
+    }
+
+    for (const item of skippedUnchangedItems) {
+      options.onProgress?.({
+        stage: "item_skipped",
+        sourceType: "mp",
+        bookID: item.bookID,
+        title: item.title,
+        message: `《${item.title || item.bookID}》没有变化，已跳过`,
+        status: "skipped",
+      });
+    }
+
+    options.onProgress?.({
+      stage: "planning",
+      sourceType: "mp",
+      total: plannedItems.length,
+      message: `公众号计划已生成：待同步 ${plannedItems.length}，无变化 ${skippedUnchanged}，未就绪 ${notReadyItems.length}`,
+      status: "running",
+    });
+
     // 如果没有需要同步的内容，直接返回
     if (plannedItems.length === 0) {
       if (options.onProgress) {
@@ -323,6 +361,13 @@ export async function syncWereadApiMpAccounts(
 
     // 计划确认回调
     if (options.confirmPlan) {
+      options.onProgress?.({
+        stage: "confirming",
+        sourceType: "mp",
+        total: plannedItems.length,
+        message: `等待确认 ${plannedItems.length} 个公众号的同步计划`,
+        status: "running",
+      });
       const planItemsForConfirm: WereadSyncPlanItem[] = plannedItems.map(item => ({
         sourceType: "mp",
         bookID: item.bookID,
@@ -385,6 +430,7 @@ export async function syncWereadApiMpAccounts(
     }
 
     const pool = new PromiseLimitPool<PreparedMpSyncItem>(2);
+    let preparedCompleted = 0;
 
     for (let i = 0; i < plannedItems.length; i++) {
       const planned = plannedItems[i];
@@ -398,7 +444,6 @@ export async function syncWereadApiMpAccounts(
             sourceType: "mp",
             bookID,
             title,
-            index: i + 1,
             total: plannedItems.length,
             message: `准备中：《${title || bookID}》`,
             status: "running",
@@ -442,6 +487,18 @@ export async function syncWereadApiMpAccounts(
           };
         } catch (error: any) {
           return { ok: false, bookID, title, message: error?.message || "同步过程中发生未知错误" };
+        } finally {
+          preparedCompleted++;
+          options.onProgress?.({
+            stage: "preparing",
+            sourceType: "mp",
+            bookID,
+            title,
+            index: preparedCompleted,
+            total: plannedItems.length,
+            message: `准备完成：《${title || bookID}》`,
+            status: "running",
+          });
         }
       });
     }
@@ -502,7 +559,6 @@ export async function syncWereadApiMpAccounts(
           sourceType: "mp",
           bookID: prepared.bookID,
           title: prepared.title,
-          index: writeIndex,
           total: orderedResults.length,
           message: `写入中：《${prepared.title || prepared.bookID}》`,
           status: "running",

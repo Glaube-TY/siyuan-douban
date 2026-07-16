@@ -106,6 +106,12 @@ export async function syncWereadApiNormalBooks(
     confirmPlan?: WereadSyncPlanConfirmCallback;
   }
 ): Promise<WereadApiNormalBooksSyncResult> {
+  options.onProgress?.({
+    stage: "planning",
+    sourceType: "book",
+    message: "正在分析普通书籍缓存、目标文档和变更状态...",
+    status: "running",
+  });
   const enrichedCache = await ensureWereadApiNotebookCacheDetails(plugin, apiKey, { limit: 100 });
   const cache = enrichedCache.length > 0 ? enrichedCache : await plugin.loadData("temporary_weread_notebooksList");
 
@@ -317,6 +323,25 @@ export async function syncWereadApiNormalBooks(
 
   const plannedItems = Array.from(plannedMap.values());
 
+  for (const skipped of [...notReadyItems, ...skippedUnchangedItems]) {
+    options.onProgress?.({
+      stage: "item_skipped",
+      sourceType: "book",
+      bookID: skipped.bookID,
+      title: skipped.title,
+      message: skipped.message,
+      status: "skipped",
+    });
+  }
+
+  options.onProgress?.({
+    stage: "planning",
+    sourceType: "book",
+    total: plannedItems.length,
+    message: `普通书籍计划已生成：待同步 ${plannedItems.length}，无变化 ${skippedUnchanged}，未就绪 ${notReadyItems.length}`,
+    status: "running",
+  });
+
   // 如果没有需要同步的内容，直接返回
   if (plannedItems.length === 0) {
     if (options.onProgress) {
@@ -347,6 +372,13 @@ export async function syncWereadApiNormalBooks(
       bookID: item.bookID,
       title: item.title,
     }));
+    options.onProgress?.({
+      stage: "confirming",
+      sourceType: "book",
+      total: plannedItems.length,
+      message: `等待确认 ${plannedItems.length} 本普通书籍的同步计划...`,
+      status: "running",
+    });
     const confirmed = await options.confirmPlan({
       mode: options.mode,
       sourceType: "book",
@@ -390,6 +422,7 @@ export async function syncWereadApiNormalBooks(
   }
 
   const pool = new PromiseLimitPool<PreparedNormalSyncItem>(3);
+  let preparedCompleted = 0;
 
   for (let i = 0; i < plannedItems.length; i++) {
     const planned = plannedItems[i];
@@ -404,7 +437,6 @@ export async function syncWereadApiNormalBooks(
           sourceType: "book",
           bookID,
           title,
-          index: i + 1,
           total: plannedItems.length,
           message: `准备中：《${title || bookID}》`,
           status: "running",
@@ -454,6 +486,18 @@ export async function syncWereadApiNormalBooks(
         };
       } catch (error: any) {
         return { ok: false, bookID, title, message: error?.message || "同步过程中发生未知错误" };
+      } finally {
+        preparedCompleted += 1;
+        options.onProgress?.({
+          stage: "preparing",
+          sourceType: "book",
+          bookID,
+          title,
+          index: preparedCompleted,
+          total: plannedItems.length,
+          message: `准备完成 ${preparedCompleted}/${plannedItems.length}：《${title || bookID}》`,
+          status: "running",
+        });
       }
     });
   }
@@ -514,7 +558,6 @@ export async function syncWereadApiNormalBooks(
         sourceType: "book",
         bookID: prepared.bookID,
         title: prepared.title,
-        index: writeIndex,
         total: orderedResults.length,
         message: `写入中：《${prepared.title || prepared.bookID}》`,
         status: "running",

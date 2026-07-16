@@ -22,15 +22,52 @@ export interface WereadApiWorkbenchManualSyncResult {
   message?: string;
 }
 
+interface WereadApiWorkbenchManualSyncOptions {
+  onProgress?: WereadSyncProgressCallback;
+  confirmPlan?: WereadSyncPlanConfirmCallback;
+}
+
 export async function runWorkbenchManualWereadApiSync(
   plugin: WereadPluginLike,
   mode: "all" | "update",
-  options?: {
-    onProgress?: WereadSyncProgressCallback;
-    confirmPlan?: WereadSyncPlanConfirmCallback;
+  options?: WereadApiWorkbenchManualSyncOptions,
+): Promise<WereadApiWorkbenchManualSyncResult> {
+  let terminalProgressEmitted = false;
+  const forwardProgress: WereadSyncProgressCallback = (event) => {
+    if (event.stage === "cancelled" || (event.stage === "finished" && !event.sourceType)) {
+      terminalProgressEmitted = true;
+    }
+    options?.onProgress?.(event);
+  };
+
+  try {
+    return await runWorkbenchManualWereadApiSyncInternal(plugin, mode, {
+      ...options,
+      onProgress: forwardProgress,
+    });
+  } catch (error: any) {
+    if (!terminalProgressEmitted) {
+      forwardProgress({
+        stage: "finished",
+        message: `同步失败：${error?.message || "同步异常"}`,
+        status: "failed",
+      });
+    }
+    throw error;
   }
+}
+
+async function runWorkbenchManualWereadApiSyncInternal(
+  plugin: WereadPluginLike,
+  mode: "all" | "update",
+  options: WereadApiWorkbenchManualSyncOptions,
 ): Promise<WereadApiWorkbenchManualSyncResult> {
   const startedAt = Date.now();
+  options?.onProgress?.({
+    stage: "checking_sources",
+    message: "正在验证微信读书配置并拉取来源...",
+    status: "running",
+  });
   const auth = await loadWereadAuthState(plugin);
 
   const emptyNormalResult: WereadApiNormalBooksSyncResult = {
@@ -45,6 +82,11 @@ export async function runWorkbenchManualWereadApiSync(
   };
 
   if (!auth.verified || !auth.apiKey) {
+    options?.onProgress?.({
+      stage: "finished",
+      message: "同步失败：API Key 未验证",
+      status: "failed",
+    });
     await saveWereadSyncReportAndApplyStatus(plugin, buildWereadSyncReport({
       startedAt,
       endedAt: Date.now(),
@@ -57,6 +99,11 @@ export async function runWorkbenchManualWereadApiSync(
 
   const bookTemplate = (await plugin.loadData("weread_templates") || "").trim();
   if (!bookTemplate) {
+    options?.onProgress?.({
+      stage: "finished",
+      message: "同步失败：请先配置微信读书笔记模板",
+      status: "failed",
+    });
     await saveWereadSyncReportAndApplyStatus(plugin, buildWereadSyncReport({
       startedAt,
       endedAt: Date.now(),
@@ -97,6 +144,12 @@ export async function runWorkbenchManualWereadApiSync(
 
   await plugin.saveData("temporary_weread_notebooksList", notebooksList);
   await plugin.saveData("weread_notebooksList_readyAt", Date.now());
+  options?.onProgress?.({
+    stage: "planning",
+    total: notebooksList.length,
+    message: `已加载 ${notebooksList.length} 个来源，正在检查新来源和同步计划...`,
+    status: "running",
+  });
 
   let normalResult: WereadApiNormalBooksSyncResult = emptyNormalResult;
   let mpResult: WereadApiMpAccountsSyncResult | undefined = undefined;
@@ -170,7 +223,8 @@ export async function runWorkbenchManualWereadApiSync(
       plugin,
       auth.apiKey,
       mode,
-      runSync
+      runSync,
+      options?.onProgress,
     );
 
     if (flowResult === "cancelled") {

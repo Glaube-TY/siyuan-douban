@@ -12,6 +12,7 @@ import { buildWereadApiMpAccountSyncData } from "./buildWereadApiMpAccountSyncDa
 import { detectWereadApiNewSources, type WereadApiNewSourceItem } from "./detectWereadApiNewSources";
 import { findWereadApiBookTargetDoc } from "./findWereadApiBookTargetDoc";
 import WereadNewBooks from "@/components/common/wereadNewBooksDialog.svelte";
+import type { WereadSyncProgressCallback } from "./wereadSyncProgress";
 
 interface WereadPluginLike {
   loadData: (key: string) => Promise<any>;
@@ -23,7 +24,8 @@ export async function showWereadApiNewSourcesDialogAndSync(
   plugin: WereadPluginLike,
   apiKey: string,
   _mode: "all" | "update",
-  runSync: (forceOptions?: { forceBookIDs?: string[]; forceMpBookIDs?: string[] }) => Promise<void>
+  runSync: (forceOptions?: { forceBookIDs?: string[]; forceMpBookIDs?: string[] }) => Promise<void>,
+  onProgress?: WereadSyncProgressCallback,
 ): Promise<"synced" | "cancelled" | "no_work"> {
   try {
     const settings = await plugin.loadData("weread_settings") || {};
@@ -36,6 +38,11 @@ export async function showWereadApiNewSourcesDialogAndSync(
 
     let newSources: WereadApiNewSourceItem[];
     try {
+      onProgress?.({
+        stage: "planning",
+        message: "正在比对本地数据库并检查新书籍和公众号...",
+        status: "running",
+      });
       const result = await detectWereadApiNewSources(plugin, apiKey);
       newSources = result.newSources;
     } catch (e) {
@@ -44,9 +51,21 @@ export async function showWereadApiNewSourcesDialogAndSync(
     }
 
     if (newSources.length === 0) {
+      onProgress?.({
+        stage: "planning",
+        message: "没有待处理的新来源，正在生成同步计划...",
+        status: "running",
+      });
       await runSync();
       return "synced";
     }
+
+    onProgress?.({
+      stage: "confirming",
+      total: newSources.length,
+      message: `发现 ${newSources.length} 个新来源，等待确认处理方式...`,
+      status: "running",
+    });
 
     return new Promise<"synced" | "cancelled">((resolve) => {
     const dialog = svelteDialog({
@@ -70,6 +89,13 @@ export async function showWereadApiNewSourcesDialogAndSync(
                   resolve("cancelled");
                   return;
                 }
+
+                onProgress?.({
+                  stage: "confirming",
+                  total: newSources.length,
+                  message: "已确认新来源，正在导入所选来源并准备同步...",
+                  status: "running",
+                });
 
                 await handleNewSourcesConfirm(
                   plugin,
@@ -121,6 +147,11 @@ export async function showWereadApiNewSourcesDialogAndSync(
             },
             onContinue: async (ignoredBooks: WereadApiNewSourceItem[]) => {
               try {
+                onProgress?.({
+                  stage: "planning",
+                  message: "已跳过新来源导入，正在生成已有来源同步计划...",
+                  status: "running",
+                });
                 showMessage(
                   plugin.i18n?.wereadApiContinueSyncingDetailed
                     || "已跳过新来源导入，正在同步已有书籍...",
