@@ -1,8 +1,9 @@
 import type { WereadReadingDashboard, WereadReadingLongestItem, WereadReadingStatsPeriod } from "../weread/api/buildWereadApiReadingStats";
 import { formatReadingCompare, formatReadingDuration } from "../weread/api/formatWereadReadingStats";
-import { getReadingBookStatuses, getReadingInboxItems } from "../storage/readingStorage";
+import { getReadingInboxItems } from "../storage/readingStorage";
 import { getLatestWereadSyncReport } from "../storage/syncReportStorage";
 import { loadWereadNoteUnitBlockIndex } from "../weread/incremental/blockIndexStorage";
+import { buildSyncOutcomeData } from "../readingManagement/managementData";
 import { countNotebookNotes, safeLoadNotebookCache, safeLoadReadingStatsCache } from "./readingCenterData";
 
 export interface ReadingRecentDay {
@@ -56,7 +57,7 @@ export interface ReadingStatsDashboardView {
         indexedSources: number;
         indexedItems: number;
         pendingInbox: number;
-        unboundBooks: number;
+        actionableIssues: number;
         todayReadSeconds: number;
         todayReadTimeText: string;
     };
@@ -99,13 +100,13 @@ const PERIOD_LABELS: Record<ReadingPeriodMode, string> = {
 };
 
 export async function getReadingStatsDashboardView(plugin: any): Promise<ReadingStatsDashboardView> {
-    const [stats, notebooks, inboxItems, bookStatuses, blockIndex, latestReport] = await Promise.all([
+    const [stats, notebooks, inboxItems, blockIndex, latestReport, syncOutcome] = await Promise.all([
         safeLoadReadingStatsCache(plugin).catch(() => null),
         safeLoadNotebookCache(plugin).catch(() => null),
         getReadingInboxItems(plugin).catch(() => []),
-        getReadingBookStatuses(plugin).catch(() => []),
         loadWereadNoteUnitBlockIndex(plugin).catch(() => null),
         getLatestWereadSyncReport(plugin).catch(() => null),
+        buildSyncOutcomeData(plugin).catch(() => null),
     ]);
 
     const dashboard = stats as WereadReadingDashboard | null;
@@ -117,8 +118,9 @@ export async function getReadingStatsDashboardView(plugin: any): Promise<Reading
     const indexedItems: number = blockIndex?.sources
         ? (Object.values(blockIndex.sources) as any[]).reduce<number>((sum, source) => sum + Object.keys(source?.items || {}).length, 0)
         : 0;
-    const pendingInbox = inboxItems.filter((item) => item.status === "unprocessed" || item.status === "later").length;
-    const unboundBooks = bookStatuses.filter((item) => !item.noteDocId && !item.syncFailed).length;
+    const pendingInbox = syncOutcome?.summary.pendingContentCount
+        ?? inboxItems.filter((item) => item.status === "unprocessed" || item.status === "later").length;
+    const actionableIssues = syncOutcome?.summary.actionableIssueCount || 0;
     const noteCount = notebooks ? countNotebookNotes(notebooks) : 0;
     const shelf = dashboard?.shelf;
     const syncChanges = aggregateLatestSyncChanges(latestReport?.items || []);
@@ -143,7 +145,7 @@ export async function getReadingStatsDashboardView(plugin: any): Promise<Reading
             indexedSources,
             indexedItems,
             pendingInbox,
-            unboundBooks,
+            actionableIssues,
             todayReadSeconds,
             todayReadTimeText: formatReadingDuration(todayReadSeconds),
         },

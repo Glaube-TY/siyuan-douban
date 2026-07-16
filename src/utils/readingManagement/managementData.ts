@@ -6,6 +6,7 @@ import {
     getReadingInboxItems,
     getWereadSourceKey,
     normalizeReadingBookStatusSource,
+    saveReadingBookStatuses,
 } from "../storage/readingStorage";
 import { getLatestWereadSyncReport, loadWereadSyncReports } from "../storage/syncReportStorage";
 import { safeLoadNotebookCache } from "../readingCenter/readingCenterData";
@@ -28,7 +29,18 @@ import type {
     RecentNoteView,
     SyncChangeReportView,
     SyncChangeSummaryView,
+    SyncOutcomeData,
+    SyncOutcomeIssue,
+    SyncOutcomeIssueCode,
+    SyncOutcomeNewContentGroup,
+    SyncOutcomeRecord,
 } from "./types";
+import {
+    getNoteDocumentBinding,
+    validateNoteDocumentBindings,
+    type NoteDocumentBinding,
+    type NoteDocumentBindingState,
+} from "./noteDocumentBinding";
 
 interface RecentNoteOptions {
     limit?: number;
@@ -51,36 +63,7 @@ interface BookHealthOptions {
 
 export async function buildReadingManagementSummary(plugin: any): Promise<ReadingManagementSummary> {
     try {
-        const [inboxItems, latestReport, healthViews] = await Promise.all([
-            getReadingInboxItems(plugin).catch(() => [] as ReadingInboxItem[]),
-            getLatestWereadSyncReport(plugin).catch(() => null),
-            buildBookHealthViews(plugin).catch(() => [] as BookHealthView[]),
-        ]);
-
-        const inboxPendingCount = inboxItems.filter((item) => item.status === "unprocessed").length;
-        const inboxLaterCount = inboxItems.filter((item) => item.status === "later").length;
-        const inboxProcessedCount = inboxItems.filter((item) => item.status === "processed").length;
-        const reportStats = summarizeReportItems(latestReport?.items || []);
-        const syncProblemCount = countSyncProblems(latestReport, healthViews);
-
-        return {
-            inboxPendingCount,
-            inboxLaterCount,
-            inboxProcessedCount,
-            latestAddedItemCount: reportStats.added,
-            latestChangedItemCount: reportStats.changed,
-            latestDeletedItemCount: reportStats.deleted,
-            latestBlockChangeCount: reportStats.added + reportStats.changed + reportStats.deleted,
-            latestBlockOperationCount: reportStats.blockOperations,
-            latestRebuiltCount: reportStats.rebuilt,
-            unboundBookCount: healthViews.filter((item) => !item.bound).length,
-            syncProblemCount,
-            healthyBookCount: healthViews.filter((item) => item.level === "healthy").length,
-            warningBookCount: healthViews.filter((item) => item.level === "warning").length,
-            errorBookCount: healthViews.filter((item) => item.level === "error").length,
-            lastSyncTime: latestReport?.endedAt || latestReport?.startedAt,
-            lastSyncStatus: latestReport?.status || "unknown",
-        };
+        return (await buildSyncOutcomeData(plugin)).summary;
     } catch (error) {
         console.error("[readingManagement] buildReadingManagementSummary failed:", error);
         return {
@@ -99,6 +82,11 @@ export async function buildReadingManagementSummary(plugin: any): Promise<Readin
             warningBookCount: 0,
             errorBookCount: 0,
             lastSyncStatus: "unknown",
+            latestSuccessCount: 0,
+            latestFailedCount: 0,
+            latestSkippedCount: 0,
+            pendingContentCount: 0,
+            actionableIssueCount: 0,
         };
     }
 }
@@ -189,7 +177,23 @@ export async function buildBookHealthViews(plugin: any, options: BookHealthOptio
         ]);
 
         const merged = mergeBookStatusesWithCache(statuses, cache || []);
-        const views = merged
+        const bindingMap = await validateNoteDocumentBindings(
+            merged.map((item) => item.noteDocId || item.noteDocumentCandidateId)
+        );
+        const validated = merged.map((item) => {
+            const binding = getNoteDocumentBinding(item.noteDocId || item.noteDocumentCandidateId, bindingMap);
+            return {
+                ...item,
+                noteDocId: binding.documentId,
+                noteDocumentCandidateId: binding.candidateId,
+                noteDocumentBindingState: binding.state,
+            };
+        });
+        if (haveStatusBindingsChanged(statuses, validated)) {
+            await saveReadingBookStatuses(plugin, validated);
+        }
+
+        const views = validated
             .map((item) => buildBookHealthView(item, cache || [], inboxItems, latestReport, blockIndex))
             .filter((item) => filterBookHealth(item, options.filter || "all"))
             .sort((a, b) => {
@@ -207,6 +211,327 @@ export async function buildBookHealthViews(plugin: any, options: BookHealthOptio
 export async function buildUnboundBookViews(plugin: any, options: BookHealthOptions = {}): Promise<BookHealthView[]> {
     const filter = options.filter && options.filter !== "all" ? options.filter : "unbound";
     return buildBookHealthViews(plugin, { ...options, filter });
+}
+
+export async function buildSyncOutcomeData(plugin: any): Promise<SyncOutcomeData> {
+    const [inboxItems, rawStatuses, cache, latestReport, blockIndex] = await Promise.all([
+        getReadingInboxItems(plugin).catch(() => [] as ReadingInboxItem[]),
+        getReadingBookStatuses(plugin).catch(() => [] as ReadingBookStatus[]),
+        safeLoadNotebookCache(plugin).catch(() => null),
+        getLatestWereadSyncReport(plugin).catch(() => null),
+        loadWereadNoteUnitBlockIndex(plugin).catch(() => null),
+    ]);
+
+    const mergedStatuses = mergeBookStatusesWithCache(rawStatuses, cache || []);
+    const candidateIds = [
+        ...mergedStatuses.map((item) => item.noteDocId || item.noteDocumentCandidateId),
+        ...inboxItems.map((item) => item.noteDocId),
+        ...(latestReport?.items || []).map((item) => item.noteDocId),
+    ];
+    const bindingMap = await validateNoteDocumentBindings(candidateIds);
+
+    const statuses = mergedStatuses.map((item) => {
+        const binding = getNoteDocumentBinding(item.noteDocId || item.noteDocumentCandidateId, bindingMap);
+        return {
+            ...item,
+            noteDocId: binding.documentId,
+            noteDocumentCandidateId: binding.candidateId,
+            noteDocumentBindingState: binding.state,
+        };
+    });
+    if (haveStatusBindingsChanged(rawStatuses, statuses)) {
+        await saveReadingBookStatuses(plugin, statuses);
+    }
+
+    const statusMap = new Map(statuses.map((item) => [item.sourceKey, item]));
+    const recentViews = inboxItems
+        .filter((item) => item.status !== "ignored")
+        .map((item) => {
+            const binding = resolveSourceBinding(item.sourceKey, item.noteDocId, statusMap, bindingMap);
+            return buildRecentNoteView({ ...item, noteDocId: binding.documentId }, blockIndex);
+        });
+    const pendingViews = recentViews.filter((item) => item.status === "unprocessed" || item.status === "later");
+    const newContentGroups = buildNewContentGroups(pendingViews, statusMap, bindingMap);
+
+    const reportView = latestReport ? buildReportView(latestReport, statusMap, bindingMap) : null;
+    const issues = buildSyncOutcomeIssues(statuses, cache || [], latestReport, blockIndex, bindingMap);
+    const issueSourceKeys = new Set(issues.map((item) => item.sourceKey));
+    const records = (reportView?.items || []).map((item): SyncOutcomeRecord => {
+        const binding = resolveSourceBinding(item.sourceKey, item.noteDocId, statusMap, bindingMap);
+        return {
+            ...item,
+            noteDocId: binding.documentId,
+            noteDocumentBindingState: binding.state,
+            hasChanges: item.addedItemCount > 0 || item.changedItemCount > 0 || item.deletedItemCount > 0,
+            hasProblem: issueSourceKeys.has(item.sourceKey),
+        };
+    });
+    const reportStats = summarizeReportItems(latestReport?.items || []);
+    const failedSources = new Set(issues.filter((item) => item.issueCode === "sync_failed").map((item) => item.sourceKey));
+    const warningSources = new Set(issues
+        .filter((item) => item.issueCode === "index_broken" || item.issueCode === "document_missing" || item.issueCode === "document_invalid")
+        .map((item) => item.sourceKey));
+    const allSourceKeys = new Set(statuses.filter((item) => item.sourceType !== "local-book").map((item) => item.sourceKey));
+    const healthyBookCount = Array.from(allSourceKeys).filter((key) => !issues.some((item) => item.sourceKey === key)).length;
+
+    const summary: ReadingManagementSummary = {
+        inboxPendingCount: inboxItems.filter((item) => item.status === "unprocessed").length,
+        inboxLaterCount: inboxItems.filter((item) => item.status === "later").length,
+        inboxProcessedCount: inboxItems.filter((item) => item.status === "processed").length,
+        latestAddedItemCount: reportStats.added,
+        latestChangedItemCount: reportStats.changed,
+        latestDeletedItemCount: reportStats.deleted,
+        latestBlockChangeCount: reportStats.added + reportStats.changed + reportStats.deleted,
+        latestBlockOperationCount: reportStats.blockOperations,
+        latestRebuiltCount: reportStats.rebuilt,
+        unboundBookCount: issues.filter((item) => item.issueCode === "unbound_with_notes").length,
+        syncProblemCount: issues.length,
+        healthyBookCount,
+        warningBookCount: warningSources.size,
+        errorBookCount: failedSources.size,
+        lastSyncTime: latestReport?.endedAt || latestReport?.startedAt,
+        lastSyncStatus: latestReport?.status || "unknown",
+        latestSuccessCount: latestReport?.successCount || 0,
+        latestFailedCount: latestReport?.failedCount || 0,
+        latestSkippedCount: latestReport?.skippedCount || 0,
+        pendingContentCount: pendingViews.length,
+        actionableIssueCount: issues.length,
+    };
+
+    return { latestReport: reportView, summary, newContentGroups, issues, records };
+}
+
+function buildReportView(
+    report: WereadSyncReport,
+    statusMap: Map<string, ReadingBookStatus>,
+    bindingMap: Map<string, NoteDocumentBinding>
+): SyncChangeReportView {
+    const stats = summarizeReportItems(report.items || []);
+    const items = buildSyncChangeViewsFromReport(report).map((item) => {
+        const binding = resolveSourceBinding(item.sourceKey, item.noteDocId, statusMap, bindingMap);
+        return { ...item, noteDocId: binding.documentId };
+    });
+    return {
+        reportId: report.id,
+        startedAt: report.startedAt,
+        endedAt: report.endedAt,
+        status: report.status,
+        statusLabel: getReportStatusLabel(report.status),
+        successCount: report.successCount || 0,
+        failedCount: report.failedCount || 0,
+        skippedCount: report.skippedCount || 0,
+        addedItemCount: stats.added,
+        changedItemCount: stats.changed,
+        deletedItemCount: stats.deleted,
+        unchangedItemCount: stats.unchanged,
+        blockOperationCount: stats.blockOperations,
+        rebuiltCount: stats.rebuilt,
+        items,
+    };
+}
+
+function buildNewContentGroups(
+    views: RecentNoteView[],
+    statusMap: Map<string, ReadingBookStatus>,
+    bindingMap: Map<string, NoteDocumentBinding>
+): SyncOutcomeNewContentGroup[] {
+    const groups = new Map<string, RecentNoteView[]>();
+    for (const view of views) {
+        const current = groups.get(view.sourceKey) || [];
+        current.push(view);
+        groups.set(view.sourceKey, current);
+    }
+
+    return Array.from(groups.entries()).map(([sourceKey, items]) => {
+        const sortedItems = [...items].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+        const first = sortedItems[0];
+        const binding = resolveSourceBinding(sourceKey, first.noteDocId, statusMap, bindingMap);
+        return {
+            sourceKey,
+            sourceType: first.sourceType,
+            bookID: first.bookID,
+            title: first.title,
+            totalCount: sortedItems.length,
+            bookmarkCount: sortedItems.filter((item) => item.itemType === "bookmark" && item.sourceType !== "mp").length,
+            reviewCount: sortedItems.filter((item) => item.itemType === "review" && item.sourceType !== "mp").length,
+            mpArticleCount: sortedItems.filter((item) => item.sourceType === "mp").length,
+            latestDiscoveredAt: first.createdAt,
+            latestDiscoveredAtText: formatLocalDateTime(first.createdAt),
+            noteDocId: binding.documentId,
+            noteDocumentBindingState: binding.state,
+            items: sortedItems.map((item) => ({ ...item, noteDocId: binding.documentId })),
+        };
+    }).sort((a, b) => (b.latestDiscoveredAt || 0) - (a.latestDiscoveredAt || 0));
+}
+
+function buildSyncOutcomeIssues(
+    statuses: ReadingBookStatus[],
+    cache: any[],
+    latestReport: WereadSyncReport | null,
+    blockIndex: WereadNoteUnitBlockIndex | null,
+    bindingMap: Map<string, NoteDocumentBinding>
+): SyncOutcomeIssue[] {
+    const descriptors = new Map<string, ReadingBookStatus>();
+    for (const status of statuses) {
+        if (status.sourceType !== "local-book") descriptors.set(status.sourceKey, status);
+    }
+    for (const reportItem of latestReport?.items || []) {
+        const sourceType = toManagedSourceType(reportItem.sourceType);
+        const sourceKey = toReadingSourceKey(sourceType, reportItem.bookID);
+        if (!descriptors.has(sourceKey)) {
+            descriptors.set(sourceKey, {
+                sourceKey,
+                sourceType: sourceType === "mp" ? "weread-mp" : "weread-book",
+                bookID: reportItem.bookID,
+                title: reportItem.title || reportItem.bookID,
+                status: "not_started",
+                updatedAt: latestReport?.endedAt || latestReport?.startedAt || Date.now(),
+                noteDocId: reportItem.noteDocId,
+            });
+        }
+    }
+
+    const issueMap = new Map<string, SyncOutcomeIssue>();
+    const addIssue = (issue: SyncOutcomeIssue) => {
+        issueMap.set(`${issue.sourceKey}:${issue.issueCode}`, issue);
+    };
+
+    for (const status of descriptors.values()) {
+        const sourceType = toManagedSourceType(status.sourceType);
+        const bookID = status.bookID || status.sourceKey.split(":").pop() || "";
+        const sourceKey = toReadingSourceKey(sourceType, bookID);
+        const cached = findCachedBook(cache, sourceType, bookID);
+        const reportItem = findReportItem(latestReport, sourceType, bookID, sourceKey);
+        const binding = getNoteDocumentBinding(
+            status.noteDocId || status.noteDocumentCandidateId || reportItem?.noteDocId,
+            bindingMap
+        );
+        const title = status.title || cached?.title || reportItem?.title || bookID || "未命名来源";
+        const noteCount = getCachedNoteCount(cached) || 0;
+        const hasWereadContent = noteCount > 0 || !!status.hasNewNotes || (status.lastNewNoteCount || 0) > 0;
+        const hasSourceSyncHistory = !!reportItem || !!status.lastSyncedAt || !!status.syncFailed;
+
+        if (binding.state === "missing") {
+            addIssue(createIssue(sourceKey, sourceType, bookID, title, "document_missing", binding));
+        } else if (binding.state === "invalid") {
+            addIssue(createIssue(sourceKey, sourceType, bookID, title, "document_invalid", binding));
+        } else if (binding.state === "not_created" && hasWereadContent && hasSourceSyncHistory) {
+            addIssue(createIssue(sourceKey, sourceType, bookID, title, "unbound_with_notes", binding));
+        }
+
+        const syncFailed = status.syncFailed || reportItem?.status === "failed";
+        if (syncFailed) {
+            addIssue(createIssue(sourceKey, sourceType, bookID, title, "sync_failed", binding, reportItem?.reasonText || status.lastSyncError));
+        }
+
+        const blockSourceKey = normalizeSourceKeyForBlockIndex(sourceKey, status.sourceType, bookID);
+        const indexStatus = getIndexStatus(blockIndex?.sources?.[blockSourceKey]);
+        if (indexStatus === "broken" && syncFailed) {
+            addIssue(createIssue(sourceKey, sourceType, bookID, title, "index_broken", binding));
+        }
+    }
+
+    if (latestReport?.status === "failed" && !(latestReport.items || []).some((item) => item.status === "failed")) {
+        addIssue({
+            id: "sync:latest:sync_failed",
+            sourceKey: "sync:latest",
+            sourceType: "book",
+            title: "最近一次同步",
+            issueCode: "sync_failed",
+            reason: latestReport.errors?.[0] || "最近一次同步失败，请查看同步记录确认原因。",
+            action: "open_records",
+            actionLabel: "查看同步记录",
+            noteDocumentBindingState: "not_created",
+        });
+    }
+
+    const order: Record<SyncOutcomeIssueCode, number> = {
+        sync_failed: 0,
+        document_missing: 1,
+        document_invalid: 2,
+        unbound_with_notes: 3,
+        index_broken: 4,
+    };
+    return Array.from(issueMap.values()).sort((a, b) => order[a.issueCode] - order[b.issueCode] || a.title.localeCompare(b.title, "zh-CN"));
+}
+
+function createIssue(
+    sourceKey: string,
+    sourceType: ReadingManagementSourceType,
+    bookID: string,
+    title: string,
+    issueCode: SyncOutcomeIssueCode,
+    binding: NoteDocumentBinding,
+    detail?: string
+): SyncOutcomeIssue {
+    const config: Record<SyncOutcomeIssueCode, Pick<SyncOutcomeIssue, "reason" | "action" | "actionLabel">> = {
+        unbound_with_notes: {
+            reason: "微信读书已有笔记内容，但尚未绑定真实的读书笔记文档。",
+            action: "open_shelf",
+            actionLabel: "打开书架检查",
+        },
+        document_missing: {
+            reason: "原绑定的读书笔记文档已经不存在，请检查书架中的绑定。",
+            action: "open_shelf",
+            actionLabel: "打开书架检查",
+        },
+        document_invalid: {
+            reason: "绑定 ID 指向的块不是文档块，请检查书架中的绑定。",
+            action: "open_shelf",
+            actionLabel: "打开书架检查",
+        },
+        sync_failed: {
+            reason: detail || "最近一次同步失败，请查看同步记录确认原因。",
+            action: "open_records",
+            actionLabel: "查看同步记录",
+        },
+        index_broken: {
+            reason: "已有块索引结构损坏，并且已经影响最近同步。",
+            action: "open_diagnostics",
+            actionLabel: "查看诊断信息",
+        },
+    };
+    return {
+        id: `${sourceKey}:${issueCode}`,
+        sourceKey,
+        sourceType,
+        bookID,
+        title,
+        issueCode,
+        ...config[issueCode],
+        noteDocumentBindingState: binding.state,
+        noteDocId: binding.documentId,
+    };
+}
+
+function resolveSourceBinding(
+    sourceKey: string,
+    candidateId: string | undefined,
+    statusMap: Map<string, ReadingBookStatus>,
+    bindingMap: Map<string, NoteDocumentBinding>
+): NoteDocumentBinding {
+    const readingKey = sourceKey.startsWith("book:")
+        ? sourceKey.replace(/^book:/, "weread-book:")
+        : sourceKey.startsWith("mp:")
+            ? sourceKey.replace(/^mp:/, "weread-mp:")
+            : sourceKey;
+    const status = statusMap.get(sourceKey) || statusMap.get(readingKey);
+    return getNoteDocumentBinding(
+        candidateId || status?.noteDocId || status?.noteDocumentCandidateId,
+        bindingMap
+    );
+}
+
+function haveStatusBindingsChanged(before: ReadingBookStatus[], after: ReadingBookStatus[]): boolean {
+    if (before.length !== after.length) return true;
+    const beforeMap = new Map(before.map((item) => [item.sourceKey, item]));
+    return after.some((item) => {
+        const previous = beforeMap.get(item.sourceKey);
+        return !previous
+            || previous.noteDocId !== item.noteDocId
+            || previous.noteDocumentCandidateId !== item.noteDocumentCandidateId
+            || previous.noteDocumentBindingState !== item.noteDocumentBindingState;
+    });
 }
 
 function buildRecentNoteView(
@@ -239,6 +564,7 @@ function buildRecentNoteView(
         createdAt: item.createdAt,
         syncedAt: item.createdAt,
         createdAtText: formatLocalDateTime(item.createdAt),
+        discoveredAtText: formatLocalDateTime(item.createdAt),
         status: item.status,
         statusLabel: getInboxStatusLabel(item.status),
         blockIndexed: !!locatedBlock,
@@ -257,7 +583,7 @@ function buildSyncChangeViewsFromReport(report: WereadSyncReport): SyncChangeSum
         const sourceType = toManagedSourceType(item.sourceType);
         return {
             reportId: report.id,
-            sourceKey: item.sourceKey || toBlockSourceKey(sourceType, item.bookID),
+            sourceKey: toReadingSourceKey(sourceType, item.bookID),
             bookID: item.bookID,
             title: item.title || item.bookID || "未命名来源",
             sourceType,
@@ -297,8 +623,10 @@ function buildBookHealthView(
     );
     const indexStatus = getIndexStatus(blockIndex?.sources?.[blockSourceKey]);
     const bound = !!status.noteDocId;
-    const reasons = buildHealthReasons(status, reportItem, bound, indexStatus, pendingInbox.length, sourceType);
-    const level = getHealthLevel(reasons, indexStatus);
+    const noteCount = getCachedNoteCount(cached);
+    const bindingState = status.noteDocumentBindingState || (bound ? "bound" : "not_created");
+    const reasons = buildHealthReasons(status, reportItem, bindingState, indexStatus, pendingInbox.length, sourceType, noteCount);
+    const level = getHealthLevel(reasons);
     const title = status.title || cached?.title || bookID || "未命名来源";
 
     return {
@@ -325,7 +653,7 @@ function buildBookHealthView(
         addedItemCount: reportItem?.addedItemCount || 0,
         changedItemCount: reportItem?.changedItemCount || 0,
         deletedItemCount: reportItem?.deletedItemCount || 0,
-        noteCount: getCachedNoteCount(cached),
+        noteCount,
         recommendedAction: getRecommendedAction(reasons, sourceType),
     };
 }
@@ -343,7 +671,13 @@ function mergeBookStatusesWithCache(statuses: ReadingBookStatus[], cache: any[])
         if (!bookID) continue;
         const sourceType: ReadingManagementSourceType = toManagedSourceType(book.sourceType);
         const sourceKey = getWereadSourceKey(sourceType, bookID);
-        if (!map.has(sourceKey)) {
+        const cachedCandidateId = String(book.localDocBlockID || book.localDocCandidateID || "").trim() || undefined;
+        const existing = map.get(sourceKey);
+        if (existing) {
+            if (!existing.noteDocId && !existing.noteDocumentCandidateId && cachedCandidateId) {
+                map.set(sourceKey, { ...existing, noteDocumentCandidateId: cachedCandidateId });
+            }
+        } else {
             map.set(sourceKey, {
                 sourceKey,
                 sourceType: sourceType === "mp" ? "weread-mp" : "weread-book",
@@ -352,6 +686,7 @@ function mergeBookStatusesWithCache(statuses: ReadingBookStatus[], cache: any[])
                 title: book.title || book.name || bookID,
                 status: "not_started",
                 updatedAt: Date.now(),
+                noteDocumentCandidateId: cachedCandidateId,
             });
         }
     }
@@ -362,26 +697,36 @@ function mergeBookStatusesWithCache(statuses: ReadingBookStatus[], cache: any[])
 function buildHealthReasons(
     status: ReadingBookStatus,
     reportItem: WereadSyncReportItem | undefined,
-    bound: boolean,
+    bindingState: NoteDocumentBindingState,
     indexStatus: BookIndexStatus,
     pendingInboxCount: number,
-    sourceType: ReadingManagementSourceType
+    sourceType: ReadingManagementSourceType,
+    noteCount?: number
 ): BookHealthReason[] {
     const reasons: BookHealthReason[] = [];
-    reasons.push(bound ? "bound" : "unbound");
+    const hasSourceSyncHistory = !!reportItem || !!status.lastSyncedAt || !!status.syncFailed;
+    if (bindingState === "bound") {
+        reasons.push("bound");
+    } else if (bindingState === "missing") {
+        reasons.push("document_missing");
+    } else if (bindingState === "invalid") {
+        reasons.push("document_invalid");
+    } else if (hasSourceSyncHistory && ((noteCount || 0) > 0 || status.hasNewNotes || pendingInboxCount > 0)) {
+        reasons.push("unbound");
+    }
     if (pendingInboxCount > 0 || status.hasNewNotes) reasons.push("has_new_notes");
-    if (status.syncFailed || reportItem?.status === "failed") reasons.push("sync_failed");
+    const syncFailed = status.syncFailed || reportItem?.status === "failed";
+    if (syncFailed) reasons.push("sync_failed");
     if (reportItem?.status === "not_ready") reasons.push("not_ready");
     if (reportItem?.status === "skipped") reasons.push(sourceType === "mp" ? "mp_skipped" : "normal_book_skipped");
-    if (indexStatus === "missing") reasons.push("index_missing");
-    if (indexStatus === "broken") reasons.push("index_broken");
+    if (indexStatus === "broken" && syncFailed) reasons.push("index_broken");
     return Array.from(new Set(reasons));
 }
 
-function getHealthLevel(reasons: BookHealthReason[], indexStatus: BookIndexStatus): BookHealthLevel {
+function getHealthLevel(reasons: BookHealthReason[]): BookHealthLevel {
     if (reasons.includes("sync_failed")) return "error";
-    if (indexStatus === "broken") return "warning";
-    if (reasons.includes("unbound") || reasons.includes("has_new_notes") || reasons.includes("index_missing") || reasons.includes("not_ready")) {
+    if (reasons.includes("document_missing") || reasons.includes("document_invalid")) return "warning";
+    if (reasons.includes("unbound") || reasons.includes("has_new_notes")) {
         return "attention";
     }
     return "healthy";
@@ -446,14 +791,6 @@ function summarizeReportItems(items: WereadSyncReportItem[]): {
         },
         { added: 0, changed: 0, deleted: 0, unchanged: 0, blockOperations: 0, rebuilt: 0 }
     );
-}
-
-function countSyncProblems(latestReport: WereadSyncReport | null, healthViews: BookHealthView[]): number {
-    const failedInReport = latestReport?.failedCount || 0;
-    const warnings = latestReport?.warnings?.length || 0;
-    const errors = latestReport?.errors?.length || 0;
-    const healthErrors = healthViews.filter((item) => item.level === "error").length;
-    return failedInReport + warnings + errors + healthErrors;
 }
 
 function filterSyncChange(item: SyncChangeSummaryView, filter: NonNullable<SyncChangeOptions["filter"]>): boolean {
@@ -538,6 +875,8 @@ function getHealthReasonLabel(reason: BookHealthReason): string {
     const map: Record<BookHealthReason, string> = {
         bound: "已绑定本地笔记",
         unbound: "未绑定本地笔记",
+        document_missing: "绑定的笔记文档已不存在",
+        document_invalid: "绑定目标不是有效文档",
         has_new_notes: "有新增笔记待处理",
         sync_failed: "最近同步失败",
         index_missing: "还没有建立块级索引",
@@ -563,6 +902,7 @@ function getIndexStatusLabel(status: BookIndexStatus): string {
 
 function getRecommendedAction(reasons: BookHealthReason[], sourceType: ReadingManagementSourceType): string {
     if (reasons.includes("sync_failed")) return "查看同步报告，确认失败原因后重新同步。";
+    if (reasons.includes("document_missing") || reasons.includes("document_invalid")) return "打开书架检查并重新建立笔记文档绑定。";
     if (reasons.includes("unbound")) return sourceType === "mp" ? "导入公众号或先忽略该来源。" : "打开书架或搜索添加，确认后再绑定。";
     if (reasons.includes("has_new_notes")) return "进入新增笔记收件箱处理。";
     if (reasons.includes("index_broken")) return "这本书的块级索引可能失效，建议重新同步一次。";

@@ -1,4 +1,9 @@
 import { sql, getAttributeView, removeAttributeViewBlocks } from "@/api";
+import {
+  getAttributeViewNoteDocumentCandidate,
+  getNoteDocumentBinding,
+  validateNoteDocumentBindings,
+} from "../../readingManagement/noteDocumentBinding";
 
 interface WereadPluginLike {
   loadData: (key: string) => Promise<any>;
@@ -85,13 +90,16 @@ interface BookRow {
 function buildRowsByTitle(
   titleValues: any[],
   isbnValues: any[],
-  bookIDValues: any[]
+  bookIDValues: any[],
+  strictDocumentCandidate = false,
 ): Map<string, BookRow> {
   const rows = new Map<string, BookRow>();
 
   for (const tv of titleValues) {
     const rowBlockID = getValueBlockID(tv);
-    const docBlockID = getValueDocID(tv);
+    const docBlockID = strictDocumentCandidate
+      ? getAttributeViewNoteDocumentCandidate(tv)
+      : getValueDocID(tv);
     if (!rowBlockID) continue;
     rows.set(rowBlockID, {
       rowBlockID,
@@ -198,8 +206,9 @@ export async function attachWereadApiLocalNoteDocs(
   try {
     const { titleValues, isbnValues, bookIDValues } = await loadDatabaseView(plugin);
 
-    const rows = buildRowsByTitle(titleValues, isbnValues, bookIDValues);
+    const rows = buildRowsByTitle(titleValues, isbnValues, bookIDValues, true);
     const rowArray = Array.from(rows.values());
+    const bindings = await validateNoteDocumentBindings(rowArray.map((row) => row.docBlockID));
 
     const bookIDIndex = new Map<string, BookRow>();
     for (const row of rowArray) {
@@ -229,6 +238,13 @@ export async function attachWereadApiLocalNoteDocs(
     }
 
     return books.map((book) => {
+      const cleanBook = { ...book };
+      delete cleanBook.localDocBlockID;
+      delete cleanBook.localDocCandidateID;
+      delete cleanBook.localDocId;
+      delete cleanBook.noteDocId;
+      delete cleanBook.localDocMatchType;
+
       const bookID = book.bookID || book.bookId || "";
       const isbn = normalizeISBN(book.isbn || "").toUpperCase();
       const title = book.title || "";
@@ -247,18 +263,51 @@ export async function attachWereadApiLocalNoteDocs(
         matchType = "title";
       }
 
-      if (matchedRow && matchedRow.docBlockID) {
+      const binding = getNoteDocumentBinding(matchedRow?.docBlockID, bindings);
+      if (matchedRow && binding.state === "bound" && binding.documentId) {
         return {
-          ...book,
-          localDocBlockID: matchedRow.docBlockID,
+          ...cleanBook,
+          localDocBlockID: binding.documentId,
+          localDocCandidateID: binding.candidateId,
+          noteDocumentBindingState: binding.state,
           localDocMatchType: matchType,
         };
       }
 
-      return { ...book };
+      return {
+        ...cleanBook,
+        localDocCandidateID: binding.candidateId,
+        noteDocumentBindingState: binding.state,
+        ...(matchedRow && matchType ? { localDocMatchType: matchType } : {}),
+      };
     });
-  } catch {
-    return books.map((book) => ({ ...book }));
+  } catch (error) {
+    console.error("[attachWereadApiLocalNoteDocs] load database bindings failed:", error);
+    const cachedBindings = await validateNoteDocumentBindings(
+      books.map((book) => String(
+        book.localDocBlockID || book.localDocCandidateID || book.noteDocId || book.localDocId || ""
+      ).trim())
+    );
+    return books.map((book) => {
+      const candidateId = String(
+        book.localDocBlockID || book.localDocCandidateID || book.noteDocId || book.localDocId || ""
+      ).trim();
+      const binding = getNoteDocumentBinding(candidateId, cachedBindings);
+      const cleanBook = { ...book };
+      delete cleanBook.localDocBlockID;
+      delete cleanBook.localDocCandidateID;
+      delete cleanBook.localDocId;
+      delete cleanBook.noteDocId;
+      delete cleanBook.localDocMatchType;
+
+      return {
+        ...cleanBook,
+        ...(binding.documentId ? { localDocBlockID: binding.documentId } : {}),
+        localDocCandidateID: binding.candidateId,
+        noteDocumentBindingState: binding.state,
+        ...(binding.documentId && book.localDocMatchType ? { localDocMatchType: book.localDocMatchType } : {}),
+      };
+    });
   }
 }
 

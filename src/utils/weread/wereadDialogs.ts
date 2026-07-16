@@ -83,7 +83,6 @@ export const createLocalBookShelfDialog = (plugin: any, books: any) => {
                         books,
                         closeDialog: () => dialogRef?.close?.(),
                         showLocalDocBadge: true,
-                        openAllBooks: false,
                     }
                 });
             }

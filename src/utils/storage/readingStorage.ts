@@ -139,6 +139,8 @@ export async function upsertReadingBookStatus(
         status: status.status || existing?.status || "not_started",
         updatedAt: status.updatedAt || Date.now(),
         noteDocId: status.noteDocId ?? existing?.noteDocId,
+        noteDocumentCandidateId: status.noteDocumentCandidateId ?? status.noteDocId ?? existing?.noteDocumentCandidateId ?? existing?.noteDocId,
+        noteDocumentBindingState: status.noteDocumentBindingState ?? (status.noteDocId ? "bound" : existing?.noteDocumentBindingState),
         lastSyncedAt: status.lastSyncedAt ?? existing?.lastSyncedAt,
         hasNewNotes: status.hasNewNotes ?? existing?.hasNewNotes,
         lastNewNoteCount: status.lastNewNoteCount ?? existing?.lastNewNoteCount,
@@ -189,6 +191,28 @@ export async function updateReadingInboxItemStatus(
     item.status = status;
     await saveReadingInboxItems(plugin, items);
     await syncBookNewNoteStateFromInbox(plugin, item.sourceKey);
+}
+
+export async function updateReadingInboxItemsStatus(
+    plugin: PluginLike,
+    ids: string[],
+    status: ReadingInboxStatus
+): Promise<void> {
+    const idSet = new Set(ids.filter(Boolean));
+    if (idSet.size === 0) return;
+    const items = await getReadingInboxItems(plugin);
+    const affectedSources = new Set<string>();
+    let changed = false;
+    for (const item of items) {
+        if (!idSet.has(item.id) || item.status === status) continue;
+        item.status = status;
+        affectedSources.add(item.sourceKey);
+        changed = true;
+    }
+    if (changed) await saveReadingInboxItems(plugin, items);
+    for (const sourceKey of affectedSources) {
+        await syncBookNewNoteStateFromInbox(plugin, sourceKey);
+    }
 }
 
 export async function markSourceInboxItemsProcessed(plugin: PluginLike, sourceKey: string): Promise<void> {
@@ -263,4 +287,3 @@ export async function syncBookNewNoteStateFromInbox(plugin: PluginLike, sourceKe
     existing.updatedAt = Date.now();
     await saveReadingBookStatuses(plugin, statuses);
 }
-

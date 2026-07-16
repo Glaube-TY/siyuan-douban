@@ -448,7 +448,7 @@
             <button class="metric-card" type="button" on:click={() => emitAction("open-inbox")}>
                 <span>未处理新增</span>
                 <strong>{metrics.pendingInbox}</strong>
-                <em>打开收件箱</em>
+                <em>查看待处理</em>
             </button>
         </section>
 
@@ -713,7 +713,7 @@
                     <span>最近同步与本地索引</span>
                 </div>
                 <div class="coverage-grid">
-                    <button type="button" on:click={() => emitAction("open-diagnostics")}>
+                    <button type="button" on:click={() => emitAction("open-sync-changes")}>
                         <span>最近同步</span>
                         <strong>{formatSyncTime(view.syncCoverage.latestSyncTime)}</strong>
                         <em>成功 {view.syncCoverage.successCount} / 失败 {view.syncCoverage.failedCount} / 跳过 {view.syncCoverage.skippedCount}</em>
@@ -733,15 +733,15 @@
                         <strong>{view.syncCoverage.latestDeleted}</strong>
                         <em>最近报告</em>
                     </div>
-                    <button type="button" on:click={() => emitAction("open-diagnostics")}>
+                    <button type="button" on:click={() => emitAction("open-maintenance")}>
                         <span>索引覆盖</span>
                         <strong>{metrics.indexedSources}</strong>
                         <em>{metrics.indexedItems} 个同步单元</em>
                     </button>
                     <button type="button" on:click={() => emitAction("open-unbound-books")}>
-                        <span>未绑定书籍</span>
-                        <strong>{metrics.unboundBooks}</strong>
-                        <em>打开未绑定页面</em>
+                        <span>需要处理</span>
+                        <strong>{metrics.actionableIssues}</strong>
+                        <em>查看问题</em>
                     </button>
                 </div>
             </section>

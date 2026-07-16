@@ -18,6 +18,8 @@ export interface ReadingBookStatus {
     status: ReadingBookReviewStatus;
     updatedAt: number;
     noteDocId?: string;
+    noteDocumentCandidateId?: string;
+    noteDocumentBindingState?: "bound" | "not_created" | "missing" | "invalid";
     lastSyncedAt?: number;
     hasNewNotes?: boolean;
     lastNewNoteCount?: number;
@@ -34,4 +36,3 @@ export const READING_BOOK_STATUS_LABELS: Record<ReadingBookReviewStatus, string>
     reviewed: "已整理",
     archived: "已归档",
 };
-

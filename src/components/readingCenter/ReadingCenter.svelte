@@ -16,17 +16,12 @@
     import WereadSyncProgressDialog from "../common/WereadSyncProgressDialog.svelte";
     import ReadingWorkbench from "../workbench/ReadingWorkbench.svelte";
     import ReadingFeatureShell from "./ReadingFeatureShell.svelte";
-    import SyncReportCenter from "../syncReport/SyncReportCenter.svelte";
-    import ReadingInbox from "./ReadingInbox.svelte";
+    import SyncResultCenter from "../readingManagement/SyncResultCenter.svelte";
     import ReadingBookStatusManager from "./ReadingBookStatusManager.svelte";
     import ReadingTopics from "./ReadingTopics.svelte";
     import ReadingReview from "./ReadingReview.svelte";
     import ReadingDigestReports from "./ReadingDigestReports.svelte";
     import ReadingStatsCenter from "./ReadingStatsCenter.svelte";
-    import SyncChangePanel from "../readingManagement/SyncChangePanel.svelte";
-    import UnboundBooksPanel from "../readingManagement/UnboundBooksPanel.svelte";
-    import BookHealthPanel from "../readingManagement/BookHealthPanel.svelte";
-    import DataMaintenancePanel from "../readingManagement/DataMaintenancePanel.svelte";
     import WereadTab from "../tabs/WereadTab.svelte";
     import DatabaseSettingsDialog from "../settings/DatabaseSettingsDialog.svelte";
     import BookPreferenceSettingsDialog from "../settings/BookPreferenceSettingsDialog.svelte";
@@ -44,13 +39,8 @@
     type ReadingCenterView =
         | "dashboard"
         | "sync-panel"
-        | "sync-report"
         | "reading-stats"
-        | "sync-changes"
-        | "inbox"
-        | "unbound-books"
-        | "book-health"
-        | "maintenance"
+        | "sync-result"
         | "book-status"
         | "topics"
         | "review"
@@ -63,6 +53,8 @@
     let databaseStatus: "success" | "error" | "" = "";
     let workbenchRefreshKey = 0;
     let isWorkbenchSyncing = false;
+    let syncResultInitialView: "todo" | "records" = "todo";
+    let syncResultFocus: "new" | "issues" | "diagnostics" | "changes" = "new";
 
     // 同步进度弹窗相关
     let progressDialogRef: WereadSyncProgressDialog | null = null;
@@ -99,6 +91,15 @@
 
     function switchToView(view: ReadingCenterView) {
         currentView = view;
+    }
+
+    function openSyncResult(
+        view: "todo" | "records",
+        focus: "new" | "issues" | "diagnostics" | "changes"
+    ) {
+        syncResultInitialView = view;
+        syncResultFocus = focus;
+        currentView = "sync-result";
     }
 
     function openComponentDialog(component: any, options: { title: string; width?: string; height?: string; props?: Record<string, any> }) {
@@ -293,17 +294,17 @@
                 await refreshAll();
             }
         } else if (action === "open-inbox") {
-            switchToView("inbox");
+            openSyncResult("todo", "new");
         } else if (action === "open-sync-changes") {
-            switchToView("sync-changes");
+            openSyncResult("records", "changes");
         } else if (action === "open-unbound-books") {
-            switchToView("unbound-books");
+            openSyncResult("todo", "issues");
         } else if (action === "open-book-health") {
-            switchToView("book-health");
+            openSyncResult("todo", "issues");
         } else if (action === "open-maintenance") {
-            switchToView("maintenance");
+            openSyncResult("records", "diagnostics");
         } else if (action === "open-diagnostics") {
-            switchToView("sync-report");
+            openSyncResult("todo", "issues");
         } else if (action === "open-database-settings") {
             openDatabaseSettings();
         } else if (action === "open-book-preferences") {
@@ -362,10 +363,6 @@
         switchToView("topics");
     }
 
-    function handleRetryFailed() {
-        showMessage("已切换到微信读书同步面板，请重新执行更新同步。");
-        switchToView("sync-panel");
-    }
 </script>
 
 <div class="reading-center-container" class:reading-center-container-mobile={mobile}>
@@ -408,20 +405,19 @@
                 <WereadTab bind:plugin bind:i18n {databaseStatus} {mobile} />
             </div>
         </ReadingFeatureShell>
-    {:else if currentView === "sync-report"}
-        <SyncReportCenter {plugin} on:back={switchToDashboard} on:retryFailed={handleRetryFailed} on:maintenance={() => switchToView("maintenance")} />
     {:else if currentView === "reading-stats"}
         <ReadingStatsCenter {plugin} on:back={switchToDashboard} on:action={handleWorkbenchAction} />
-    {:else if currentView === "sync-changes"}
-        <SyncChangePanel {plugin} on:back={switchToDashboard} on:action={handleWorkbenchAction} />
-    {:else if currentView === "inbox"}
-        <ReadingInbox {plugin} on:back={switchToDashboard} on:addToTopic={handleAddInboxToTopic} />
-    {:else if currentView === "unbound-books"}
-        <UnboundBooksPanel {plugin} on:back={switchToDashboard} on:action={handleWorkbenchAction} />
-    {:else if currentView === "book-health"}
-        <BookHealthPanel {plugin} on:back={switchToDashboard} on:action={handleWorkbenchAction} />
-    {:else if currentView === "maintenance"}
-        <DataMaintenancePanel {plugin} on:back={switchToDashboard} />
+    {:else if currentView === "sync-result"}
+        {#key `${syncResultInitialView}:${syncResultFocus}`}
+            <SyncResultCenter
+                {plugin}
+                initialView={syncResultInitialView}
+                focus={syncResultFocus}
+                on:back={switchToDashboard}
+                on:action={handleWorkbenchAction}
+                on:addToTopic={handleAddInboxToTopic}
+            />
+        {/key}
     {:else if currentView === "book-status"}
         <ReadingBookStatusManager {plugin} on:back={switchToDashboard} />
     {:else if currentView === "topics"}

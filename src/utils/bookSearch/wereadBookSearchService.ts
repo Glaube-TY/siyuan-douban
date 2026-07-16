@@ -19,7 +19,7 @@ function toResult(book: any): WorkbenchSearchResult {
         isbn: book.isbn || book.ISBN,
         cover: book.cover,
         bookID: book.bookID,
-        noteDocId: book.noteDocId || book.localDocId || book.localDocBlockID,
+        noteDocId: book.localDocBlockID,
         description: `${book.totalNoteCount ?? book.noteCount ?? 0} 条笔记`,
         raw: book,
     };
@@ -31,7 +31,19 @@ export async function loadWereadCachedBooks(plugin: PluginLike): Promise<any[]> 
 }
 
 export async function searchWereadCachedBooks(plugin: PluginLike, query: string): Promise<WorkbenchSearchResult[]> {
-    const books = await loadWereadCachedBooks(plugin);
+    const cachedBooks = await loadWereadCachedBooks(plugin);
+    let books = cachedBooks;
+    try {
+        books = await attachWereadApiLocalNoteDocs(plugin, cachedBooks);
+    } catch (error) {
+        console.error("[wereadBookSearch] validate local note documents failed:", error);
+        books = cachedBooks.map((book) => ({
+            ...book,
+            localDocBlockID: undefined,
+            noteDocId: undefined,
+            localDocId: undefined,
+        }));
+    }
     const keyword = String(query || "").trim().toLowerCase();
     const matched = !keyword
         ? books

@@ -7,6 +7,7 @@
     import { secureExternalImageUrl } from "../../utils/core/externalImageUrl";
     import { loadWereadAuthState } from "../../utils/settings/wereadSettingsService";
     import { attachWereadApiLocalNoteDocs } from "../../utils/weread/api/findWereadApiBookTargetDoc";
+    import { getNoteDocumentBindingLabel, type NoteDocumentBindingState } from "../../utils/readingManagement/noteDocumentBinding";
     import { buildApiBookShelf } from "../../utils/weread/api/buildApiBookShelf";
     import { openDoc } from "../../utils/openDoc";
 
@@ -58,7 +59,9 @@
     }
 
     function getLocalDocId(book: any): string {
-        return book.localDocBlockID || book.noteDocId || book.localDocId || book.blockID || "";
+        return book.noteDocumentBindingState === "bound" || (!book.noteDocumentBindingState && book.localDocBlockID)
+            ? String(book.localDocBlockID || "").trim()
+            : "";
     }
 
     function canOpenLocalDoc(book: any): boolean {
@@ -66,7 +69,8 @@
     }
 
     function getBindingLabel(book: any): string {
-        return canOpenLocalDoc(book) ? "已绑定" : "未绑定";
+        const state = (book.noteDocumentBindingState || (canOpenLocalDoc(book) ? "bound" : "not_created")) as NoteDocumentBindingState;
+        return getNoteDocumentBindingLabel(state);
     }
 
     async function loadLocal() {
@@ -117,8 +121,10 @@
         try {
             const cache = await plugin.loadData("weread_api_bookshelf_cache");
             if (Array.isArray(cache) && cache.length > 0) {
-                shelfBooks = cache;
+                const validated = await attachWereadApiLocalNoteDocs(plugin, cache);
+                shelfBooks = validated;
                 shelfLoaded = true;
+                await plugin.saveData("weread_api_bookshelf_cache", validated);
             }
         } catch {
             // 忽略
@@ -165,7 +171,7 @@
         if (docId) {
             openDoc(plugin, docId, 1);
         } else {
-            showMessage("该书籍暂无可打开的本地笔记文档");
+            showMessage(`${getBindingLabel(book)}，暂无可打开的本地笔记文档`);
         }
     }
 

@@ -1,4 +1,9 @@
-import { getAttributeView, sql } from "@/api";
+import { getAttributeView } from "@/api";
+import {
+    getAttributeViewNoteDocumentCandidate,
+    getNoteDocumentBinding,
+    validateNoteDocumentBindings,
+} from "../readingManagement/noteDocumentBinding";
 
 function getTextValue(v: any): string {
     if (!v) return "";
@@ -49,25 +54,7 @@ function getSelectValue(v: any): string {
 }
 
 function getDocCandidateID(v: any): string {
-    return String(v?.block?.id ?? v?.blockID ?? "").trim();
-}
-
-async function loadValidDocIDs(ids: string[]): Promise<Set<string>> {
-    const uniqueIDs = Array.from(new Set(ids.filter(Boolean)));
-    if (uniqueIDs.length === 0) return new Set();
-
-    try {
-        const escapedIDs = uniqueIDs.map((id) => `"${id.replace(/"/g, '""')}"`).join(",");
-        const blocks = await sql(`SELECT id, type FROM blocks WHERE id IN (${escapedIDs})`);
-        return new Set(
-            (blocks || [])
-                .filter((block: any) => block?.type === "d")
-                .map((block: any) => block.id)
-                .filter(Boolean)
-        );
-    } catch {
-        return new Set();
-    }
+    return getAttributeViewNoteDocumentCandidate(v);
 }
 
 export async function loadLocalBookShelfBooks(avID: string) {
@@ -157,23 +144,28 @@ export async function loadLocalBookShelfBooks(avID: string) {
     fillColumn(categoryKey, getSelectValue);
     fillColumn(readingStatusKey, getSelectValue);
 
-    const validDocIDs = await loadValidDocIDs(docCandidateIDs);
+    const bindings = await validateNoteDocumentBindings(docCandidateIDs);
 
-    return Array.from(rowMap.values()).map((row) => ({
-        title: row.title,
-        cover: row.cover,
-        author: row.author,
-        publisher: row.publisher,
-        publishTime: row.publishTime,
-        isbn: row.isbn,
-        price: row.price,
-        pages: row.pages,
-        star: row.star,
-        ratingCount: row.ratingCount,
-        category: row.category,
-        readingStatus: row.readingStatus,
-        localDocBlockID: validDocIDs.has(row.docCandidateID) ? row.docCandidateID : "",
-        blockID: row.blockID,
-        sourceType: "local_book",
-    }));
+    return Array.from(rowMap.values()).map((row) => {
+        const binding = getNoteDocumentBinding(row.docCandidateID, bindings);
+        return {
+            title: row.title,
+            cover: row.cover,
+            author: row.author,
+            publisher: row.publisher,
+            publishTime: row.publishTime,
+            isbn: row.isbn,
+            price: row.price,
+            pages: row.pages,
+            star: row.star,
+            ratingCount: row.ratingCount,
+            category: row.category,
+            readingStatus: row.readingStatus,
+            localDocBlockID: binding.documentId || "",
+            localDocCandidateID: binding.candidateId || "",
+            noteDocumentBindingState: binding.state,
+            blockID: row.blockID,
+            sourceType: "local_book",
+        };
+    });
 }

@@ -10,7 +10,6 @@
     export let plugin: any;
     export let closeDialog: () => void = () => {};
     export let showLocalDocBadge = true;
-    export let openAllBooks = false;
     export let books: Array<{
         title?: string;
         author?: string;
@@ -132,9 +131,7 @@
     }
 
     function getOpenDocID(book: typeof books[0]): string {
-        if (book.localDocBlockID) return book.localDocBlockID;
-        if (openAllBooks && book.blockID) return book.blockID;
-        return "";
+        return String(book.localDocBlockID || "").trim();
     }
 
     function canOpenBook(book: typeof books[0]): boolean {

@@ -16,188 +16,202 @@
         summary = await buildReadingManagementSummary(plugin);
     }
 
+    function formatTime(timestamp?: number): string {
+        if (!timestamp) return "尚无同步记录";
+        return new Date(timestamp).toLocaleString("zh-CN", {
+            month: "2-digit",
+            day: "2-digit",
+            hour: "2-digit",
+            minute: "2-digit",
+        });
+    }
+
+    function getStatusText(status?: string): string {
+        if (!status || status === "unknown") return "尚未同步";
+        if (status === "success") return "最近同步正常";
+        if (status === "partial" || status === "partial_success") return "最近同步部分完成";
+        if (status === "cancelled") return "最近同步已取消";
+        if (status === "running") return "同步正在进行";
+        return "最近同步失败";
+    }
+
     onMount(load);
 
     $: if (refreshKey !== lastRefreshKey) {
         lastRefreshKey = refreshKey;
         load();
     }
-
-    interface CardEntry {
-        id: string;
-        type: WorkbenchAction;
-        label: string;
-        icon: string;
-        count: number;
-        description: string;
-    }
-
-    function buildCards(data: ReadingManagementSummary | null): CardEntry[] {
-        if (!data) {
-            return [
-                { id: "inbox", type: "open-inbox", label: "新增笔记", icon: "inbox", count: 0, description: "待处理划线/评论" },
-                { id: "block-changes", type: "open-sync-changes", label: "本次块变更", icon: "diagnostics", count: 0, description: "新增 0 / 更新 0 / 删除 0" },
-                { id: "unbound-books", type: "open-unbound-books", label: "未绑定书籍", icon: "book", count: 0, description: "无法写入本地笔记" },
-                { id: "sync-problems", type: "open-diagnostics", label: "同步问题", icon: "diagnostics", count: 0, description: "失败/异常/警告" },
-            ];
-        }
-
-        return [
-            {
-                id: "inbox",
-                type: "open-inbox",
-                label: "新增笔记",
-                icon: "inbox",
-                count: data.inboxPendingCount + data.inboxLaterCount,
-                description: "待处理划线/评论",
-            },
-            {
-                id: "block-changes",
-                type: "open-sync-changes",
-                label: "本次块变更",
-                icon: "diagnostics",
-                count: data.latestBlockChangeCount,
-                description: `新增 ${data.latestAddedItemCount} / 更新 ${data.latestChangedItemCount} / 删除 ${data.latestDeletedItemCount}`,
-            },
-            {
-                id: "unbound-books",
-                type: "open-unbound-books",
-                label: "未绑定书籍",
-                icon: "book",
-                count: data.unboundBookCount,
-                description: "无法写入本地笔记",
-            },
-            {
-                id: "sync-problems",
-                type: "open-diagnostics",
-                label: "同步问题",
-                icon: "diagnostics",
-                count: data.syncProblemCount,
-                description: "失败/异常/警告",
-            },
-        ];
-    }
-
-    $: cards = buildCards(summary);
 </script>
 
-<section class="workbench-panel workbench-review-panel">
-    <div class="workbench-panel-head">
-        <div class="workbench-panel-title">
+<section class="review-panel">
+    <div class="panel-heading">
+        <div class="panel-title">
             <SiYuanIcon name="review" size={18} />
-            <h2>同步后处理</h2>
+            <div>
+                <h2>同步结果与待办</h2>
+                <p>{getStatusText(summary?.lastSyncStatus)}</p>
+            </div>
         </div>
-        <button class="workbench-panel-link" on:click={() => dispatch("action", "open-book-health")}>书籍健康</button>
+        <button class="records-link" type="button" on:click={() => dispatch("action", "open-sync-changes")}>查看同步记录</button>
     </div>
 
-    <div class="workbench-review-grid">
-        {#each cards as card (card.id)}
-            <button on:click={() => dispatch("action", card.type)}>
-                <span class="workbench-review-icon"><SiYuanIcon name={card.icon} size={17} /></span>
-                <strong>{summary ? card.count : "暂无"}</strong>
-                <span>{card.label}</span>
-                <em>{card.description}</em>
-            </button>
-        {/each}
-    </div>
+    {#if summary}
+        <div class="sync-summary">
+            <span>{formatTime(summary.lastSyncTime)}</span>
+            <span>成功 {summary.latestSuccessCount} 本</span>
+            <span>新增 {summary.latestAddedItemCount}</span>
+            <span>更新 {summary.latestChangedItemCount}</span>
+        </div>
+
+        {#if summary.pendingContentCount > 0 || summary.actionableIssueCount > 0}
+            <div class="todo-summary">
+                {#if summary.pendingContentCount > 0}<strong>{summary.pendingContentCount} 条新增内容待查看</strong>{/if}
+                {#if summary.actionableIssueCount > 0}<strong class="problem">{summary.actionableIssueCount} 项需要处理</strong>{/if}
+            </div>
+            <div class="primary-actions">
+                {#if summary.pendingContentCount > 0}
+                    <button type="button" on:click={() => dispatch("action", "open-inbox")}>处理新增内容</button>
+                {/if}
+                {#if summary.actionableIssueCount > 0}
+                    <button type="button" class="secondary" on:click={() => dispatch("action", "open-diagnostics")}>查看问题</button>
+                {/if}
+            </div>
+        {:else}
+            <div class="all-clear">
+                <SiYuanIcon name="success" size={16} />
+                <span>当前无需处理</span>
+            </div>
+        {/if}
+    {:else}
+        <div class="loading">正在读取最近同步结果...</div>
+    {/if}
 </section>
 
 <style>
-    .workbench-panel {
+    .review-panel {
         display: grid;
-        grid-template-rows: auto 1fr;
         gap: 12px;
-        padding: 12px;
+        padding: 16px;
         border: 1px solid var(--b3-border-color);
-        border-radius: 8px;
+        border-radius: 10px;
         background: var(--b3-theme-surface);
-        align-content: start;
+        color: var(--b3-theme-on-background);
     }
 
-    .workbench-panel-head {
+    .panel-heading,
+    .panel-title,
+    .sync-summary,
+    .todo-summary,
+    .primary-actions,
+    .all-clear {
         display: flex;
+        align-items: center;
+    }
+
+    .panel-heading {
         justify-content: space-between;
         gap: 12px;
-        align-items: center;
     }
 
-    .workbench-panel-title {
-        display: flex;
-        align-items: center;
+    .panel-title {
         gap: 8px;
+        min-width: 0;
         color: var(--b3-theme-primary);
     }
 
-    h2 {
+    .panel-title div {
+        min-width: 0;
+    }
+
+    h2,
+    p {
         margin: 0;
+    }
+
+    h2 {
         color: var(--b3-theme-on-background);
         font-size: 16px;
     }
 
-    .workbench-review-grid {
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        grid-template-rows: repeat(2, minmax(120px, 1fr));
-        gap: 10px;
-    }
-
-    .workbench-panel-link,
-    .workbench-review-grid button {
-        display: grid;
-        gap: 5px;
-        min-width: 0;
-        min-height: 118px;
-        padding: 12px;
-        border: 1px solid var(--b3-border-color);
-        border-radius: 8px;
-        background: var(--b3-theme-background);
-        color: var(--b3-theme-on-background);
-        cursor: pointer;
-        text-align: left;
-        align-content: center;
-    }
-
-    .workbench-panel-link {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        min-height: unset;
-        height: 32px;
-        padding: 0 12px;
+    p,
+    .sync-summary,
+    .loading {
+        color: var(--b3-theme-on-surface-light);
         font-size: 12px;
     }
 
-    .workbench-review-grid button:hover,
-    .workbench-panel-link:hover {
-        border-color: var(--b3-theme-primary);
+    .sync-summary,
+    .todo-summary,
+    .primary-actions {
+        flex-wrap: wrap;
+        gap: 8px;
     }
 
-    .workbench-review-icon {
+    .sync-summary span {
+        padding-right: 8px;
+        border-right: 1px solid var(--b3-border-color);
+    }
+
+    .sync-summary span:last-child {
+        border-right: 0;
+    }
+
+    .todo-summary strong {
+        color: var(--b3-theme-primary);
+        font-size: 13px;
+    }
+
+    .todo-summary .problem {
+        color: var(--b3-card-warning-color);
+    }
+
+    button {
+        min-height: 34px;
+        padding: 0 12px;
+        border: 1px solid var(--b3-theme-primary);
+        border-radius: 7px;
+        background: var(--b3-theme-primary);
+        color: var(--b3-theme-background);
+        cursor: pointer;
+        font: inherit;
+        font-size: 12px;
+    }
+
+    button.secondary,
+    .records-link {
+        border-color: var(--b3-border-color);
+        background: var(--b3-theme-background);
+        color: var(--b3-theme-on-background);
+    }
+
+    .records-link {
+        min-height: 28px;
+        padding: 0 8px;
+        border-color: transparent;
         color: var(--b3-theme-primary);
     }
 
-    strong {
-        font-size: 20px;
-        line-height: 1.1;
-    }
-
-    span {
+    .all-clear {
+        gap: 7px;
+        padding: 10px 12px;
+        border-radius: 8px;
+        background: var(--b3-card-success-background);
+        color: var(--b3-theme-on-background);
         font-size: 13px;
-        font-weight: 700;
     }
 
-    em {
-        overflow: hidden;
-        color: var(--b3-theme-on-surface-light);
-        font-size: 12px;
-        font-style: normal;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-    }
+    @media (max-width: 600px) {
+        .review-panel {
+            padding: 12px;
+        }
 
-    @media (max-width: 920px) {
-        .workbench-review-grid {
-            grid-template-columns: repeat(2, minmax(0, 1fr));
+        .panel-heading {
+            align-items: flex-start;
+        }
+
+        .primary-actions button {
+            flex: 1 1 130px;
+            min-height: 42px;
         }
     }
 </style>

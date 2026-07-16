@@ -9,7 +9,6 @@
     import WorkbenchSearch from "./WorkbenchSearch.svelte";
     import WorkbenchLocalAssets from "./WorkbenchLocalAssets.svelte";
     import WorkbenchWereadAssets from "./WorkbenchWereadAssets.svelte";
-    import WorkbenchRecentNotes from "./WorkbenchRecentNotes.svelte";
     import WorkbenchReviewPanel from "./WorkbenchReviewPanel.svelte";
     import WorkbenchShelfHub from "./WorkbenchShelfHub.svelte";
     import ReadingStatsCenter from "../readingCenter/ReadingStatsCenter.svelte";
@@ -133,9 +132,8 @@
                         <div class="mobile-group-content"><WorkbenchWereadAssets summary={wereadSummary} pluginName={plugin.name} on:action={action} /></div>
                     </details>
                     <details>
-                        <summary><span><strong>整理与回顾</strong><small>最近笔记和复习入口</small></span><em>展开</em></summary>
-                        <div class="mobile-group-content mobile-group-stack">
-                            <WorkbenchRecentNotes {plugin} {refreshKey} on:action={action} on:refresh={refresh} />
+                        <summary><span><strong>同步结果与待办</strong><small>新增内容、问题与同步记录</small></span><em>展开</em></summary>
+                        <div class="mobile-group-content">
                             <WorkbenchReviewPanel {plugin} {refreshKey} on:action={action} />
                         </div>
                     </details>
@@ -169,7 +167,6 @@
                 <WorkbenchWereadAssets summary={wereadSummary} pluginName={plugin.name} on:action={action} />
             </div>
             <div class="workbench-operations-grid">
-                <WorkbenchRecentNotes {plugin} {refreshKey} on:action={action} on:refresh={refresh} />
                 <WorkbenchReviewPanel {plugin} {refreshKey} on:action={action} />
             </div>
         {:else if activeSection === "shelf-hub"}
@@ -241,11 +238,6 @@
 
     .mobile-group-content {
         padding: 0 10px 10px;
-    }
-
-    .mobile-group-stack {
-        display: grid;
-        gap: 10px;
     }
 
     .mobile-workbench-nav {
@@ -336,7 +328,7 @@
 
     .workbench-operations-grid {
         display: grid;
-        grid-template-columns: minmax(560px, 1.25fr) minmax(360px, 0.75fr);
+        grid-template-columns: minmax(0, 1fr);
         gap: clamp(10px, 1.3vw, 16px);
         align-items: stretch;
     }

@@ -7,6 +7,11 @@
     import { openDoc } from "../../utils/openDoc";
     import { showMessage } from "siyuan";
     import SiYuanIcon from "../common/SiYuanIcon.svelte";
+    import {
+        getNoteDocumentBinding,
+        getNoteDocumentBindingLabel,
+        validateNoteDocumentBindings,
+    } from "../../utils/readingManagement/noteDocumentBinding";
 
     export let plugin: any;
 
@@ -43,7 +48,8 @@
                     title: prev.title || item.title,
                     bookID: prev.bookID || item.bookID,
                     isbn: prev.isbn || item.isbn,
-                    noteDocId: prev.noteDocId || item.noteDocId,
+                    noteDocId: item.noteDocId ?? prev.noteDocId,
+                    noteDocumentCandidateId: item.noteDocumentCandidateId ?? prev.noteDocumentCandidateId,
                     lastSyncedAt: Math.max(prev.lastSyncedAt || 0, item.lastSyncedAt || 0) || prev.lastSyncedAt || item.lastSyncedAt,
                     lastNewNoteCount: Math.max(prev.lastNewNoteCount || 0, item.lastNewNoteCount || 0) || prev.lastNewNoteCount || item.lastNewNoteCount,
                     hasNewNotes: prev.hasNewNotes || item.hasNewNotes,
@@ -61,7 +67,13 @@
                 if (!bookID) continue;
                 const sourceType = book.sourceType === "weread_mp_account" ? "weread-mp" : "weread-book";
                 const sourceKey = getWereadSourceKey(sourceType === "weread-mp" ? "mp" : "book", bookID);
-                if (!map.has(sourceKey)) {
+                const cachedCandidateId = String(book.localDocBlockID || book.localDocCandidateID || "").trim() || undefined;
+                const existingStatus = map.get(sourceKey);
+                if (existingStatus) {
+                    if (!existingStatus.noteDocId && !existingStatus.noteDocumentCandidateId && cachedCandidateId) {
+                        map.set(sourceKey, { ...existingStatus, noteDocumentCandidateId: cachedCandidateId });
+                    }
+                } else {
                     map.set(sourceKey, {
                         sourceKey,
                         sourceType,
@@ -70,12 +82,25 @@
                         title: book.title || bookID,
                         status: "not_started",
                         updatedAt: Date.now(),
+                        noteDocumentCandidateId: cachedCandidateId,
                     });
                 }
             }
         }
 
-        statuses = Array.from(map.values()).sort((a, b) => a.title.localeCompare(b.title, "zh-CN"));
+        const mergedStatuses = Array.from(map.values());
+        const bindingMap = await validateNoteDocumentBindings(
+            mergedStatuses.map((item) => item.noteDocId || item.noteDocumentCandidateId)
+        );
+        statuses = mergedStatuses.map((item) => {
+            const binding = getNoteDocumentBinding(item.noteDocId || item.noteDocumentCandidateId, bindingMap);
+            return {
+                ...item,
+                noteDocId: binding.documentId,
+                noteDocumentCandidateId: binding.candidateId,
+                noteDocumentBindingState: binding.state,
+            };
+        }).sort((a, b) => a.title.localeCompare(b.title, "zh-CN"));
         await saveReadingBookStatuses(plugin, statuses);
     }
 
@@ -99,6 +124,10 @@
 
     function formatTime(ts?: number): string {
         return ts ? new Date(ts).toLocaleString("zh-CN", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "--";
+    }
+
+    function getBindingLabel(item: ReadingBookStatus): string {
+        return getNoteDocumentBindingLabel(item.noteDocumentBindingState || (item.noteDocId ? "bound" : "not_created"));
     }
 
     $: visibleStatuses = statuses.filter((item) => {
@@ -165,7 +194,7 @@
                 <div class="badges">
                     {#if item.hasNewNotes}<span>有新增笔记 {item.lastNewNoteCount || ""}</span>{/if}
                     {#if item.syncFailed}<span class="failed">同步失败</span>{/if}
-                    <span class:unbound={!item.noteDocId && !item.syncFailed}>{item.noteDocId ? "已绑定文档" : "未绑定文档"}</span>
+                    <span class:unbound={!item.noteDocId && !item.syncFailed}>{getBindingLabel(item)}</span>
                 </div>
                 <div class="footer">
                     <span>最近同步：{formatTime(item.lastSyncedAt)}</span>
@@ -197,15 +226,15 @@
 
     p {
         margin: 0;
-        color: var(--b3-theme-on-surface-light, #666);
+        color: var(--b3-theme-on-surface-light);
         font-size: 13px;
     }
 
     .back-btn,
     .status-card select,
     .footer button {
-        border: 1px solid var(--b3-border-color, #e0e0e0);
-        background: var(--b3-theme-surface, #fff);
+        border: 1px solid var(--b3-border-color);
+        background: var(--b3-theme-surface);
         border-radius: 6px;
         padding: 6px 10px;
         font-size: 12px;
@@ -226,9 +255,9 @@
         height: auto;
         min-height: unset;
         overflow: visible;
-        border: 1px solid var(--b3-border-color, #e0e0e0);
+        border: 1px solid var(--b3-border-color);
         border-radius: 10px;
-        background: var(--b3-theme-surface, #fff);
+        background: var(--b3-theme-surface);
         box-sizing: border-box;
         margin-bottom: 14px;
     }
@@ -247,8 +276,8 @@
         min-width: 200px;
         flex: 1;
         padding: 0 10px;
-        border: 1px solid var(--b3-border-color, #e0e0e0);
-        background: var(--b3-theme-surface, #fff);
+        border: 1px solid var(--b3-border-color);
+        background: var(--b3-theme-surface);
         border-radius: 6px;
         font-size: 12px;
         box-sizing: border-box;
@@ -264,8 +293,8 @@
         flex: 0 0 150px;
         height: 32px;
         box-sizing: border-box;
-        border: 1px solid var(--b3-border-color, #e0e0e0);
-        background: var(--b3-theme-surface, #fff);
+        border: 1px solid var(--b3-border-color);
+        background: var(--b3-theme-surface);
         border-radius: 6px;
         padding: 0 10px;
         font-size: 12px;
@@ -288,8 +317,8 @@
     }
 
     .status-card {
-        background: var(--b3-theme-surface, #fff);
-        border: 1px solid var(--b3-border-color, #e0e0e0);
+        background: var(--b3-theme-surface);
+        border: 1px solid var(--b3-border-color);
         border-radius: 8px;
         padding: 14px;
         min-width: 0;
@@ -326,7 +355,7 @@
         display: flex;
         flex-wrap: wrap;
         gap: 8px;
-        color: var(--b3-theme-on-surface-light, #777);
+        color: var(--b3-theme-on-surface-light);
         font-size: 12px;
         margin-top: 4px;
         overflow-wrap: anywhere;
@@ -343,18 +372,18 @@
         font-size: 11px;
         border-radius: 999px;
         padding: 2px 8px;
-        background: color-mix(in srgb, var(--b3-theme-primary, #4CAF50) 10%, transparent);
-        color: var(--b3-theme-primary, #4CAF50);
+        background: var(--b3-theme-primary-light);
+        color: var(--b3-theme-primary);
     }
 
     .badges .failed {
-        color: #F44336;
-        background: rgba(244, 67, 54, 0.1);
+        color: var(--b3-theme-on-background);
+        background: var(--b3-card-error-background);
     }
 
     .badges .unbound {
-        color: #FF9800;
-        background: rgba(255, 152, 0, 0.08);
+        color: var(--b3-card-warning-color);
+        background: var(--b3-card-warning-background);
     }
 
     .footer {
@@ -364,7 +393,7 @@
         align-items: center;
         gap: 8px;
         font-size: 12px;
-        color: var(--b3-theme-on-surface-light, #777);
+        color: var(--b3-theme-on-surface-light);
     }
 
     .footer button {
