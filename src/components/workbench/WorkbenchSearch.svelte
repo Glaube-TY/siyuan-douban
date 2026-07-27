@@ -15,7 +15,6 @@
     const dispatch = createEventDispatcher<{ action: WorkbenchAction; refresh: void }>();
 
     let query = "";
-    let searchInput: HTMLInputElement;
     let results: WorkbenchSearchResult[] = [];
     let selectedResult: WorkbenchSearchResult | null = null;
     const tx = (key: string, fallback: string, params: Record<string, string | number> = {}) =>
@@ -36,6 +35,7 @@
     }
 
     async function runSearch() {
+        if (isSearching) return;
         isSearching = true;
         selectedResult = null;
         try {
@@ -144,29 +144,19 @@
     </div>
 
     <div class="workbench-search-bar">
-        <div
-            class="workbench-search-input-wrap"
-            tabindex="0"
-            role="button"
-            on:click={() => searchInput?.focus()}
-            on:keydown={(event) => {
-                if (event.key === "Enter" || event.key === " ") {
-                    event.preventDefault();
-                    searchInput?.focus();
-                }
-            }}
-        >
+        <label class="workbench-search-input-wrap">
             <SiYuanIcon name="search" size={16} />
             <input
                 class="b3-text-field"
-                bind:this={searchInput}
                 bind:value={query}
+                type="search"
+                inputmode="search"
+                enterkeyhint="search"
+                autocomplete="off"
                 placeholder={tx("searchInputPlaceholder", "搜索书名、ISBN 或作者")}
                 on:keydown={(event) => event.key === "Enter" && runSearch()}
-                on:click|stopPropagation
-                on:mousedown|stopPropagation
             />
-        </div>
+        </label>
         <button class="workbench-button workbench-button-primary" on:click={runSearch} disabled={isSearching}>
             <SiYuanIcon name="search" size={15} />
             <span>{isSearching ? tx("searchSearching", "搜索中") : t(plugin, "searchButton", "搜索")}</span>
@@ -405,6 +395,10 @@
         min-height: 44px;
         height: 44px;
         border-radius: 10px;
+    }
+
+    .workbench-search-mobile .workbench-search-input-wrap input {
+        font-size: 16px;
     }
 
     .workbench-search-mobile .workbench-search-results {
