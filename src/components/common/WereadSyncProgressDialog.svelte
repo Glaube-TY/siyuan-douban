@@ -103,10 +103,9 @@
     }
   }
 
-  function getProgressPercent(): number {
-    if (isFinished && finalStatus !== "cancelled") return 100;
-    return progressView.percent;
-  }
+  $: displayedPercent = isFinished && finalStatus !== "cancelled"
+    ? 100
+    : progressView.percent;
 
   function handleClose() {
     onClose();
@@ -120,15 +119,15 @@
       <div
         class="progress-bar"
         class:progress-bar-indeterminate={!progressView.determinate && !isFinished}
-        style:width={progressView.determinate || isFinished ? `${getProgressPercent()}%` : undefined}
+        style:width={progressView.determinate || isFinished ? `${displayedPercent}%` : undefined}
       ></div>
     </div>
     <p class="progress-percent">
       {#if !progressView.determinate && !isFinished}
-        {progressView.label}
-      {:else}
-        {getProgressPercent()}%
-      {/if}
+          {progressView.label}
+        {:else}
+          {displayedPercent}%
+        {/if}
     </p>
   </div>
 
