@@ -1,9 +1,10 @@
-import { sql, getConf, render, updateBlock, getAttributeView, removeAttributeViewBlocks, createDocWithMd } from "@/api";
+import { sql, getAttributeView, removeAttributeViewBlocks, createDocWithMd } from "@/api";
 import { parseDateToTimestamp } from '../core/formatOp';
 import { getImage, downloadCover } from "@/utils/core/getImg";
 import { ensureAttributeViewKeys, appendBookToAttributeView } from './ensureAttributeViewKeys';
 import { bindBookToNote } from './bindBookToNote';
 import { findBookByNormalizedTitle } from './bookDeduplication';
+import { renderBookNoteTemplate } from '../template/renderBookNoteTemplate';
 
 export async function loadAVData(avID: string, fullData: any, plugin: any) {
     try {
@@ -167,12 +168,8 @@ export async function loadAVData(avID: string, fullData: any, plugin: any) {
                     .replace(/{{书籍简介}}/g, fullData.description || '')
                     .replace(/{{作者介绍}}/g, fullData.authorBio || '')
 
-                await plugin.saveData("noteTemplate.md", template);
-
-                const conf = await getConf();
-                const dataDir = conf.conf.system.dataDir;
-                const rendered = await render(blockID, dataDir + "/storage/petal/siyuan-douban/noteTemplate.md");
-                await updateBlock("dom", rendered.content, blockID);
+                // 使用统一模板渲染工具（内部按 getFrontend() 分支）
+                await renderBookNoteTemplate(plugin, blockID, template);
             }
 
             // 绑定数据库与读书笔记
@@ -227,7 +224,7 @@ function getAttributeType(attributeName: string): string {
 }
 
 // ==== 构建添加书籍的属性列值 ====
-function buildBlocksValues(databaseKeys: any[], fullData: any) {
+function buildBlocksValues(databaseKeys: any[], fullData: any, _rowID: string) {
     const blockValues = [];
 
     // 处理每个属性列

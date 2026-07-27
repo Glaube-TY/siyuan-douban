@@ -521,6 +521,12 @@ export async function currentTime(): Promise<number> {
 }
 
 
+export async function getWorkspaceInfo(): Promise<{workspaceDir: string}> {
+    const url = '/api/system/getWorkspaceInfo';
+    return request(url, {});
+}
+
+
 // **************************************** Attribute View ****************************************
 
 export async function getAttributeView(id: string): Promise<any> {

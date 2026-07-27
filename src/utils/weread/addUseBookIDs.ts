@@ -1,9 +1,10 @@
 import { parseDateToTimestamp } from '../core/formatOp';
-import { sql, getConf, render, updateBlock, getAttributeView, removeAttributeViewBlocks, createDocWithMd } from "@/api";
+import { sql, getAttributeView, removeAttributeViewBlocks, createDocWithMd } from "@/api";
 import { downloadWereadCoverSafely } from './downloadWereadCover';
 import { ensureAttributeViewKeys, appendBookToAttributeView } from '../bookHandling/ensureAttributeViewKeys';
 import { bindBookToNote } from '../bookHandling/bindBookToNote';
 import { findBookByNormalizedTitle } from '../bookHandling/bookDeduplication';
+import { renderBookNoteTemplate } from '../template/renderBookNoteTemplate';
 
 // 添加 useBookID 书籍到数据库
 export async function addUseBookIDsToDatabase(plugin: any, avID: string, bookDetail: any) {
@@ -165,12 +166,8 @@ export async function addUseBookIDsToDatabase(plugin: any, avID: string, bookDet
             .replace(/{{微信读书评分}}/g, bookDetail.rating ? `${bookDetail.rating}` : '无评分')
             .replace(/{{微信读书评分人数}}/g, bookDetail.ratingCount ? `${bookDetail.ratingCount}` : '暂无评价')
 
-        await plugin.saveData("noteTemplate.md", template);
-
-        const conf = await getConf();
-        const dataDir = conf.conf.system.dataDir;
-        const rendered = await render(blockID, dataDir + "/storage/petal/siyuan-douban/noteTemplate.md");
-        await updateBlock("dom", rendered.content, blockID);
+        // 使用统一模板渲染工具（内部按 getFrontend() 分支）
+        await renderBookNoteTemplate(plugin, blockID, template);
     }
 
     // 绑定数据库与读书笔记
@@ -207,7 +204,7 @@ function getAttributeType(attributeName: string): string {
 }
 
 // ==== 构建添加书籍的属性列值 ====
-function buildBlocksValues(databaseKeys: any[], bookDetail: any) {
+function buildBlocksValues(databaseKeys: any[], bookDetail: any, _rowID: string) {
     const blockValues = [];
 
     // 处理每个属性列
