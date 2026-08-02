@@ -10,3 +10,7 @@ tmp
 .codegraph
 *.zip
 .reasonix
+.env
+.siyuan-api-token.local
+.siyuan-api-token.*
+.siyuan-dev-target.json

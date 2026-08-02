@@ -8,33 +8,50 @@
  */
 // make_dev_link.js
 import fs from 'fs';
-import { log, error, getSiYuanDir, chooseTarget, getThisPluginName, makeSymbolicLink } from './utils.js';
+import path from 'node:path';
+import {
+    log,
+    error,
+    getSiYuanDir,
+    chooseTarget,
+    loadLocalEnvFile
+} from './utils.js';
+import { saveDevPluginDir, syncDevDeployment } from './dev_deploy.js';
 
 let targetDir = '';
+loadLocalEnvFile();
 
 /**
  * 1. Get the parent directory to install the plugin
  */
 log('>>> Try to visit constant "targetDir" in make_dev_link.js...');
 if (targetDir === '') {
-    log('>>> Constant "targetDir" is empty, try to get SiYuan directory automatically....');
-    let res = await getSiYuanDir();
-
-    if (!res || res.length === 0) {
-        log('>>> Can not get SiYuan directory automatically, try to visit environment variable "SIYUAN_PLUGIN_DIR"....');
-        let env = process.env?.SIYUAN_PLUGIN_DIR;
-        if (env) {
-            targetDir = env;
-            log(`\tGot target directory from environment variable "SIYUAN_PLUGIN_DIR": ${targetDir}`);
-        } else {
-            error('\tCan not get SiYuan directory from environment variable "SIYUAN_PLUGIN_DIR", failed!');
-            process.exit(1);
-        }
+    const configuredPluginDir = process.env?.SIYUAN_PLUGIN_DIR?.trim();
+    if (configuredPluginDir) {
+        targetDir = path.resolve(configuredPluginDir);
+        log(`>>> Use "SIYUAN_PLUGIN_DIR" from the local environment: ${targetDir}`);
     } else {
-        targetDir = await chooseTarget(res);
+        log('>>> "SIYUAN_PLUGIN_DIR" is empty, try to get SiYuan directory automatically....');
+        const res = await getSiYuanDir();
+
+        if (!res || res.length === 0) {
+            log('>>> 无法通过思源 Kernel API 获取工作空间，可能是思源未运行、API 授权未配置、端口不是 6806 或返回结构变化。');
+            error('\tPlease set SIYUAN_PLUGIN_DIR in .env to the intended workspace data/plugins directory.');
+            process.exit(1);
+        } else {
+            targetDir = await chooseTarget(res);
+        }
     }
 
     log(`>>> Successfully got target directory: ${targetDir}`);
+}
+const targetSegments = [
+    path.basename(path.dirname(targetDir)).toLowerCase(),
+    path.basename(targetDir).toLowerCase()
+];
+if (targetSegments[0] !== 'data' || targetSegments[1] !== 'plugins') {
+    error(`Failed! Refusing to use a directory that is not data/plugins: "${targetDir}"`);
+    process.exit(1);
 }
 if (!fs.existsSync(targetDir)) {
     error(`Failed! Plugin directory not exists: "${targetDir}"`);
@@ -42,25 +59,23 @@ if (!fs.existsSync(targetDir)) {
     process.exit(1);
 }
 
-/**
- * 2. The dev directory, which contains the compiled plugin code
- */
-const devDir = `${process.cwd()}/dev`;
+/** 2. The dev directory, which contains the compiled plugin code. */
+const devDir = path.resolve(process.cwd(), 'dev');
 if (!fs.existsSync(devDir)) {
-    fs.mkdirSync(devDir);
-}
-
-
-/**
- * 3. The target directory to make symbolic link to dev directory
- */
-const name = getThisPluginName();
-if (name === null) {
+    error(`Failed! Development output does not exist: "${devDir}"`);
     process.exit(1);
 }
-const targetPath = `${targetDir}/${name}`;
 
-/**
- * 4. Make symbolic link
- */
-makeSymbolicLink(devDir, targetPath);
+/** 3. Persist the selected workspace and deploy a real, syncable directory. */
+const result = syncDevDeployment({ sourceDir: devDir, pluginDir: targetDir });
+if (!result) {
+    error('Failed! Development deployment target is not configured.');
+    process.exit(1);
+}
+const configPath = saveDevPluginDir(targetDir);
+log(`Done! Deployed a real plugin directory: ${result.targetDir}`);
+log(`\tCopied ${result.copied}, unchanged ${result.unchanged}, deleted ${result.deleted}`);
+if (result.convertedLink) {
+    log('\tConverted the previous symbolic link into a real directory.');
+}
+log(`\tSaved development target config: ${configPath}`);

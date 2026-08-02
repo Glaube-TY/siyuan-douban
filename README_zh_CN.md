@@ -10,16 +10,10 @@
 <span style="padding:5px 12px;background:rgba(255,250,240,.82);border:1px solid #d8bd87;border-radius:999px;color:#6b3f1d;">多端支持</span>
 </div>
 </div>
-
-<div style="margin-top:1.4em;padding:.8em;background:linear-gradient(135deg,#fbf6e8,#f1e3bf);border:1px solid #cfb27a;border-radius:18px;box-shadow:0 10px 28px rgba(78,52,25,.1);">
-<img src="https://glaube-ty.top/images/site/siyuan-reading-notes-hero-v1.webp" alt="读书笔记插件完整阅读流程" style="display:block;width:100%;height:auto;border-radius:14px;filter:saturate(.94) sepia(.04);">
-</div>
-
 <div style="margin-top:1.4em;padding:1.4em 1.5em;background:#fffaf0;border:1px solid #d8c49a;border-radius:14px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.45);">
 <h2 style="margin:0 0 .6em;color:#6b3f1d;">✨ 它能帮你做什么？</h2>
 <p style="margin:0;color:#5b4a35;">如果你习惯在思源笔记中管理书籍、整理摘录和沉淀读书笔记，这个插件可以替你完成大量重复操作。你可以从一本书的名称或 ISBN 开始，也可以直接同步微信读书数据，最终把书籍资料和阅读内容整理到自己的思源知识库中。</p>
 </div>
-
 <div style="margin-top:1.3em;display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;">
 <div style="padding:1.15em;background:#fffaf0;border:1px solid #dfc998;border-radius:14px;box-shadow:0 5px 16px rgba(91,58,30,.06);">
 <h3 style="margin:0 0 .45em;color:#7a3f18;">🔍 快速查书</h3>
@@ -38,14 +32,12 @@
 <p style="margin:0;color:#665640;">同步划线、想法、书评、热门划线、公众号内容与阅读统计。</p>
 </div>
 </div>
-
 <div id="interface-preview" style="margin-top:1.6em;padding:1.5em;background:#f8f1df;border:1px solid #d6bd8a;border-radius:18px;box-shadow:0 8px 24px rgba(91,58,30,.08);">
 <div style="text-align:center;margin-bottom:1.2em;">
 <div style="display:inline-block;padding:4px 12px;background:#6b3f1d;color:#fff8e7;border-radius:999px;font-size:.86em;">界面导览</div>
 <h2 style="margin:.45em 0 .25em;color:#603813;">五个核心界面，两类主要使用场景</h2>
 <p style="margin:0;color:#705d45;">以下截图分别展示工作台与书架、豆瓣书籍入库、微信读书数据和笔记同步。豆瓣书籍入库与微信读书同步是两套相互独立的流程。</p>
 </div>
-
 <div style="margin-top:1em;padding:1.2em;background:#fffdf7;border:1px solid #ddc99e;border-radius:15px;">
 <div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:.85em;">
 <span style="flex:0 0 auto;padding:3px 10px;background:#7a3f18;color:#fff8e7;border-radius:999px;font-weight:700;">01</span>
