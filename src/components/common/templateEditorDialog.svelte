@@ -1,9 +1,13 @@
 <script lang="ts">
     import { createEventDispatcher } from "svelte";
+    import ContextTutorialLink from "./ContextTutorialLink.svelte";
+    import { READING_NOTES_LINKS } from "../../utils/core/externalLinks";
+    import { t } from "../../utils/i18n";
     const dispatch = createEventDispatcher();
 
     export let plugin: any;
     export let noteTemplate: string;
+    const tx = (key: string, fallback: string) => t(plugin, key, fallback);
 
     // 本地编辑副本，避免直接修改传入的 prop
     let localTemplate = noteTemplate;
@@ -13,6 +17,13 @@
 </script>
 
 <div class="template-editor-content">
+    <div class="editor-help">
+        <ContextTutorialLink
+            href={READING_NOTES_LINKS.localBookTemplateTutorial}
+            label={tx("tutorialLocalBookTemplate", "查看书籍变量与模板示例")}
+        />
+    </div>
+
     <!-- 主体编辑区 -->
     <div class="editor-area">
         <textarea
@@ -53,6 +64,12 @@
         flex: 1;
         overflow: hidden;
         margin-bottom: 16px;
+    }
+
+    .editor-help {
+        display: flex;
+        justify-content: flex-end;
+        margin-bottom: 10px;
     }
 
     .template-textarea {

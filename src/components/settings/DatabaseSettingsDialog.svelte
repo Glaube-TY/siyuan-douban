@@ -2,6 +2,8 @@
     import { onMount } from "svelte";
     import { showMessage } from "siyuan";
     import SiYuanIcon from "../common/SiYuanIcon.svelte";
+    import ContextTutorialLink from "../common/ContextTutorialLink.svelte";
+    import { READING_NOTES_LINKS } from "../../utils/core/externalLinks";
     import {
         loadDatabaseSettings,
         saveDatabaseSettings,
@@ -50,6 +52,11 @@
         <div>
             <h2>{tx("settingsDatabaseTitle", "本地数据库设置")}</h2>
             <p>{tx("settingsDatabaseDesc", "连接本地书籍属性视图，用于搜索、添加和打开读书笔记。")}</p>
+            <ContextTutorialLink
+                href={READING_NOTES_LINKS.databaseTutorial}
+                label={tx("tutorialDatabase", "查看数据库配置教程")}
+                compact
+            />
         </div>
     </header>
 
@@ -101,6 +108,8 @@
         border-bottom: 1px solid var(--b3-border-color);
         flex-shrink: 0;
     }
+
+    .settings-dialog-header > div:last-child { display: grid; justify-items: start; gap: 4px; }
 
     .settings-dialog-icon {
         display: grid;

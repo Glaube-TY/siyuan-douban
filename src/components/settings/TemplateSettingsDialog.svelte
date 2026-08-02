@@ -4,7 +4,9 @@
     import { svelteDialog } from "../../libs/dialog";
     import TemplateEditorDialog from "../common/templateEditorDialog.svelte";
     import SiYuanIcon from "../common/SiYuanIcon.svelte";
+    import ContextTutorialLink from "../common/ContextTutorialLink.svelte";
     import { createWereadNotesTemplateDialog } from "../../utils/weread/wereadDialogs";
+    import { READING_NOTES_LINKS } from "../../utils/core/externalLinks";
     import { loadTemplateSettings, saveTemplateSettings } from "../../utils/settings/templateSettingsService";
     import { t } from "../../utils/i18n";
 
@@ -64,6 +66,10 @@
             },
             isBook ? wereadTemplates : wereadMpTemplates,
             isBook ? tx("settingsWereadBookTemplate", "微信读书书籍模板") : tx("settingsWereadMpTemplate", "微信公众号模板"),
+            isBook ? READING_NOTES_LINKS.wereadBookTemplateTutorial : READING_NOTES_LINKS.wereadMpTemplateTutorial,
+            isBook
+                ? tx("tutorialWereadBookTemplate", "查看书籍模板变量与示例")
+                : tx("tutorialWereadMpTemplate", "查看公众号模板变量与示例"),
         );
         opener();
     }
@@ -94,6 +100,11 @@
         <div>
             <h2>{tx("settingsTemplatesTitle", "模板设置")}</h2>
             <p>{tx("settingsTemplatesDesc", "维护本地书籍笔记、微信读书书籍和公众号模板。")}</p>
+            <ContextTutorialLink
+                href={READING_NOTES_LINKS.templateTutorial}
+                label={tx("tutorialTemplateOverview", "查看模板设置教程")}
+                compact
+            />
         </div>
     </header>
 
@@ -136,10 +147,17 @@
                 </button>
             </div>
 
-            <label class="settings-dialog-field">
-                <span>{tx("settingsPositionMark", "同步位置标记")}</span>
-                <input class="b3-text-field" bind:value={wereadPositionMark} />
-            </label>
+            <div class="settings-dialog-field">
+                <span class="settings-dialog-field-title">
+                    <label for="weread-position-mark">{tx("settingsPositionMark", "同步位置标记")}</label>
+                    <ContextTutorialLink
+                        href={READING_NOTES_LINKS.wereadPositionTutorial}
+                        label={tx("tutorialPositionMark", "查看位置标记教程")}
+                        compact
+                    />
+                </span>
+                <input id="weread-position-mark" class="b3-text-field" bind:value={wereadPositionMark} />
+            </div>
         </div>
     {/if}
 
@@ -152,11 +170,13 @@
 <style>
     .settings-dialog { display: flex; flex-direction: column; gap: 16px; padding: 18px; color: var(--b3-theme-on-background); background: var(--b3-theme-background); width: 100%; height: 100%; box-sizing: border-box; overflow: auto; min-width: 0; }
     .settings-dialog-header { display: flex; gap: 12px; align-items: flex-start; padding-bottom: 14px; border-bottom: 1px solid var(--b3-border-color); flex-shrink: 0; }
+    .settings-dialog-header > div:last-child { display: grid; justify-items: start; gap: 4px; }
     .settings-dialog-icon { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 8px; color: var(--b3-theme-primary); background: color-mix(in srgb, var(--b3-theme-primary) 12%, transparent); }
     h2 { margin: 0 0 4px; font-size: 18px; line-height: 1.2; }
     p { margin: 0; color: var(--b3-theme-on-surface-light); font-size: 13px; line-height: 1.5; }
     .settings-dialog-body { display: grid; gap: 14px; flex: 1; min-height: 0; overflow: auto; }
     .settings-dialog-field { display: grid; gap: 8px; font-size: 13px; font-weight: 600; }
+    .settings-dialog-field-title { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
     .settings-dialog-switch-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 10px; align-items: center; padding: 12px; border: 1px solid var(--b3-border-color); border-radius: 8px; background: var(--b3-theme-surface); }
     .settings-dialog-switch-row span:first-child { display: grid; gap: 3px; }
     .settings-dialog-switch-row strong { font-size: 13px; }

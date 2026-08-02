@@ -2,6 +2,8 @@
     import { onMount } from "svelte";
     import { showMessage } from "siyuan";
     import SiYuanIcon from "../common/SiYuanIcon.svelte";
+    import ContextTutorialLink from "../common/ContextTutorialLink.svelte";
+    import { READING_NOTES_LINKS } from "../../utils/core/externalLinks";
     import {
         clearWereadApiKey,
         loadWereadAuthState,
@@ -70,6 +72,11 @@
         <div>
             <h2>{tx("settingsWereadAuthTitle", "微信读书授权")}</h2>
             <p>{tx("settingsWereadAuthDesc", "配置用于同步划线、想法、书评和阅读统计的 API Key。")}</p>
+            <ContextTutorialLink
+                href={READING_NOTES_LINKS.wereadAuthTutorial}
+                label={tx("tutorialWereadAuth", "查看 API Key 授权教程")}
+                compact
+            />
         </div>
     </header>
 
@@ -104,6 +111,7 @@
 <style>
     .settings-dialog { display: flex; flex-direction: column; gap: 16px; padding: 18px; color: var(--b3-theme-on-background); background: var(--b3-theme-background); width: 100%; height: 100%; box-sizing: border-box; overflow: auto; min-width: 0; }
     .settings-dialog-header { display: flex; gap: 12px; align-items: flex-start; padding-bottom: 14px; border-bottom: 1px solid var(--b3-border-color); flex-shrink: 0; }
+    .settings-dialog-header > div:last-child { display: grid; justify-items: start; gap: 4px; }
     .settings-dialog-icon { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 8px; color: var(--b3-theme-primary); background: color-mix(in srgb, var(--b3-theme-primary) 12%, transparent); }
     h2 { margin: 0 0 4px; font-size: 18px; line-height: 1.2; }
     p { margin: 0; color: var(--b3-theme-on-surface-light); font-size: 13px; line-height: 1.5; }

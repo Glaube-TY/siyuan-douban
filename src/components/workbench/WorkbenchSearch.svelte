@@ -2,6 +2,8 @@
     import { createEventDispatcher } from "svelte";
     import { showMessage } from "siyuan";
     import SiYuanIcon from "../common/SiYuanIcon.svelte";
+    import ContextTutorialLink from "../common/ContextTutorialLink.svelte";
+    import { READING_NOTES_LINKS } from "../../utils/core/externalLinks";
     import DoubanBookDetailDialog from "../bookSearch/DoubanBookDetailDialog.svelte";
     import type { WorkbenchAction, WorkbenchSearchResult } from "../../types/workbench";
     import { addEditedDoubanBookToDatabase, loadDoubanBookDetail, loadDoubanBookPreferences, searchDoubanBook } from "../../utils/bookSearch/doubanSearchService";
@@ -141,6 +143,11 @@
             <h2>{tx("searchPanelTitle", "豆瓣读书书籍搜索导入")}</h2>
             <p>{tx("searchPanelDesc", "从豆瓣读书搜索书籍，确认详情后导入本地阅读数据库。")}</p>
         </div>
+        <ContextTutorialLink
+            href={READING_NOTES_LINKS.addBookTutorial}
+            label={tx("tutorialAddBook", "查看搜索与入库教程")}
+            compact
+        />
     </div>
 
     <div class="workbench-search-bar">

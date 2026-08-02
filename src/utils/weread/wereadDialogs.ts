@@ -4,7 +4,14 @@ import allNotebooks from "@/components/common/allNotebooks.svelte";
 import wereadBookShelfView from "@/components/common/wereadBookShelfView.svelte";
 import wereadReadingStatsDialog from "@/components/common/wereadReadingStatsDialog.svelte";
 
-export const createWereadNotesTemplateDialog = (i18n: any, onConfirm: (newWereadTemplates: string) => void, initialTemplates = "", title: string) => {
+export const createWereadNotesTemplateDialog = (
+    i18n: any,
+    onConfirm: (newWereadTemplates: string) => void,
+    initialTemplates = "",
+    title: string,
+    tutorialUrl = "",
+    tutorialLabel = "",
+) => {
     return () => {
         const dialog = svelteDialog({
             title: title,
@@ -14,6 +21,8 @@ export const createWereadNotesTemplateDialog = (i18n: any, onConfirm: (newWeread
                     props: {
                         i18n: i18n,
                         newWereadTemplates: initialTemplates,
+                        tutorialUrl,
+                        tutorialLabel,
                         close: () => dialog.close(),
                         confirm: (newWereadTemplates: string) => {
                             onConfirm(newWereadTemplates);

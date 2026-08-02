@@ -37,6 +37,7 @@
     import WereadSyncPlanConfirmDialog from "@/components/common/WereadSyncPlanConfirmDialog.svelte";
     import WereadSyncProgressDialog from "@/components/common/WereadSyncProgressDialog.svelte";
     import { READING_NOTES_LINKS } from "@/utils/core/externalLinks";
+    import ContextTutorialLink from "@/components/common/ContextTutorialLink.svelte";
 
     import wereadManageISBN from "@/components/common/wereadManageISBN.svelte";
     import wereadIgnoredBooksDialog from "@/components/common/wereadIgnoredBooksDialog.svelte";
@@ -1100,6 +1101,8 @@
                             },
                             wereadTemplates,
                             i18n.setBookNotesTemplateTitle,
+                            READING_NOTES_LINKS.wereadBookTemplateTutorial,
+                            i18nText("tutorialWereadBookTemplate", "查看书籍模板变量与示例"),
                         )}>{i18n.setBookNotesTemplate}</button>
                     <span class="template-status" class:configured={wereadTemplates?.trim()}>{wereadTemplates?.trim() ? i18n.templateConfigured : i18n.templateNotConfigured}</span>
                 </div>
@@ -1120,6 +1123,8 @@
                             },
                             wereadMpTemplates,
                             i18n.setMpNotesTemplateTitle,
+                            READING_NOTES_LINKS.wereadMpTemplateTutorial,
+                            i18nText("tutorialWereadMpTemplate", "查看公众号模板变量与示例"),
                         )}>{i18n.setMpNotesTemplate}</button>
                     <span class="template-status" class:configured={wereadMpTemplates?.trim()}>{wereadMpTemplates?.trim() ? i18n.templateConfigured : i18n.templateNotConfigured}</span>
                 </div>
@@ -1128,6 +1133,11 @@
                 <div class="weread-row-info">
                     <div class="weread-row-title">{i18n.positionMark}</div>
                     <div class="weread-row-desc" title={i18n.notesSyncPositionTip}>{i18n.positionMarkDesc}</div>
+                    <ContextTutorialLink
+                        href={READING_NOTES_LINKS.wereadPositionTutorial}
+                        label={i18nText("tutorialPositionMark", "查看位置标记教程")}
+                        compact
+                    />
                 </div>
                 <div class="weread-row-control weread-row-control--inline">
                     <input type="text" bind:value={wereadPositionMark} class="weread-position-input" />

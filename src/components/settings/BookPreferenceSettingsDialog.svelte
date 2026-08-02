@@ -2,6 +2,8 @@
     import { onMount } from "svelte";
     import { showMessage } from "siyuan";
     import SiYuanIcon from "../common/SiYuanIcon.svelte";
+    import ContextTutorialLink from "../common/ContextTutorialLink.svelte";
+    import { READING_NOTES_LINKS } from "../../utils/core/externalLinks";
     import {
         loadBookPreferenceSettings,
         saveBookPreferenceSettings,
@@ -50,6 +52,11 @@
         <div>
             <h2>{tx("settingsPreferencesTitle", "书籍偏好设置")}</h2>
             <p>{tx("settingsPreferencesDesc", "配置添加书籍时可选的评分、分类和阅读状态。")}</p>
+            <ContextTutorialLink
+                href={READING_NOTES_LINKS.bookPreferencesTutorial}
+                label={tx("tutorialBookPreferences", "查看字段与偏好教程")}
+                compact
+            />
         </div>
     </header>
 
@@ -100,6 +107,7 @@
         border-bottom: 1px solid var(--b3-border-color);
         flex-shrink: 0;
     }
+    .settings-dialog-header > div:last-child { display: grid; justify-items: start; gap: 4px; }
     .settings-dialog-icon {
         display: grid;
         place-items: center;

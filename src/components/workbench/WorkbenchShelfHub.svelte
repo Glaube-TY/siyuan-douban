@@ -2,6 +2,8 @@
     import { onMount } from "svelte";
     import { showMessage } from "siyuan";
     import SiYuanIcon from "../common/SiYuanIcon.svelte";
+    import ContextTutorialLink from "../common/ContextTutorialLink.svelte";
+    import { READING_NOTES_LINKS } from "../../utils/core/externalLinks";
     import { loadLocalBookSearchState } from "../../utils/bookSearch/localBookSearchService";
     import { loadWereadCachedBooks } from "../../utils/bookSearch/wereadBookSearchService";
     import { secureExternalImageUrl } from "../../utils/core/externalImageUrl";
@@ -213,6 +215,11 @@
             <h2>{tx("workbenchShelfCenter", "书架中心")}</h2>
         </div>
         <div class="shelf-hub-actions">
+            <ContextTutorialLink
+                href={READING_NOTES_LINKS.shelfTutorial}
+                label={tx("tutorialShelf", "查看书架教程")}
+                compact
+            />
             {#if activeTab === "weread-shelf"}
                 <button class="workbench-panel-link" on:click={refreshShelf} disabled={isLoading}>
                     <SiYuanIcon name="sync" size={14} />

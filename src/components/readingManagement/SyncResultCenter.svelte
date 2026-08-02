@@ -26,6 +26,8 @@
         keepRecentSyncReports,
     } from "../../utils/readingManagement/maintenanceActions";
     import { localizeKnownUiText, t } from "../../utils/i18n";
+    import ContextTutorialLink from "../common/ContextTutorialLink.svelte";
+    import { READING_NOTES_LINKS } from "../../utils/core/externalLinks";
 
     export let plugin: any;
     export let initialView: "todo" | "records" = "todo";
@@ -263,6 +265,11 @@
             <h2>{tx("syncResultTitle", "同步结果与待办")}</h2>
             <p>{tx("syncResultSubtitle", "查看新增内容、需要处理的问题和最近同步记录")}</p>
         </div>
+        <ContextTutorialLink
+            href={READING_NOTES_LINKS.wereadResultsTutorial}
+            label={tx("tutorialSyncResults", "查看同步结果教程")}
+            compact
+        />
     </header>
 
     <nav class="main-tabs" aria-label={tx("syncResultViewLabel", "同步结果视图")}>
@@ -484,6 +491,8 @@
         justify-content: flex-start;
         margin-bottom: 14px;
     }
+
+    .page-header :global(.context-tutorial-link) { margin-left: auto; }
 
     h2,
     h3,

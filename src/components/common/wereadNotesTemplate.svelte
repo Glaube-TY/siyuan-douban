@@ -1,14 +1,22 @@
 <script lang="ts">
     import { I18N } from "siyuan";
     import "../styles/main.scss";
+    import ContextTutorialLink from "./ContextTutorialLink.svelte";
 
     export let i18n: I18N;
     export let newWereadTemplates: string;
     export let close: () => void;
     export let confirm: (newWereadTemplates: string) => void;
+    export let tutorialUrl = "";
+    export let tutorialLabel = "";
 </script>
 
 <div class="template-weread-dialog">
+    {#if tutorialUrl && tutorialLabel}
+        <div class="template-tutorial-link">
+            <ContextTutorialLink href={tutorialUrl} label={tutorialLabel} />
+        </div>
+    {/if}
     <div class="template-tip">{i18n.templateEditorTip}</div>
     <div class="weread-api-notice">{i18n.wereadTemplateApiNotice}</div>
     <textarea class="weread-template" bind:value={newWereadTemplates} placeholder={i18n.templateEditorPlaceholder}
@@ -39,6 +47,12 @@
             color: var(--b3-theme-on-surface);
             opacity: 0.7;
             margin-bottom: 4px;
+        }
+
+        .template-tutorial-link {
+            display: flex;
+            width: 100%;
+            justify-content: flex-end;
         }
 
         .weread-api-notice {

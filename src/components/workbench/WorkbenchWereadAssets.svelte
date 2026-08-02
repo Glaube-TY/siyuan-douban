@@ -1,6 +1,8 @@
 <script lang="ts">
     import { createEventDispatcher } from "svelte";
     import SiYuanIcon from "../common/SiYuanIcon.svelte";
+    import ContextTutorialLink from "../common/ContextTutorialLink.svelte";
+    import { READING_NOTES_LINKS } from "../../utils/core/externalLinks";
     import type { WorkbenchAction, WorkbenchWereadAssetSummary } from "../../types/workbench";
     import { t } from "../../utils/i18n";
 
@@ -50,11 +52,18 @@
             <h2>{tx("wereadAssetsTitle", "微信读书同步")}</h2>
             <span class="workbench-panel-status">{authStatusText}</span>
         </div>
-        <button
-            class:needs-attention={authNeedsAttention}
-            class="workbench-panel-link"
-            on:click={() => action("open-weread-auth")}
-        >{tx("wereadAssetsAuth", "授权设置")}</button>
+        <div class="workbench-panel-actions">
+            <ContextTutorialLink
+                href={READING_NOTES_LINKS.wereadSyncTutorial}
+                label={tx("tutorialWereadSync", "查看同步教程")}
+                compact
+            />
+            <button
+                class:needs-attention={authNeedsAttention}
+                class="workbench-panel-link"
+                on:click={() => action("open-weread-auth")}
+            >{tx("wereadAssetsAuth", "授权设置")}</button>
+        </div>
     </div>
 
     <div class="workbench-compact-stats">
@@ -123,6 +132,14 @@
         margin: 0;
         color: var(--b3-theme-on-background);
         font-size: 16px;
+    }
+
+    .workbench-panel-actions {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 8px;
     }
 
     .workbench-panel-status {
