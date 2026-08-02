@@ -325,6 +325,7 @@
     "reviewSyncRunning": "Sync in progress",
     "reviewSyncFailed": "Latest sync failed",
     "reviewViewRecords": "View Sync Records",
+    "reviewExperimentalBadge": "Experimental · In development",
     "reviewSuccessBooks": "{count} succeeded",
     "reviewAdded": "{count} added",
     "reviewUpdated": "{count} updated",

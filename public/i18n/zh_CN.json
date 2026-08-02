@@ -325,6 +325,7 @@
     "reviewSyncRunning": "同步正在进行",
     "reviewSyncFailed": "最近同步失败",
     "reviewViewRecords": "查看同步记录",
+    "reviewExperimentalBadge": "实验性功能 · 开发中",
     "reviewSuccessBooks": "成功 {count} 本",
     "reviewAdded": "新增 {count}",
     "reviewUpdated": "更新 {count}",

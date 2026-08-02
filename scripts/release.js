@@ -2,9 +2,11 @@ import { readFileSync } from 'node:fs';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import readline from 'node:readline';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 
 const VERSION_PATTERN = /^(\d+)\.(\d+)\.(\d+)$/;
+const RELEASE_NOTES_INSTRUCTIONS_PATTERN =
+    /<!-- release-notes-editor:instructions:start -->[\s\S]*?<!-- release-notes-editor:instructions:end -->\s*/;
 const cliArgs = parseArgs(process.argv.slice(2));
 const pipedAnswers = process.stdin.isTTY ? null : readFileSync(0, 'utf8').split(/\r?\n/);
 const promptInterface = process.stdin.isTTY && !cliArgs.yes
@@ -148,6 +150,198 @@ function ensureTagDoesNotExist(version) {
     }
 }
 
+function getGitStatus() {
+    try {
+        return getOutput('git', ['status', '--short']);
+    } catch {
+        return '';
+    }
+}
+
+function resolveGitPath(fileName) {
+    const gitPath = getOutput('git', ['rev-parse', '--git-path', fileName]);
+    return path.isAbsolute(gitPath) ? gitPath : path.resolve(process.cwd(), gitPath);
+}
+
+function getPreviousReleaseTag(currentVersion) {
+    const currentTag = `v${currentVersion}`;
+    if (
+        commandSucceeds('git', ['show-ref', '--verify', '--quiet', `refs/tags/${currentTag}`])
+        && commandSucceeds('git', ['merge-base', '--is-ancestor', currentTag, 'HEAD'])
+    ) {
+        return currentTag;
+    }
+
+    try {
+        return getOutput('git', ['describe', '--tags', '--abbrev=0', '--match', 'v[0-9]*', 'HEAD']);
+    } catch {
+        return '';
+    }
+}
+
+function getCommitsSinceTag(previousTag) {
+    if (!previousTag) return [];
+
+    const output = getOutput('git', [
+        'log',
+        '--reverse',
+        '--format=%H%x1f%h%x1f%s%x1f%b%x1e',
+        `${previousTag}..HEAD`,
+    ]);
+    if (!output) return [];
+
+    return output
+        .split('\x1e')
+        .map((record) => record.trim())
+        .filter(Boolean)
+        .map((record) => {
+            const [hash = '', shortHash = '', subject = '', ...bodyParts] = record.split('\x1f');
+            return {
+                hash,
+                shortHash,
+                subject: subject.trim(),
+                body: bodyParts.join('\x1f').trim(),
+            };
+        });
+}
+
+function formatCommitAsReleaseNote(commit) {
+    const subject = commit.subject || `Commit ${commit.shortHash}`;
+    const lines = [`- ${subject} (\`${commit.shortHash}\`)`];
+    if (commit.body) {
+        lines.push('');
+        lines.push(...commit.body.split(/\r?\n/).map((line) => line ? `  ${line}` : ''));
+    }
+    return lines.join('\n');
+}
+
+function createGeneratedReleaseNotes(version, commits) {
+    return commits.length > 0
+        ? commits.map(formatCommitAsReleaseNote).join('\n\n')
+        : `- Release v${version}`;
+}
+
+function createReleaseNotesDraft(version, previousTag, commits) {
+    const rangeLabel = previousTag ? `${previousTag}..HEAD` : '未找到可用的上一 release tag';
+
+    return [
+        '<!-- release-notes-editor:instructions:start -->',
+        '请在下方编辑本次发布的详细更新日志。',
+        '每个一级无序列表项对应一次提交；可以增删、合并或重写内容。',
+        '保存并关闭此文件后，release 流程会自动继续。',
+        '本说明块不会进入 Git commit、tag 或 GitHub Release。',
+        `自动生成范围：${rangeLabel}`,
+        `检测到提交数：${commits.length}`,
+        '<!-- release-notes-editor:instructions:end -->',
+        '',
+        createGeneratedReleaseNotes(version, commits),
+        '',
+    ].join('\n');
+}
+
+function parseEditorCommand(editorCommand) {
+    const parts = String(editorCommand || '').match(/(?:[^\s"']+|"[^"]*"|'[^']*')+/g) || [];
+    return parts.map((part) => {
+        if (
+            (part.startsWith('"') && part.endsWith('"'))
+            || (part.startsWith("'") && part.endsWith("'"))
+        ) {
+            return part.slice(1, -1);
+        }
+        return part;
+    });
+}
+
+function getOptionalOutput(command, args) {
+    try {
+        return getOutput(command, args);
+    } catch {
+        return '';
+    }
+}
+
+function resolveReleaseEditor() {
+    const configuredEditor =
+        process.env.RELEASE_EDITOR
+        || process.env.GIT_EDITOR
+        || getOptionalOutput('git', ['config', '--get', 'core.editor'])
+        || process.env.VISUAL
+        || process.env.EDITOR;
+    if (configuredEditor) return configuredEditor;
+
+    if (process.env.TERM_PROGRAM === 'vscode') return 'code --wait';
+
+    const hasCodeCommand = process.platform === 'win32'
+        ? commandSucceeds('where.exe', ['code'])
+        : commandSucceeds('sh', ['-c', 'command -v code >/dev/null 2>&1']);
+    if (hasCodeCommand) return 'code --wait';
+
+    return process.platform === 'win32' ? 'notepad.exe' : 'vi';
+}
+
+function openReleaseNotesEditor(filePath) {
+    const editorParts = parseEditorCommand(resolveReleaseEditor());
+    if (editorParts.length === 0) {
+        throw new Error('No release notes editor is configured.');
+    }
+
+    const [editorCommand, ...editorArgs] = editorParts;
+    const editorName = path.basename(editorCommand).toLowerCase();
+    if (
+        /^(code|code-insiders|codium)(?:\.cmd|\.exe)?$/.test(editorName)
+        && !editorArgs.includes('--wait')
+    ) {
+        editorArgs.push('--wait');
+    }
+
+    console.log(`\n[release] Opening release notes editor: ${filePath}`);
+    console.log('[release] Save and close the editor file to continue.');
+    promptInterface?.pause();
+    try {
+        const extension = path.extname(editorCommand).toLowerCase();
+        const needsShell = process.platform === 'win32'
+            && (!extension || extension === '.cmd' || extension === '.bat');
+        const result = spawnSync(editorCommand, [...editorArgs, filePath], {
+            stdio: 'inherit',
+            shell: needsShell,
+        });
+        if (result.error) throw result.error;
+        if (result.status !== 0) {
+            throw new Error(`Release notes editor exited with status ${result.status ?? 'unknown'}.`);
+        }
+    } finally {
+        promptInterface?.resume();
+    }
+}
+
+async function editReleaseNotes(version, previousTag, commits) {
+    const releaseNotesPath = resolveGitPath('RELEASE_NOTES.md');
+    await fs.writeFile(
+        releaseNotesPath,
+        createReleaseNotesDraft(version, previousTag, commits),
+        'utf8',
+    );
+
+    openReleaseNotesEditor(releaseNotesPath);
+
+    const editedNotes = await fs.readFile(releaseNotesPath, 'utf8');
+    const releaseNotes = editedNotes
+        .replace(RELEASE_NOTES_INSTRUCTIONS_PATTERN, '')
+        .trim();
+    return {
+        releaseNotes: normalizeNotes(releaseNotes, version),
+        releaseNotesPath,
+    };
+}
+
+async function writeReleaseGitMessageFiles(commitSubject, tagTitle, releaseNotes) {
+    const commitMessagePath = resolveGitPath('RELEASE_COMMIT_MESSAGE.txt');
+    const tagMessagePath = resolveGitPath('RELEASE_TAG_MESSAGE.txt');
+    await fs.writeFile(commitMessagePath, `${commitSubject}\n\n${releaseNotes}\n`, 'utf8');
+    await fs.writeFile(tagMessagePath, `${tagTitle}\n\n${releaseNotes}\n`, 'utf8');
+    return { commitMessagePath, tagMessagePath };
+}
+
 async function selectVersion(currentVersion) {
     if (cliArgs.version) return cliArgs.version.trim();
     console.log(`\n[release] Current version: ${currentVersion}\n`);
@@ -164,12 +358,38 @@ async function selectVersion(currentVersion) {
     return '';
 }
 
-async function loadReleaseNotes(version) {
+async function loadReleaseNotes(version, previousTag, commits) {
     if (cliArgs.notesFile) {
-        return normalizeNotes(await fs.readFile(path.resolve(cliArgs.notesFile), 'utf8'), version);
+        const releaseNotesPath = path.resolve(cliArgs.notesFile);
+        return {
+            releaseNotes: normalizeNotes(await fs.readFile(releaseNotesPath, 'utf8'), version),
+            releaseNotesPath,
+        };
     }
-    if (cliArgs.yes) return normalizeNotes('', version);
-    return normalizeNotes(await promptUser('Release notes (use \\n for new lines): '), version);
+    if (cliArgs.yes) {
+        return {
+            releaseNotes: normalizeNotes(createGeneratedReleaseNotes(version, commits), version),
+            releaseNotesPath: 'generated from git log',
+        };
+    }
+    if (pipedAnswers) {
+        const releaseNotesPath = resolveGitPath('RELEASE_NOTES.md');
+        await fs.writeFile(releaseNotesPath, createReleaseNotesDraft(version, previousTag, commits), 'utf8');
+        const pipedNotes = pipedAnswers.shift() ?? '';
+        if (pipedNotes.trim()) {
+            await fs.writeFile(releaseNotesPath, normalizeNotes(pipedNotes, version), 'utf8');
+        }
+        const editedNotes = await fs.readFile(releaseNotesPath, 'utf8');
+        const releaseNotes = editedNotes
+            .replace(RELEASE_NOTES_INSTRUCTIONS_PATTERN, '')
+            .trim();
+        console.log(`\n[release] Non-interactive mode: using release notes from ${releaseNotesPath}`);
+        return {
+            releaseNotes: normalizeNotes(releaseNotes, version),
+            releaseNotesPath,
+        };
+    }
+    return editReleaseNotes(version, previousTag, commits);
 }
 
 async function restoreVersionFiles(files, originals) {
@@ -212,8 +432,12 @@ async function restoreVersionFiles(files, originals) {
             throw new Error(`New version must be greater than ${currentVersion}, got ${newVersion}`);
         }
 
+        if (!cliArgs.summary && !cliArgs.yes) {
+            console.log('\n[release] Enter this release update summary.');
+            console.log('[release] This will be used in the git commit title, tag title, and GitHub Release title.');
+            console.log('[release] Leave empty to use only the version number.');
+        }
         const summary = normalizeSummary(cliArgs.summary || (cliArgs.yes ? '' : await promptUser('Release summary: ')));
-        const notes = await loadReleaseNotes(newVersion);
         const suffix = summary ? ` - ${summary}` : '';
         const commitSubject = `release: v${newVersion}${suffix}`;
         const tagTitle = `v${newVersion}${suffix}`;
@@ -222,15 +446,27 @@ async function restoreVersionFiles(files, originals) {
         ensureMainCanPush();
         ensureTagDoesNotExist(newVersion);
 
-        const status = getOutput('git', ['status', '--short']);
+        const previousReleaseTag = getPreviousReleaseTag(currentVersion);
+        const releaseCommits = getCommitsSinceTag(previousReleaseTag);
+        console.log(`\n[release] Preparing detailed release notes from ${previousReleaseTag || 'no previous tag'}.`);
+        console.log(`[release] Found ${releaseCommits.length} commit(s) to prefill.`);
+        const {
+            releaseNotes,
+            releaseNotesPath,
+        } = await loadReleaseNotes(newVersion, previousReleaseTag, releaseCommits);
+
+        const status = getGitStatus();
         if (status) {
-            console.log('\n[release] Changes included in the release commit:\n');
+            console.log('\n[release] Changes that will be included in the release commit:\n');
             console.log(status);
             if (!cliArgs.yes && (await promptUser('\nInclude these changes? (y/N): ')).trim().toLowerCase() !== 'y') return;
         }
 
-        console.log(`\n[release] Commit: ${commitSubject}`);
-        console.log(`[release] Tag:    ${tagTitle}`);
+        console.log('\n[release] Release metadata preview:');
+        console.log(`   Commit: ${commitSubject}`);
+        console.log(`   Tag:    ${tagTitle}`);
+        console.log(`   File:   ${releaseNotesPath}`);
+        console.log(`   Notes:  ${releaseNotes.split('\n')[0]}${releaseNotes.includes('\n') ? ' ...' : ''}`);
         if (!cliArgs.yes && (await promptUser(`Build, commit, tag, and release v${newVersion}? (y/N): `)).trim().toLowerCase() !== 'y') return;
 
         pluginData.version = newVersion;
@@ -250,11 +486,10 @@ async function restoreVersionFiles(files, originals) {
         run('git', ['add', '-A']);
         if (commandSucceeds('git', ['diff', '--cached', '--quiet'])) throw new Error('Nothing staged for release commit.');
 
-        const gitDir = getOutput('git', ['rev-parse', '--git-dir']);
-        const commitMessagePath = path.resolve(gitDir, 'RELEASE_COMMIT_MSG.tmp');
-        const tagMessagePath = path.resolve(gitDir, 'RELEASE_TAG_MSG.tmp');
-        await fs.writeFile(commitMessagePath, `${commitSubject}\n\n${notes}\n`, 'utf8');
-        await fs.writeFile(tagMessagePath, `${tagTitle}\n\n${notes}\n`, 'utf8');
+        const {
+            commitMessagePath,
+            tagMessagePath,
+        } = await writeReleaseGitMessageFiles(commitSubject, tagTitle, releaseNotes);
 
         run('git', ['commit', '-F', commitMessagePath]);
         committed = true;

@@ -113,11 +113,8 @@
             constructor: (container: HTMLElement) => new component({
                 target: container,
                 props: {
-                    plugin,
-                    i18n,
                     ...(options.props || {}),
                     close: () => dialogRef?.close?.(),
-                    onSaved: refreshAll,
                 },
             }),
         });
@@ -127,23 +124,44 @@
     }
 
     function openDatabaseSettings() {
-        openComponentDialog(DatabaseSettingsDialog, { title: tx("centerDatabaseSettings", "本地数据库设置"), width: "min(560px, 92vw)" });
+        openComponentDialog(DatabaseSettingsDialog, {
+            title: tx("centerDatabaseSettings", "本地数据库设置"),
+            width: "min(560px, 92vw)",
+            props: { plugin, onSaved: refreshAll },
+        });
     }
 
     function openBookPreferences() {
-        openComponentDialog(BookPreferenceSettingsDialog, { title: tx("centerBookPreferences", "书籍偏好设置"), width: "min(620px, 92vw)" });
+        openComponentDialog(BookPreferenceSettingsDialog, {
+            title: tx("centerBookPreferences", "书籍偏好设置"),
+            width: "min(620px, 92vw)",
+            props: { plugin, onSaved: refreshAll },
+        });
     }
 
     function openTemplateSettings() {
-        openComponentDialog(TemplateSettingsDialog, { title: tx("centerTemplateSettings", "模板设置"), width: "min(760px, 92vw)", height: "min(680px, 86vh)" });
+        openComponentDialog(TemplateSettingsDialog, {
+            title: tx("centerTemplateSettings", "模板设置"),
+            width: "min(760px, 92vw)",
+            height: "min(680px, 86vh)",
+            props: { plugin, i18n, onSaved: refreshAll },
+        });
     }
 
     function openWereadAuth() {
-        openComponentDialog(WereadApiKeyDialog, { title: tx("centerWereadAuth", "微信读书授权"), width: "min(580px, 92vw)" });
+        openComponentDialog(WereadApiKeyDialog, {
+            title: tx("centerWereadAuth", "微信读书授权"),
+            width: "min(580px, 92vw)",
+            props: { plugin, onSaved: refreshAll },
+        });
     }
 
     function openSyncOptions() {
-        openComponentDialog(SyncOptionsDialog, { title: tx("settingsSyncOptionsTitle", "同步选项"), width: "min(600px, 92vw)" });
+        openComponentDialog(SyncOptionsDialog, {
+            title: tx("settingsSyncOptionsTitle", "同步选项"),
+            width: "min(600px, 92vw)",
+            props: { plugin, onSaved: refreshAll },
+        });
     }
 
     function openAbout() {
@@ -151,6 +169,7 @@
             title: tx("centerAbout", "关于插件"),
             width: "min(720px, 92vw)",
             height: "min(620px, 86vh)",
+            props: { i18n },
         });
     }
 

@@ -51,7 +51,10 @@
         <div class="panel-title">
             <SiYuanIcon name="review" size={18} />
             <div>
-                <h2>{tx("workbenchSyncTodo", "同步结果与待办")}</h2>
+                <div class="panel-title-line">
+                    <h2>{tx("workbenchSyncTodo", "同步结果与待办")}</h2>
+                    <span class="experimental-badge">{tx("reviewExperimentalBadge", "实验性功能 · 开发中")}</span>
+                </div>
                 <p>{getStatusText(summary?.lastSyncStatus)}</p>
             </div>
         </div>
@@ -124,6 +127,28 @@
 
     .panel-title div {
         min-width: 0;
+    }
+
+    .panel-title-line {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .experimental-badge {
+        display: inline-flex;
+        align-items: center;
+        min-height: 20px;
+        padding: 0 7px;
+        border: 1px solid color-mix(in srgb, var(--b3-card-warning-color) 48%, var(--b3-border-color));
+        border-radius: 999px;
+        background: color-mix(in srgb, var(--b3-card-warning-color) 10%, var(--b3-theme-surface));
+        color: var(--b3-card-warning-color);
+        font-size: 10px;
+        font-weight: 700;
+        line-height: 1;
+        white-space: nowrap;
     }
 
     h2,
