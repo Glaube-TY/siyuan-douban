@@ -1,4 +1,6 @@
 <script lang="ts">
+    import { READING_NOTES_LINKS } from "@/utils/core/externalLinks";
+
     export let plugin: any;
     export let onContinue: () => void;
     export let onNeverNotice: () => void;
@@ -18,7 +20,7 @@
                 {plugin.i18n.firstDialog3}
                 <div class="tip-links">
                     <a
-                        href="https://blog.glaube-ty.top/du-shu-bi-ji-cha-jian"
+                        href={READING_NOTES_LINKS.basicUsageTutorial}
                         target="_blank"
                         class="tip-link"
                     >
@@ -48,7 +50,7 @@
                 {plugin.i18n.firstDialog9}
                 <div class="tip-links">
                     <a
-                        href="https://github.com/ttl8ygt82u/siyuan-douban/issues"
+                        href="https://github.com/Glaube-TY/siyuan-douban/issues"
                         target="_blank"
                         class="tip-link"
                     >

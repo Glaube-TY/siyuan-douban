@@ -1,19 +1,20 @@
 <script lang="ts">
     import { I18N } from "siyuan";
+    import { READING_NOTES_LINKS } from "@/utils/core/externalLinks";
 
     export let i18n: I18N;
 
     export const LINKS = {
+        website: READING_NOTES_LINKS.website,
         github: "https://github.com/Glaube-TY/siyuan-douban",
-        notion: "https://cooperative-ferry-4dc.notion.site/SY-1e3c50d8b56c809bae91e6e059c87e82",
         author: "https://github.com/Glaube-TY",
         ld246: "https://ld246.com/member/GlaubeTY",
         douban: "https://book.douban.com/",
         weread: "https://weread.qq.com/",
         issues: "https://github.com/Glaube-TY/siyuan-douban/issues",
-        tencent: "https://pd.qq.com/s/724c4lpoc",
-        myblog: "https://blog.glaube-ty.top/du-shu-bi-ji-cha-jian",
-        donate: "https://blog.glaube-ty.top/da-shang"
+        tencent: "https://pd.qq.com/s/2ks4079x0",
+        tutorial: READING_NOTES_LINKS.tutorial,
+        donate: READING_NOTES_LINKS.donate,
     };
 </script>
 
@@ -28,12 +29,14 @@
             <div class="card-row">
                 <span class="icon">🌐</span>
                 <span class="label">{i18n.pluginHomepage}：</span>
-                <a href={LINKS.github} class="link">siyuan-douban</a>
+                <a href={LINKS.website} class="link">{i18n.pluginWebsiteLink}</a>
+                <span>/</span>
+                <a href={LINKS.github} class="link">GitHub</a>
             </div>
             <div class="card-row">
                 <span class="icon">📜</span>
                 <span class="label">{i18n.pluginTutorial}：</span>
-                <a href={LINKS.myblog} class="link">{i18n.pluginTutorialLink}</a>
+                <a href={LINKS.tutorial} class="link">{i18n.pluginTutorialLink}</a>
             </div>
         </div>
 

@@ -36,6 +36,7 @@
     import type { WereadSyncProgressEvent, WereadSyncPlanConfirmPayload } from "@/utils/weread/api/wereadSyncProgress";
     import WereadSyncPlanConfirmDialog from "@/components/common/WereadSyncPlanConfirmDialog.svelte";
     import WereadSyncProgressDialog from "@/components/common/WereadSyncProgressDialog.svelte";
+    import { READING_NOTES_LINKS } from "@/utils/core/externalLinks";
 
     import wereadManageISBN from "@/components/common/wereadManageISBN.svelte";
     import wereadIgnoredBooksDialog from "@/components/common/wereadIgnoredBooksDialog.svelte";
@@ -812,7 +813,7 @@
                 <div class="weread-row-action">
                     <a
                         class="weread-tutorial-link"
-                        href="https://blog.glaube-ty.top/archives/019d1f09-0d1c-71b5-a53d-395321304440"
+                        href={READING_NOTES_LINKS.wereadTutorial}
                         target="_blank"
                     >{i18n.tutorialLink}</a>
                 </div>

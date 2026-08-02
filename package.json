@@ -5,7 +5,7 @@
   "packageManager": "pnpm@10.14.0",
   "description": "Search books from Douban, generate reading notes, and sync WeRead highlights, thoughts, book reviews, and reading statistics to SiYuan (https://github.com/Glaube-TY/siyuan-douban)",
   "repository": "https://github.com/Glaube-TY/siyuan-douban",
-  "homepage": "https://github.com/Glaube-TY/siyuan-douban",
+  "homepage": "https://glaube-ty.top/sites/siyuan-reading-notes/index.html",
   "author": "Glaube-TY",
   "license": "MIT",
   "scripts": {

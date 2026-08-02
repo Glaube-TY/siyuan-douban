@@ -11,6 +11,10 @@
 </div>
 </div>
 
+<div style="margin-top:1.4em;padding:.8em;background:linear-gradient(135deg,#fbf6e8,#f1e3bf);border:1px solid #cfb27a;border-radius:18px;box-shadow:0 10px 28px rgba(78,52,25,.1);">
+<img src="https://glaube-ty.top/images/site/siyuan-reading-notes-hero-v1.webp" alt="读书笔记插件完整阅读流程" style="display:block;width:100%;height:auto;border-radius:14px;filter:saturate(.94) sepia(.04);">
+</div>
+
 <div style="margin-top:1.4em;padding:1.4em 1.5em;background:#fffaf0;border:1px solid #d8c49a;border-radius:14px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.45);">
 <h2 style="margin:0 0 .6em;color:#6b3f1d;">✨ 它能帮你做什么？</h2>
 <p style="margin:0;color:#5b4a35;">如果你习惯在思源笔记中管理书籍、整理摘录和沉淀读书笔记，这个插件可以替你完成大量重复操作。你可以从一本书的名称或 ISBN 开始，也可以直接同步微信读书数据，最终把书籍资料和阅读内容整理到自己的思源知识库中。</p>
@@ -50,7 +54,7 @@
 <p style="margin:.25em 0 0;color:#665640;">所有功能的统一入口。你可以在这里搜索书籍、查看本地阅读资产、进入微信读书书架，并打开数据库、模板和同步设置。</p>
 </div>
 </div>
-<img src="https://blog.glaube-ty.top/upload/30040c8f-55d6-43e0-86ce-97cd329ad950.webp" alt="读书笔记工作台总览" style="display:block;width:100%;height:auto;border-radius:12px;border:1px solid #e3d4b4;box-shadow:0 8px 22px rgba(78,52,25,.1);filter:saturate(.94) sepia(.04);">
+<img src="https://glaube-ty.top/uploads/attachments/halo/ee798b0b-e2c5-4981-9507-f213db695bd9.webp" alt="读书笔记工作台总览" style="display:block;width:100%;height:auto;border-radius:12px;border:1px solid #e3d4b4;box-shadow:0 8px 22px rgba(78,52,25,.1);filter:saturate(.94) sepia(.04);">
 <p style="margin:.75em 0 0;padding:.7em .85em;background:#f8f1df;border-radius:9px;color:#705d45;">阅读提示：桌面端以新标签页打开工作台；移动端使用全屏界面，并针对触控、菜单与纵向浏览进行了适配。</p>
 </div>
 
@@ -62,7 +66,7 @@
 <p style="margin:.25em 0 0;color:#665640;">集中查看已经进入知识库的书籍和对应笔记文档，快速定位阅读资产，减少在多个页面之间来回查找。</p>
 </div>
 </div>
-<img src="https://blog.glaube-ty.top/upload/9081dba2-5e26-48ff-a796-ea80eca7505a.webp" alt="书架与本地书籍管理界面" loading="lazy" style="display:block;width:100%;height:auto;border-radius:12px;border:1px solid #d8dfc4;box-shadow:0 8px 22px rgba(49,87,44,.1);filter:saturate(.94) sepia(.04);">
+<img src="https://glaube-ty.top/uploads/attachments/halo/ad937812-d474-4795-b14f-91e10d67a137.webp" alt="书架与本地书籍管理界面" loading="lazy" style="display:block;width:100%;height:auto;border-radius:12px;border:1px solid #d8dfc4;box-shadow:0 8px 22px rgba(49,87,44,.1);filter:saturate(.94) sepia(.04);">
 <p style="margin:.75em 0 0;padding:.7em .85em;background:#f1f6e9;border-radius:9px;color:#53633d;">适合场景：想快速确认某本书是否已经入库、是否已有笔记文档，或者从书架直接继续整理阅读内容。</p>
 </div>
 
@@ -74,7 +78,7 @@
 <p style="margin:.25em 0 0;color:#665640;">在工作台中查看微信读书书籍、笔记与阅读统计，让同步不只是导入内容，也能帮助你回顾自己的阅读节奏。</p>
 </div>
 </div>
-<img src="https://blog.glaube-ty.top/upload/02c5919b-25bf-42d3-8de9-c497173b57de.webp" alt="微信读书数据与阅读统计界面" loading="lazy" style="display:block;width:100%;height:auto;border-radius:12px;border:1px solid #c7dce2;box-shadow:0 8px 22px rgba(31,95,115,.1);filter:saturate(.94) sepia(.04);">
+<img src="https://glaube-ty.top/uploads/attachments/halo/bf7e4d83-1607-4b33-b5ce-b0347501df1e.webp" alt="微信读书数据与阅读统计界面" loading="lazy" style="display:block;width:100%;height:auto;border-radius:12px;border:1px solid #c7dce2;box-shadow:0 8px 22px rgba(31,95,115,.1);filter:saturate(.94) sepia(.04);">
 <p style="margin:.75em 0 0;padding:.7em .85em;background:#eef8fa;border-radius:9px;color:#3f6670;">数据范围：支持查看本周、本月、本年与累计阅读情况，并统一管理有笔记书籍及微信读书内容。</p>
 </div>
 
@@ -86,7 +90,7 @@
 <p style="margin:.25em 0 0;color:#665640;">通过豆瓣检索选中书籍后，可以打开详情页面核对书名、作者、出版信息和封面。确认无误后，将书籍资料写入数据库，并按照当前配置生成读书笔记文档。</p>
 </div>
 </div>
-<img src="https://blog.glaube-ty.top/upload/c6fedce1-3f07-4fc1-934c-7e66492483ac.webp" alt="豆瓣书籍详情确认与添加入库界面" loading="lazy" style="display:block;width:100%;height:auto;border-radius:12px;border:1px solid #ead0bd;box-shadow:0 8px 22px rgba(154,52,18,.1);filter:saturate(.94) sepia(.04);">
+<img src="https://glaube-ty.top/uploads/attachments/halo/64f21300-da83-4a26-8abc-640599239b26.webp" alt="豆瓣书籍详情确认与添加入库界面" loading="lazy" style="display:block;width:100%;height:auto;border-radius:12px;border:1px solid #ead0bd;box-shadow:0 8px 22px rgba(154,52,18,.1);filter:saturate(.94) sepia(.04);">
 <p style="margin:.75em 0 0;padding:.7em .85em;background:#fff3e9;border-radius:9px;color:#7c4a32;">完整流程：豆瓣搜索 → 查看书籍详情 → 确认并添加 → 写入数据库 → 生成读书笔记。此过程与微信读书同步无关。</p>
 </div>
 
@@ -98,7 +102,7 @@
 <p style="margin:.25em 0 0;color:#665640;">同步窗口会展示当前阶段、完成进度与处理明细，便于了解正在检查、匹配或写入哪些内容。</p>
 </div>
 </div>
-<img src="https://blog.glaube-ty.top/upload/cd1ffa08-0ced-4e3f-8c2d-7f32e91924f9.webp" alt="微信读书笔记同步进度界面" loading="lazy" style="display:block;width:100%;height:auto;border-radius:12px;border:1px solid #ddcce2;box-shadow:0 8px 22px rgba(109,63,120,.1);filter:saturate(.94) sepia(.04);">
+<img src="https://glaube-ty.top/uploads/attachments/halo/662560d6-cb65-4cad-ab20-6a394ea8d375.webp" alt="微信读书同步结果与待办界面" loading="lazy" style="display:block;width:100%;height:auto;border-radius:12px;border:1px solid #ddcce2;box-shadow:0 8px 22px rgba(109,63,120,.1);filter:saturate(.94) sepia(.04);">
 <p style="margin:.75em 0 0;padding:.7em .85em;background:#f7eff9;border-radius:9px;color:#694b70;">操作提示：同步期间请根据确认窗口完成选择；主动取消或关闭同步窗口后，可以重新发起同步任务。</p>
 </div>
 </div>
@@ -187,18 +191,30 @@
 <h2 style="margin:0 0 .4em;color:#6b3f1d;">🔗 使用与帮助</h2>
 <p style="margin:0 0 1em;color:#705d45;">需要更详细的配置步骤、版本变化或问题交流时，可以从下面的入口继续查看。</p>
 <div style="display:flex;flex-wrap:wrap;gap:10px;">
-<a href="https://blog.glaube-ty.top/du-shu-bi-ji-cha-jian" style="display:inline-block;padding:10px 18px;background:#5b3a1e;color:#fff8e7;border-radius:9px;text-decoration:none;font-weight:600;">📖 使用教程</a>
-<a href="https://blog.glaube-ty.top/archives/019d1eb8-849f-707f-91c8-d32b7094af98" style="display:inline-block;padding:10px 18px;background:#31572c;color:#f7f1df;border-radius:9px;text-decoration:none;font-weight:600;">📅 更新日志</a>
+<a href="https://glaube-ty.top/sites/siyuan-reading-notes/index.html" style="display:inline-block;padding:10px 18px;background:#7a3f18;color:#fff8e7;border-radius:9px;text-decoration:none;font-weight:600;">🌐 插件官网</a>
+<a href="https://glaube-ty.top/tutorials/siyuan-reading-notes/" style="display:inline-block;padding:10px 18px;background:#5b3a1e;color:#fff8e7;border-radius:9px;text-decoration:none;font-weight:600;">📖 使用教程</a>
+<a href="https://glaube-ty.top/tutorials/siyuan-reading-notes/changelog/" style="display:inline-block;padding:10px 18px;background:#31572c;color:#f7f1df;border-radius:9px;text-decoration:none;font-weight:600;">📅 更新日志</a>
 <a href="https://pd.qq.com/s/2ks4079x0" style="display:inline-block;padding:10px 18px;background:#334155;color:#f7f1df;border-radius:9px;text-decoration:none;font-weight:600;">💬 讨论频道</a>
-<a href="https://blog.glaube-ty.top/da-shang" style="display:inline-block;padding:10px 18px;background:#a16207;color:#fff8e7;border-radius:9px;text-decoration:none;font-weight:600;">💖 支持开发</a>
+<a href="https://glaube-ty.top/da-shang/" style="display:inline-block;padding:10px 18px;background:#a16207;color:#fff8e7;border-radius:9px;text-decoration:none;font-weight:600;">💖 支持开发</a>
 </div>
+</div>
+
+<div style="margin-top:1.4em;padding:1.45em;background:#eef6f8;border-left:5px solid #1f5f73;border-radius:14px;">
+<h2 style="margin:0 0 .8em;color:#164e63;">📚 教程与相关文章</h2>
+<ul style="margin:0;padding-left:1.25em;color:#3f6670;">
+<li style="margin:.45em 0;"><a href="https://glaube-ty.top/tutorials/siyuan-reading-notes/basic-usage/">基础使用</a>：数据库配置、豆瓣检索入库与书架管理。</li>
+<li style="margin:.45em 0;"><a href="https://glaube-ty.top/tutorials/siyuan-reading-notes/template-settings/">模板设置</a>：配置新建读书笔记的文档结构。</li>
+<li style="margin:.45em 0;"><a href="https://glaube-ty.top/tutorials/siyuan-reading-notes/wechat-reading-sync/">微信读书同步</a>：API Key 配置、同步流程与结果处理。</li>
+<li style="margin:.45em 0;"><a href="https://glaube-ty.top/articles/019c8f8e-084b-7709-b7d5-4f82e7d0b3c5/">思源笔记插件开发记录（一）</a>：读书笔记插件的开发缘起与功能演进。</li>
+<li style="margin:.45em 0;"><a href="https://glaube-ty.top/articles/019e44ef-2cf2-744a-b5e2-cc60e4a7c76d/">微信读书 API 接口</a>：迁移到官方 Skills API 的背景与方案。</li>
+</ul>
 </div>
 
 <div style="margin-top:1.4em;padding:1.45em;background:#f3f8ed;border-left:5px solid #4d7c0f;border-radius:14px;">
 <h2 style="margin:0 0 .8em;color:#365314;">💬 加入讨论</h2>
 <p style="margin:.5em 0;color:#53633d;">目前我在开发多个思源插件，为了方便统一交流与管理，这些项目共用同一个腾讯频道。欢迎反馈问题、分享使用经验或提出功能建议。</p>
 <div style="margin:1em 0;text-align:center;">
-<img src="https://glaube-ty.oss-cn-chengdu.aliyuncs.com/img/TCQR.jpg" alt="腾讯讨论频道二维码" loading="lazy" style="width:210px;max-width:100%;height:auto;border-radius:12px;border:1px solid #c9d9b6;box-shadow:0 8px 22px rgba(77,124,15,.14);">
+<img src="https://glaube-ty.top/uploads/attachments/halo/efd8396d-eed5-40cd-a464-eb0da83fc008.webp" alt="腾讯讨论频道二维码" loading="lazy" style="width:210px;max-width:100%;height:auto;border-radius:12px;border:1px solid #c9d9b6;box-shadow:0 8px 22px rgba(77,124,15,.14);">
 </div>
 <div style="text-align:center;">
 <a href="https://pd.qq.com/s/2ks4079x0" style="display:inline-block;padding:10px 20px;background:#4d7c0f;color:white;border-radius:9px;text-decoration:none;font-weight:600;">👥 加入腾讯讨论频道</a>
@@ -208,11 +224,12 @@
 <div style="margin-top:1.4em;padding:1.45em;background:#fff7ed;border-left:5px solid #b45309;border-radius:14px;">
 <h2 style="margin:0 0 .8em;color:#92400e;">🌹 支持开发</h2>
 <p style="margin:.5em 0;color:#5b4a35;">如果这个插件对你有帮助，欢迎点赞、分享或请作者喝一杯咖啡。你的支持会鼓励我继续维护项目，并开发更多实用的思源插件。</p>
-<div style="margin:1em 0;text-align:center;">
-<img src="https://glaube-ty.oss-cn-chengdu.aliyuncs.com/img/ReQR.png" alt="支持插件开发二维码" loading="lazy" style="width:560px;max-width:100%;height:auto;border-radius:12px;border:1px solid #e5c88b;box-shadow:0 8px 22px rgba(180,83,9,.12);">
+<div style="margin:1em 0;display:flex;justify-content:center;gap:14px;flex-wrap:wrap;">
+<img src="https://glaube-ty.top/uploads/attachments/halo/8b772b15-f542-4157-a251-e3985f37f84a.png" alt="微信赞赏码" loading="lazy" style="width:240px;max-width:100%;height:auto;border-radius:12px;border:1px solid #e5c88b;box-shadow:0 8px 22px rgba(180,83,9,.12);">
+<img src="https://glaube-ty.top/uploads/attachments/halo/f3d25e23-333e-4356-99d0-d0fda69d11ad.jpg" alt="支付宝二维码" loading="lazy" style="width:240px;max-width:100%;height:auto;border-radius:12px;border:1px solid #e5c88b;box-shadow:0 8px 22px rgba(180,83,9,.12);">
 </div>
 <div style="text-align:center;">
-<a href="https://blog.glaube-ty.top/da-shang" style="display:inline-block;padding:10px 20px;background:#a16207;color:#fff8e7;border-radius:9px;text-decoration:none;font-weight:600;">💖 查看特别鸣谢</a>
+<a href="https://glaube-ty.top/da-shang/" style="display:inline-block;padding:10px 20px;background:#a16207;color:#fff8e7;border-radius:9px;text-decoration:none;font-weight:600;">💖 查看特别鸣谢</a>
 </div>
 </div>
 

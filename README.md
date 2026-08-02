@@ -1,6 +1,6 @@
 <div class="sy__outline" style="max-width:860px;margin:0 auto;line-height:1.78;color:#3f3426;font-family:serif;">
 <div style="margin-top:1.4em;padding:.8em;background:linear-gradient(135deg,#fbf6e8,#f1e3bf);border:1px solid #cfb27a;border-radius:18px;box-shadow:0 10px 28px rgba(78,52,25,.1);">
-<img src="https://glaube-ty.oss-cn-chengdu.aliyuncs.com/img/%E8%AF%BB%E4%B9%A6%E7%AC%94%E8%AE%B0%E6%8F%92%E4%BB%B6.webp" alt="Reading Notes Plugin Feature Introduction" style="display:block;width:100%;border-radius:14px;filter:saturate(.92) sepia(.08);">
+<img src="https://glaube-ty.top/images/site/siyuan-reading-notes-hero-v1.webp" alt="Reading Notes Plugin Feature Introduction" style="display:block;width:100%;border-radius:14px;filter:saturate(.92) sepia(.08);">
 </div>
 <div style="margin-top:1.4em;padding:1.35em 1.5em;background:#fffaf0;border:1px solid #d8c49a;border-radius:14px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.45);">
 <h2 style="margin:0 0 .7em;color:#6b3f1d;">✨ What Can It Do for You?</h2>
@@ -36,17 +36,28 @@
 <div style="margin-top:1.4em;padding:1.45em;background:#fffaf0;border:1px solid #d8c49a;border-radius:14px;">
 <h2 style="margin:0 0 1em;color:#6b3f1d;">🧭 Usage Entry Points</h2>
 <div style="display:flex;flex-wrap:wrap;gap:10px;">
-<a href="https://blog.glaube-ty.top/du-shu-bi-ji-cha-jian" style="display:inline-block;padding:10px 18px;background:#5b3a1e;color:#fff8e7;border-radius:9px;text-decoration:none;font-weight:600;">📖 Tutorial</a>
-<a href="https://blog.glaube-ty.top/archives/019d1eb8-849f-707f-91c8-d32b7094af98" style="display:inline-block;padding:10px 18px;background:#31572c;color:#f7f1df;border-radius:9px;text-decoration:none;font-weight:600;">📅 Changelog</a>
+<a href="https://glaube-ty.top/sites/siyuan-reading-notes/index.html" style="display:inline-block;padding:10px 18px;background:#7a3f18;color:#fff8e7;border-radius:9px;text-decoration:none;font-weight:600;">🌐 Official Website</a>
+<a href="https://glaube-ty.top/tutorials/siyuan-reading-notes/" style="display:inline-block;padding:10px 18px;background:#5b3a1e;color:#fff8e7;border-radius:9px;text-decoration:none;font-weight:600;">📖 Tutorial</a>
+<a href="https://glaube-ty.top/tutorials/siyuan-reading-notes/changelog/" style="display:inline-block;padding:10px 18px;background:#31572c;color:#f7f1df;border-radius:9px;text-decoration:none;font-weight:600;">📅 Changelog</a>
 <a href="https://pd.qq.com/s/2ks4079x0" style="display:inline-block;padding:10px 18px;background:#334155;color:#f7f1df;border-radius:9px;text-decoration:none;font-weight:600;">💬 Discussion Channel</a>
-<a href="https://blog.glaube-ty.top/da-shang" style="display:inline-block;padding:10px 18px;background:#a16207;color:#fff8e7;border-radius:9px;text-decoration:none;font-weight:600;">💖 Support Development</a>
+<a href="https://glaube-ty.top/da-shang/" style="display:inline-block;padding:10px 18px;background:#a16207;color:#fff8e7;border-radius:9px;text-decoration:none;font-weight:600;">💖 Support Development</a>
 </div>
+</div>
+<div style="margin-top:1.4em;padding:1.45em;background:#eef6f8;border-left:5px solid #1f5f73;border-radius:14px;">
+<h2 style="margin:0 0 .8em;color:#164e63;">📚 Tutorials & Related Articles</h2>
+<ul style="margin:0;padding-left:1.25em;color:#3f6670;">
+<li><a href="https://glaube-ty.top/tutorials/siyuan-reading-notes/basic-usage/">Basic Usage</a> — database setup, book search, import, and bookshelf management.</li>
+<li><a href="https://glaube-ty.top/tutorials/siyuan-reading-notes/template-settings/">Template Settings</a> — customize newly generated reading-note documents.</li>
+<li><a href="https://glaube-ty.top/tutorials/siyuan-reading-notes/wechat-reading-sync/">WeRead Sync</a> — API Key setup, sync flow, and result handling.</li>
+<li><a href="https://glaube-ty.top/articles/019c8f8e-084b-7709-b7d5-4f82e7d0b3c5/">SiYuan Plugin Development Notes (I)</a> — how the reading-notes plugin evolved.</li>
+<li><a href="https://glaube-ty.top/articles/019e44ef-2cf2-744a-b5e2-cc60e4a7c76d/">WeRead API</a> — why the plugin migrated to the official Skills API.</li>
+</ul>
 </div>
 <div style="margin-top:1.4em;padding:1.45em;background:#f3f8ed;border-left:5px solid #4d7c0f;border-radius:14px;">
 <h2 style="margin:0 0 .8em;color:#365314;">💬 Join the Discussion</h2>
 <p style="margin:.5em 0;color:#53633d;">I am currently developing multiple SiYuan plugins. For unified communication and management, I use the same Tencent channel.</p>
 <div style="margin:1em 0;text-align:center;">
-<img src="https://glaube-ty.oss-cn-chengdu.aliyuncs.com/img/TCQR.jpg" alt="Tencent Discussion Channel QR Code" style="width:210px;border-radius:12px;border:1px solid #c9d9b6;box-shadow:0 8px 22px rgba(77,124,15,.14);">
+<img src="https://glaube-ty.top/uploads/attachments/halo/efd8396d-eed5-40cd-a464-eb0da83fc008.webp" alt="Tencent Discussion Channel QR Code" style="width:210px;border-radius:12px;border:1px solid #c9d9b6;box-shadow:0 8px 22px rgba(77,124,15,.14);">
 </div>
 <div style="text-align:center;">
 <a href="https://pd.qq.com/s/2ks4079x0" style="display:inline-block;padding:10px 20px;background:#4d7c0f;color:white;border-radius:9px;text-decoration:none;font-weight:600;">👥 Join Tencent Discussion Channel</a>
@@ -55,11 +66,12 @@
 <div style="margin-top:1.4em;padding:1.45em;background:#fff7ed;border-left:5px solid #b45309;border-radius:14px;">
 <h2 style="margin:0 0 .8em;color:#92400e;">🌹 Support Development</h2>
 <p style="margin:.5em 0;color:#5b4a35;">If this plugin is helpful to you, feel free to give the author a thumbs up or buy a cup of coffee. It encourages me to continue maintaining and developing more useful plugins.</p>
-<div style="margin:1em 0;text-align:center;">
-<img src="https://glaube-ty.oss-cn-chengdu.aliyuncs.com/img/ReQR.png" alt="Support Development QR Code" style="max-width:100%;width:560px;border-radius:12px;border:1px solid #e5c88b;box-shadow:0 8px 22px rgba(180,83,9,.12);">
+<div style="margin:1em 0;display:flex;justify-content:center;gap:14px;flex-wrap:wrap;">
+<img src="https://glaube-ty.top/uploads/attachments/halo/8b772b15-f542-4157-a251-e3985f37f84a.png" alt="WeChat Support QR Code" style="max-width:100%;width:240px;border-radius:12px;border:1px solid #e5c88b;box-shadow:0 8px 22px rgba(180,83,9,.12);">
+<img src="https://glaube-ty.top/uploads/attachments/halo/f3d25e23-333e-4356-99d0-d0fda69d11ad.jpg" alt="Alipay Support QR Code" style="max-width:100%;width:240px;border-radius:12px;border:1px solid #e5c88b;box-shadow:0 8px 22px rgba(180,83,9,.12);">
 </div>
 <div style="text-align:center;">
-<a href="https://blog.glaube-ty.top/da-shang" style="display:inline-block;padding:10px 20px;background:#a16207;color:#fff8e7;border-radius:9px;text-decoration:none;font-weight:600;">💖 Special Thanks</a>
+<a href="https://glaube-ty.top/da-shang/" style="display:inline-block;padding:10px 20px;background:#a16207;color:#fff8e7;border-radius:9px;text-decoration:none;font-weight:600;">💖 Special Thanks</a>
 </div>
 </div>
 <div style="margin-top:1.4em;padding:1.45em;background:#f8f3e7;border-left:5px solid #7c2d12;border-radius:14px;">
