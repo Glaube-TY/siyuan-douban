@@ -6,7 +6,6 @@ export interface PluginSettings {
     categories: string[];
     statuses: string[];
     addNotes: boolean;
-    isSYTemplateRender: boolean;
     bookDatabaseID: string;
     noteTemplate: string;
 }

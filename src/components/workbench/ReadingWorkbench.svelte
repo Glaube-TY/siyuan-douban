@@ -54,7 +54,6 @@
                 localBookCount: localState.databaseStatus.valid ? localState.books.length : null,
                 bookTemplateConfigured: !!templates.noteTemplate.trim(),
                 addNotes: templates.addNotes,
-                isSYTemplateRender: templates.isSYTemplateRender,
                 ratingsCount: preferences.ratings.length,
                 categoriesCount: preferences.categories.length,
                 statusesCount: preferences.statuses.length,

@@ -21,6 +21,12 @@ function normalizeAuthors(value: unknown): string {
     return String(value || "");
 }
 
+function normalizeEditedPeople(value: unknown): string[] {
+    if (Array.isArray(value)) return value as string[];
+    const normalized = String(value ?? "").trim();
+    return normalized ? [normalized] : [];
+}
+
 function extractSubjectId(html: string): string {
     const doc = new DOMParser().parseFromString(html, "text/html");
     const canonicalUrl = doc.querySelector<HTMLLinkElement>('link[rel="canonical"]')?.href
@@ -103,6 +109,8 @@ export async function addEditedDoubanBookToDatabase(plugin: PluginLike, editedBo
     const settings = await loadPluginData(plugin, "settings.json", DEFAULT_SETTINGS);
     const fullData = {
         ...editedBookInfo,
+        authors: normalizeEditedPeople(editedBookInfo.authors),
+        translators: normalizeEditedPeople(editedBookInfo.translators),
         ISBN: editedBookInfo.isbn,
         databaseBlockId: database.blockID,
         noteTemplate: settings.noteTemplate || "",

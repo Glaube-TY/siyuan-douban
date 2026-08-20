@@ -54,14 +54,14 @@ export async function fetchDoubanBook(html: string): Promise<BookInfo> {
             originalTitle: document.evaluate('//div[@id="info"]/span[contains(text(),"原作名")]/following-sibling::text()[1]', doc, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue?.nodeValue?.trim() || extractInfo(doc, "原作名"),
 
             authors: Array.from(doc.querySelectorAll("span.pl"))
-                .filter((span) => span.textContent?.trim() === "作者")
+                .filter((span) => /^作者[:：]?$/.test(span.textContent?.trim() || ""))
                 .flatMap((span) =>
                     Array.from(span.parentElement?.querySelectorAll("a") || [])
                         .map((a) => a.textContent?.replace(/【.*?】/g, "")?.trim())
                 ),
 
             translators: Array.from(doc.querySelectorAll('span.pl'))
-                .filter(span => span.textContent?.trim() === '译者')
+                .filter(span => /^译者[:：]?$/.test(span.textContent?.trim() || ''))
                 .flatMap(span =>
                     Array.from(span.parentElement?.querySelectorAll('a') || [])
                         .map(a => a.textContent?.trim())

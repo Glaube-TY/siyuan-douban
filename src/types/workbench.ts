@@ -26,7 +26,6 @@ export interface WorkbenchLocalAssetSummary {
     localBookCount: number | null;
     bookTemplateConfigured: boolean;
     addNotes: boolean;
-    isSYTemplateRender: boolean;
     ratingsCount: number;
     categoriesCount: number;
     statusesCount: number;

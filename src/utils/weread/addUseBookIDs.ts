@@ -96,79 +96,39 @@ export async function addUseBookIDsToDatabase(plugin: any, avID: string, bookDet
         throw new Error(`未找到ID为 ${setting.bookDatabaseID} 的数据库块，请确保数据库存在且ID正确`);
     }
 
-    // 根据模板创建读书笔记
-    // 根据是否使用思源笔记模板渲染分别进行
-    const isSYTemplateRender = setting.isSYTemplateRender;
-    if (!isSYTemplateRender) {
-        const result = await createDocWithMd(
-            sqlresult[0].box,
-            sqlresult[0].hpath + "/" + bookDetail.title,
-            setting.noteTemplate
-                .replace(/{{书名}}/g, bookDetail.title || '无书名')
-                .replace(/{{副标题}}/g, bookDetail.subtitle || '')
-                .replace(/{{原作名}}/g, bookDetail.originalTitle || '')
-                .replace(/{{作者}}/g, bookDetail.authors || "无作者")
-                .replace(/{{译者}}/g, bookDetail.translators || "无译者")
-                .replace(/{{出版社}}/g, bookDetail.copyrightInfo.name || bookDetail.publisher || "无出版社")
-                .replace(/{{出版年}}/g, bookDetail.publishTime ? parseDateToTimestamp(bookDetail.publishTime) : null)
-                .replace(/{{出品方}}/g, bookDetail.producer || "无出品方")
-                .replace(/{{ISBN}}/g, bookDetail.isbn ? String(bookDetail.isbn) : "无ISBN")
-                .replace(/{{装帧}}/g, bookDetail.format || "无装帧")
-                .replace(/{{丛书}}/g, bookDetail.series || '无丛书')
-                .replace(/{{豆瓣评分}}/g, bookDetail.rating ? `${bookDetail.rating}` : '无评分')
-                .replace(/{{评分人数}}/g, bookDetail.ratingCount ? `${bookDetail.ratingCount}` : '0')
-                .replace(/{{页数}}/g, bookDetail.pages ? `${bookDetail.pages}` : '无页数')
-                .replace(/{{定价}}/g, bookDetail.centPrice ? String(bookDetail.centPrice / 100) : "无定价")
-                .replace(/{{我的评分}}/g, bookDetail.myRating || '未评分')
-                .replace(/{{书籍分类}}/g, bookDetail.category || "无分类")
-                .replace(/{{阅读状态}}/g, bookDetail.readingStatus || '未读')
-                .replace(/{{开始日期}}/g, bookDetail.startDate || '未开始')
-                .replace(/{{读完日期}}/g, bookDetail.finishDate || '未完成')
-                .replace(/{{封面}}/g, bookDetail.cover || '无封面')
-                .replace(/{{微信读书评分}}/g, bookDetail.rating ? `${bookDetail.rating}` : '无评分')
-                .replace(/{{微信读书评分人数}}/g, bookDetail.ratingCount ? `${bookDetail.ratingCount}` : '暂无评价'),
-            { id: blockID, parentID: sqlresult[0].root_id }
-        );
+    // 先创建空文档，再统一交给思源内部模板渲染。
+    const template = setting.noteTemplate
+        .replace(/{{书名}}/g, bookDetail.title || '无书名')
+        .replace(/{{副标题}}/g, bookDetail.subtitle || '')
+        .replace(/{{原作名}}/g, bookDetail.originalTitle || '')
+        .replace(/{{作者}}/g, bookDetail.authors || "无作者")
+        .replace(/{{译者}}/g, bookDetail.translators || "无译者")
+        .replace(/{{出版社}}/g, bookDetail.copyrightInfo.name || bookDetail.publisher || "无出版社")
+        .replace(/{{出版年}}/g, bookDetail.publishTime ? parseDateToTimestamp(bookDetail.publishTime) : null)
+        .replace(/{{出品方}}/g, bookDetail.producer || "无出品方")
+        .replace(/{{ISBN}}/g, bookDetail.isbn ? String(bookDetail.isbn) : "无ISBN")
+        .replace(/{{装帧}}/g, bookDetail.format || "无装帧")
+        .replace(/{{丛书}}/g, bookDetail.series || '无丛书')
+        .replace(/{{豆瓣评分}}/g, bookDetail.rating ? `${bookDetail.rating}` : '无评分')
+        .replace(/{{评分人数}}/g, bookDetail.ratingCount ? `${bookDetail.ratingCount}` : '0')
+        .replace(/{{页数}}/g, bookDetail.pages ? `${bookDetail.pages}` : '无页数')
+        .replace(/{{定价}}/g, bookDetail.centPrice ? String(bookDetail.centPrice / 100) : "无定价")
+        .replace(/{{我的评分}}/g, bookDetail.myRating || '未评分')
+        .replace(/{{书籍分类}}/g, bookDetail.category || "无分类")
+        .replace(/{{阅读状态}}/g, bookDetail.readingStatus || '未读')
+        .replace(/{{开始日期}}/g, bookDetail.startDate || '未开始')
+        .replace(/{{读完日期}}/g, bookDetail.finishDate || '未完成')
+        .replace(/{{封面}}/g, bookDetail.cover || '无封面')
+        .replace(/{{微信读书评分}}/g, bookDetail.rating ? `${bookDetail.rating}` : '无评分')
+        .replace(/{{微信读书评分人数}}/g, bookDetail.ratingCount ? `${bookDetail.ratingCount}` : '暂无评价');
 
-        if (!result) {
-            throw new Error("创建读书笔记失败");
-        }
-    } else {
-        await createDocWithMd(
-            sqlresult[0].box,
-            sqlresult[0].hpath + "/" + bookDetail.title,
-            "",
-            { id: blockID, parentID: sqlresult[0].root_id }
-        );
-
-        const template = setting.noteTemplate
-            .replace(/{{书名}}/g, bookDetail.title || '无书名')
-            .replace(/{{副标题}}/g, bookDetail.subtitle || '无副标题')
-            .replace(/{{原作名}}/g, bookDetail.originalTitle || '无原作名')
-            .replace(/{{作者}}/g, bookDetail.authors || "无作者")
-            .replace(/{{译者}}/g, bookDetail.translators || "无译者")
-            .replace(/{{出版社}}/g, bookDetail.copyrightInfo.name || bookDetail.publisher || "无出版社")
-            .replace(/{{出版年}}/g, bookDetail.publishTime ? parseDateToTimestamp(bookDetail.publishTime) : null)
-            .replace(/{{出品方}}/g, bookDetail.producer || "无出品方")
-            .replace(/{{ISBN}}/g, bookDetail.isbn ? String(bookDetail.isbn) : "无ISBN")
-            .replace(/{{装帧}}/g, bookDetail.format || "无装帧")
-            .replace(/{{丛书}}/g, bookDetail.series || '无丛书')
-            .replace(/{{豆瓣评分}}/g, bookDetail.rating ? `${bookDetail.rating}` : '无评分')
-            .replace(/{{评分人数}}/g, bookDetail.ratingCount ? `${bookDetail.ratingCount}` : '暂无评价')
-            .replace(/{{页数}}/g, bookDetail.pages ? `${bookDetail.pages}` : '无页数')
-            .replace(/{{定价}}/g, bookDetail.centPrice ? String(bookDetail.centPrice / 100) : "无定价")
-            .replace(/{{我的评分}}/g, bookDetail.myRating || '未评分')
-            .replace(/{{书籍分类}}/g, bookDetail.category || "无分类")
-            .replace(/{{阅读状态}}/g, bookDetail.readingStatus || '未读')
-            .replace(/{{开始日期}}/g, bookDetail.startDate || '未开始')
-            .replace(/{{读完日期}}/g, bookDetail.finishDate || '未完成')
-            .replace(/{{封面}}/g, bookDetail.cover || '无封面')
-            .replace(/{{微信读书评分}}/g, bookDetail.rating ? `${bookDetail.rating}` : '无评分')
-            .replace(/{{微信读书评分人数}}/g, bookDetail.ratingCount ? `${bookDetail.ratingCount}` : '暂无评价')
-
-        // 使用统一模板渲染工具（内部按 getFrontend() 分支）
-        await renderBookNoteTemplate(plugin, blockID, template);
-    }
+    await createDocWithMd(
+        sqlresult[0].box,
+        sqlresult[0].hpath + "/" + bookDetail.title,
+        "",
+        { id: blockID, parentID: sqlresult[0].root_id }
+    );
+    await renderBookNoteTemplate(blockID, template);
 
     // 绑定数据库与读书笔记
     await bindBookToNote(avID, blockID, matchingValue);

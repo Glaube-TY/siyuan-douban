@@ -16,7 +16,6 @@
     export let onSaved: () => void = () => {};
 
     let addNotes = true;
-    let isSYTemplateRender = false;
     let noteTemplate = "";
     let wereadTemplates = "";
     let wereadMpTemplates = "";
@@ -28,7 +27,6 @@
     onMount(async () => {
         const data = await loadTemplateSettings(plugin);
         addNotes = data.addNotes;
-        isSYTemplateRender = data.isSYTemplateRender;
         noteTemplate = data.noteTemplate;
         wereadTemplates = data.wereadTemplates;
         wereadMpTemplates = data.wereadMpTemplates;
@@ -79,7 +77,6 @@
         try {
             await saveTemplateSettings(plugin, {
                 addNotes,
-                isSYTemplateRender,
                 noteTemplate,
                 wereadTemplates,
                 wereadMpTemplates,
@@ -120,15 +117,6 @@
                 <input type="checkbox" class="settings-switch" bind:checked={addNotes} />
                 <span class="settings-switch-track"><span class="settings-switch-thumb"></span></span>
             </label>
-            <label class="settings-dialog-switch-row">
-                <span>
-                    <strong>{tx("settingsSiyuanRender", "使用思源模板渲染")}</strong>
-                    <em>{tx("settingsSiyuanRenderDesc", "保持旧模板渲染开关，不改变模板占位符。")}</em>
-                </span>
-                <input type="checkbox" class="settings-switch" bind:checked={isSYTemplateRender} />
-                <span class="settings-switch-track"><span class="settings-switch-thumb"></span></span>
-            </label>
-
             <div class="settings-dialog-template-grid">
                 <button class="settings-dialog-template-card" on:click={editNoteTemplate}>
                     <SiYuanIcon name="book" size={18} />

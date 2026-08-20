@@ -44,7 +44,6 @@ export const DEFAULT_SETTINGS: PluginSettings = {
     categories: [],
     statuses: [],
     addNotes: true,
-    isSYTemplateRender: false,
     bookDatabaseID: "",
     noteTemplate: "",
 };

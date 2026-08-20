@@ -509,8 +509,6 @@
     "settingsTemplatesSaved": "Template settings saved",
     "settingsGenerateNotes": "Generate reading notes when adding books",
     "settingsGenerateNotesDesc": "When disabled, only an attribute-view record is added.",
-    "settingsSiyuanRender": "Use SiYuan template rendering",
-    "settingsSiyuanRenderDesc": "Keep the existing rendering option without changing template placeholders.",
     "settingsLocalBookTemplate": "Book Note Template",
     "settingsWereadBookTemplate": "WeRead Book Template",
     "settingsWereadMpTemplate": "Official Account Template",

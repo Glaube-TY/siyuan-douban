@@ -1,77 +1,81 @@
-import { fetchSyncPost, IWebSocketData, getFrontend } from "siyuan";
-import { getWorkspaceInfo, getConf, render, updateBlock } from "@/api";
+import { fetchSyncPost, getFrontend, IWebSocketData } from "siyuan";
+import { getWorkspaceInfo, getConf } from "@/api";
 
-/**
- * 统一读书笔记模板渲染工具
- * 内部按 getFrontend() 分支：
- * - browser-desktop / browser-mobile：使用 workspaceDir 路径，严格 fetchSyncPost
- * - desktop / desktop-window / mobile：保持原有 dataDir 路径，复用 render + updateBlock API
- *
- * @param plugin 插件实例（用于 saveData）
- * @param blockID 目标文档 blockID
- * @param template 模板内容字符串
- */
-export async function renderBookNoteTemplate(
-    plugin: any,
-    blockID: string,
-    template: string
-): Promise<void> {
-    // 保存模板数据到插件 data 目录（所有前端共用）
-    await plugin.saveData("noteTemplate.md", template);
+const TEMPLATE_FILE_PATH = "/data/templates/.siyuan-douban/noteTemplate.md";
 
+function getKernelMessage(response: IWebSocketData): string {
+    const data = response.data as any;
+    return response.msg || (typeof data === "string" ? data : data?.msg) || `code=${response.code}`;
+}
+
+async function requestKernel(stage: string, url: string, data: any): Promise<any> {
+    try {
+        const response: IWebSocketData = await fetchSyncPost(url, data);
+        if (response.code !== 0) {
+            throw new Error(`${stage}失败：${getKernelMessage(response)}`);
+        }
+        return response.data;
+    } catch (error) {
+        if (error instanceof Error && error.message.startsWith(`${stage}失败：`)) {
+            throw error;
+        }
+        throw new Error(`${stage}失败：${error instanceof Error ? error.message : String(error)}`);
+    }
+}
+
+function joinAbsolutePath(root: string, suffix: string): string {
+    return `${root.replace(/\\/g, "/").replace(/\/+$/, "")}${suffix}`;
+}
+
+async function getTemplateAbsolutePath(): Promise<string> {
     const frontEnd = getFrontend();
-    const isBrowser = frontEnd === "browser-desktop" || frontEnd === "browser-mobile";
-
-    if (isBrowser) {
-        // ========== 浏览器前端路径 ==========
-
-        // 获取工作空间目录
+    if (frontEnd === "browser-desktop" || frontEnd === "browser-mobile") {
         const wsInfo = await getWorkspaceInfo();
-        if (!wsInfo || !wsInfo.workspaceDir) {
+        if (!wsInfo?.workspaceDir) {
             throw new Error("无法获取工作空间目录 (workspaceDir)，请确认思源内核已启动");
         }
-
-        // 组装工作空间内的绝对路径，规范化分隔符
-        let workspaceDir = wsInfo.workspaceDir.replace(/\\/g, "/").replace(/\/+$/, "");
-        const templatePath = workspaceDir + "/data/storage/petal/siyuan-douban/noteTemplate.md";
-
-        // 调用 /api/template/render（严格版：code 非 0 时抛错）
-        const response: IWebSocketData = await fetchSyncPost('/api/template/render', {
-            id: blockID,
-            path: templatePath
-        });
-
-        if (response.code !== 0) {
-            const msg = response.msg || `模板渲染失败 (code=${response.code})`;
-            throw new Error(`模板渲染失败: ${msg}。路径: ${templatePath}`);
-        }
-
-        // 严格验证返回值：content 必须是字符串
-        const data = response.data;
-        if (!data || typeof data.content !== 'string') {
-            throw new Error(
-                `模板渲染返回值异常：content 不是字符串 (type=${typeof data?.content})。路径: ${templatePath}`
-            );
-        }
-
-        // 更新文档内容
-        const updateResponse: IWebSocketData = await fetchSyncPost('/api/block/updateBlock', {
-            dataType: "dom",
-            data: data.content,
-            id: blockID
-        });
-
-        if (updateResponse.code !== 0) {
-            const msg = updateResponse.msg || `更新块内容失败 (code=${updateResponse.code})`;
-            throw new Error(`更新块内容失败: ${msg}。blockID: ${blockID}`);
-        }
-    } else {
-        // ========== PC/手机原有稳定路径 ==========
-        // 保持修改前已经正常工作的路径逻辑
-
-        const conf = await getConf();
-        const dataDir = conf.conf.system.dataDir;
-        const rendered = await render(blockID, dataDir + "/storage/petal/siyuan-douban/noteTemplate.md");
-        await updateBlock("dom", rendered.content, blockID);
+        return joinAbsolutePath(wsInfo.workspaceDir, TEMPLATE_FILE_PATH);
     }
+
+    const conf = await getConf();
+    const dataDir = conf?.conf?.system?.dataDir;
+    if (!dataDir) {
+        throw new Error("无法获取数据目录 (dataDir)，请确认思源内核已启动");
+    }
+    return joinAbsolutePath(dataDir, "/templates/.siyuan-douban/noteTemplate.md");
+}
+
+async function writeTemplate(template: string): Promise<void> {
+    const form = new FormData();
+    form.append("path", TEMPLATE_FILE_PATH);
+    form.append("isDir", "false");
+    form.append("modTime", Math.floor(Date.now() / 1000).toString());
+    form.append(
+        "file",
+        new File([new TextEncoder().encode(template)], "noteTemplate.md", { type: "text/markdown" }),
+    );
+    await requestKernel("模板写入", "/api/file/putFile", form);
+}
+
+/**
+ * 使用思源内部模板渲染读书笔记。
+ * 模板先写入 data/templates 下的固定隐藏文件，再由内核渲染并更新目标文档。
+ */
+export async function renderBookNoteTemplate(blockID: string, template: string): Promise<void> {
+    const templatePath = await getTemplateAbsolutePath();
+    await writeTemplate(template);
+
+    const rendered = await requestKernel("模板渲染", "/api/template/render", {
+        id: blockID,
+        path: templatePath,
+    });
+    if (!rendered || typeof rendered.content !== "string") {
+        throw new Error(`模板渲染失败：内核返回的 content 不是字符串 (type=${typeof rendered?.content})`);
+    }
+
+    await requestKernel("更新块内容", "/api/block/updateBlock", {
+        dataType: "dom",
+        data: rendered.content,
+        id: blockID,
+    });
 }

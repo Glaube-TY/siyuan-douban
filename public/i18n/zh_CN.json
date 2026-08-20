@@ -509,8 +509,6 @@
     "settingsTemplatesSaved": "模板设置已保存",
     "settingsGenerateNotes": "添加书籍时生成读书笔记",
     "settingsGenerateNotesDesc": "关闭后只添加书籍属性视图记录。",
-    "settingsSiyuanRender": "使用思源模板渲染",
-    "settingsSiyuanRenderDesc": "保持旧模板渲染开关，不改变模板占位符。",
     "settingsLocalBookTemplate": "书籍笔记模板",
     "settingsWereadBookTemplate": "微信读书书籍模板",
     "settingsWereadMpTemplate": "公众号模板",

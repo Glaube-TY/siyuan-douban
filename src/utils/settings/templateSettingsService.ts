@@ -12,7 +12,6 @@ type PluginLike = {
 
 export interface TemplateSettings {
     addNotes: boolean;
-    isSYTemplateRender: boolean;
     noteTemplate: string;
     wereadTemplates: string;
     wereadMpTemplates: string;
@@ -24,7 +23,6 @@ export async function loadTemplateSettings(plugin: PluginLike): Promise<Template
     const wereadPositionMark = normalizeWereadPositionMark(await plugin.loadData("weread_position_mark"));
     return {
         addNotes: settings.addNotes ?? true,
-        isSYTemplateRender: settings.isSYTemplateRender ?? false,
         noteTemplate: settings.noteTemplate || "",
         wereadTemplates: await plugin.loadData("weread_templates") || "",
         wereadMpTemplates: await plugin.loadData("weread_mp_templates") || "",
@@ -38,7 +36,6 @@ export async function saveTemplateSettings(plugin: PluginLike, next: TemplateSet
     await plugin.saveData("settings.json", {
         ...current,
         addNotes: next.addNotes,
-        isSYTemplateRender: next.isSYTemplateRender,
         noteTemplate: next.noteTemplate || "",
     });
     await plugin.saveData("weread_templates", next.wereadTemplates || "");
