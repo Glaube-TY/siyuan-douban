@@ -154,7 +154,6 @@
         <label class="workbench-search-input-wrap">
             <SiYuanIcon name="search" size={16} />
             <input
-                class="b3-text-field"
                 bind:value={query}
                 type="search"
                 inputmode="search"
@@ -245,6 +244,7 @@
         border-radius: 7px;
         background: var(--b3-theme-background);
         cursor: text;
+        transition: border-color 0.16s ease, box-shadow 0.16s ease, background 0.16s ease;
     }
 
     .workbench-search-input-wrap input {
@@ -252,12 +252,27 @@
         width: 100%;
         height: 100%;
         min-width: 0;
+        padding: 0;
         border: 0;
+        border-radius: 0;
         background: transparent;
         box-shadow: none;
+        outline: none;
+        color: var(--b3-theme-on-background);
+        font: inherit;
         pointer-events: auto;
         user-select: text;
         cursor: text;
+    }
+
+    .workbench-search-input-wrap:focus-within {
+        border-color: var(--b3-theme-primary);
+        box-shadow: 0 0 0 2px color-mix(in srgb, var(--b3-theme-primary) 16%, transparent);
+    }
+
+    .workbench-search-input-wrap input::placeholder {
+        color: var(--b3-theme-on-surface-light);
+        opacity: 1;
     }
 
     .workbench-search-input-wrap :global(.common-icon) {
