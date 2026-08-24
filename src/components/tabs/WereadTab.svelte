@@ -44,6 +44,8 @@
     import wereadManageISBN from "@/components/common/wereadManageISBN.svelte";
     import wereadIgnoredBooksDialog from "@/components/common/wereadIgnoredBooksDialog.svelte";
     import wereadUseBookIDBooksDialog from "@/components/common/wereadUseBookIDBooksDialog.svelte";
+    import WereadBookManagementDialog from "@/components/common/WereadBookManagementDialog.svelte";
+    import { loadIgnoredBooks } from "@/utils/weread/wereadSyncStorage";
 
     async function getCurrentValidBookIdentifiers(plugin: any): Promise<{ validISBNs: Set<string>, validBookIDs: Set<string>, validBookNames: Set<string> }> {
         const settings = await plugin.loadData("settings.json") || {};
@@ -743,7 +745,7 @@
     }
 
     async function createIgnoredBooksDialog() {
-        const ignoredBooks = await plugin.loadData("weread_ignoredBooks") || [];
+        const ignoredBooks = await loadIgnoredBooks(plugin);
 
         if (ignoredBooks.length == 0) {
             showMessage(i18n.showMessage13);
@@ -767,6 +769,24 @@
                     },
                 });
             },
+        });
+    }
+
+    function createWereadBookManagementDialog() {
+        let dialog: any;
+        dialog = svelteDialog({
+            title: i18n.manageSyncedData || i18n.centerBookManagement || "微信读书书籍管理",
+            width: mobile ? "100vw" : "min(720px, 92vw)",
+            height: mobile ? "100dvh" : "min(560px, 80vh)",
+            constructor: (containerEl: HTMLElement) => new WereadBookManagementDialog({
+                target: containerEl,
+                props: {
+                    plugin,
+                    initialTab: "synced",
+                    onConfirm: () => dialog.close(),
+                    onCancel: () => dialog.close(),
+                },
+            }),
         });
     }
 
@@ -1056,6 +1076,15 @@
 
         <div class="weread-section">
             <div class="weread-section-title">{i18n.wereadSectionBooks}</div>
+            <div class="weread-settings-row">
+                <div class="weread-row-info">
+                    <div class="weread-row-title">{i18n.manageSyncedData}</div>
+                    <div class="weread-row-desc">{i18n.manageSyncedDataDesc}</div>
+                </div>
+                <div class="weread-row-control">
+                    <button class="b3-button b3-button--outline" on:click={createWereadBookManagementDialog}>{i18n.manageSyncedData}</button>
+                </div>
+            </div>
             <div class="weread-settings-row">
                 <div class="weread-row-info">
                     <div class="weread-row-title">{i18n.manageCustomISBNBooks}</div>

@@ -227,6 +227,7 @@ function getReportStatus(input: {
 
 function inferReasonCode(message = "", rawStatus = ""): WereadSyncReportReasonCode | undefined {
     if (rawStatus === "success" || /同步成功/.test(message)) return undefined;
+    if (rawStatus === "skipped_ignored") return "BOOK_SKIPPED_BY_USER";
     const text = `${message} ${rawStatus}`;
     if (!text.trim()) return undefined;
     if (/API Key|api key|认证|验证/.test(text)) return "API_KEY_INVALID";
@@ -250,7 +251,7 @@ function getReasonSuggestion(code?: WereadSyncReportReasonCode): string {
         TARGET_DOC_NOT_READY: "请完成新来源导入或重新匹配本地文档后再同步。",
         WRITE_BLOCK_FAILED: "请检查目标文档是否可写，然后重新同步失败项。",
         MP_TITLE_RESOLVE_FAILED: "可继续同步，后续再次同步会尝试补全公众号文章标题。",
-        BOOK_SKIPPED_BY_USER: "这是跳过项，如需同步请取消忽略或使用强制同步。",
+        BOOK_SKIPPED_BY_USER: "这是跳过项，如需同步请取消忽略。",
         NEW_SOURCE_NOT_IMPORTED: "请先在新来源确认弹窗中导入该来源。",
         BOOK_ID_IS_MISSING: "请检查缓存数据是否完整，重新拉取有笔记书籍列表。",
         ISBN_MATCH_FAILED: "请补充 ISBN 或使用 BookID 导入。",

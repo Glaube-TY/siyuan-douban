@@ -1,21 +1,27 @@
 <script lang="ts">
     import { onMount } from "svelte";
     import { getCurrentValidBookIdentifiers } from "@/utils/weread/getCurrentValidBookIdentifiers";
+    import { loadIgnoredBooks } from "@/utils/weread/wereadSyncStorage";
     import wereadManageISBN from "./wereadManageISBN.svelte";
     import wereadIgnoredBooksDialog from "./wereadIgnoredBooksDialog.svelte";
     import wereadUseBookIDBooksDialog from "./wereadUseBookIDBooksDialog.svelte";
+    import WereadSyncedDataDialog from "./WereadSyncedDataDialog.svelte";
     import { t } from "../../utils/i18n";
+
+    type TabKey = "synced" | "ignored" | "isbn" | "bookid";
 
     export let plugin: any;
     export let onConfirm: () => void;
     export let onCancel: () => void;
+    export let initialTab: TabKey = "synced";
 
-    type TabKey = "isbn" | "ignored" | "bookid";
-    let activeTab: TabKey = "isbn";
+    let activeTab: TabKey = initialTab;
 
+    let syncedRecords: any[] = [];
     let customISBNBooks: any[] = [];
     let ignoredBooks: any[] = [];
     let useBookIDBooks: any[] = [];
+    let temporaryNotebooks: any[] = [];
     let validISBNs: string[] = [];
     let validBookIDs: string[] = [];
     let validBookNames: string[] = [];
@@ -23,22 +29,27 @@
 
     const tx = (key: string, fallback: string) => t(plugin, key, fallback);
     $: tabs = [
-        { key: "isbn" as TabKey, label: tx("managementCustomIsbn", "自定义 ISBN") },
+        { key: "synced" as TabKey, label: tx("managementSynced", "已同步数据") },
         { key: "ignored" as TabKey, label: tx("managementIgnored", "忽略书籍") },
+        { key: "isbn" as TabKey, label: tx("managementCustomIsbn", "自定义 ISBN") },
         { key: "bookid" as TabKey, label: tx("managementBookId", "bookID 同步") },
     ];
 
     onMount(async () => {
         try {
-            const [customISBN, ignored, useBookID, identifiers] = await Promise.all([
+            const [synced, ignored, customISBN, useBookID, temporary, identifiers] = await Promise.all([
+                plugin.loadData("weread_notebooks"),
+                loadIgnoredBooks(plugin),
                 plugin.loadData("weread_customBooksISBN"),
-                plugin.loadData("weread_ignoredBooks"),
                 plugin.loadData("weread_useBookIDBooks"),
+                plugin.loadData("temporary_weread_notebooksList"),
                 getCurrentValidBookIdentifiers(plugin),
             ]);
+            syncedRecords = Array.isArray(synced) ? synced : [];
             customISBNBooks = Array.isArray(customISBN) ? customISBN : [];
             ignoredBooks = Array.isArray(ignored) ? ignored : [];
             useBookIDBooks = Array.isArray(useBookID) ? useBookID : [];
+            temporaryNotebooks = Array.isArray(temporary) ? temporary : [];
             validISBNs = Array.from(identifiers.validISBNs);
             validBookIDs = Array.from(identifiers.validBookIDs);
             validBookNames = Array.from(identifiers.validBookNames);
@@ -66,16 +77,15 @@
     <div class="management-body">
         {#if isLoading}
             <div class="management-empty">{tx("uiLoading", "加载中...")}</div>
-        {:else if activeTab === "isbn"}
-            {#if customISBNBooks.length === 0}
-                <div class="management-empty">{tx("managementNoIsbn", "暂无自定义 ISBN 记录")}</div>
+        {:else if activeTab === "synced"}
+            {#if syncedRecords.length === 0}
+                <div class="management-empty">{tx("managementNoSynced", "暂无已同步数据")}</div>
             {:else}
-                <svelte:component
-                    this={wereadManageISBN}
+                <WereadSyncedDataDialog
                     {plugin}
-                    {customISBNBooks}
-                    {validISBNs}
-                    {validBookNames}
+                    {syncedRecords}
+                    {ignoredBooks}
+                    {temporaryNotebooks}
                     onConfirm={onConfirm}
                     onCancel={onCancel}
                 />
@@ -88,6 +98,20 @@
                     this={wereadIgnoredBooksDialog}
                     {plugin}
                     {ignoredBooks}
+                    onConfirm={onConfirm}
+                    onCancel={onCancel}
+                />
+            {/if}
+        {:else if activeTab === "isbn"}
+            {#if customISBNBooks.length === 0}
+                <div class="management-empty">{tx("managementNoIsbn", "暂无自定义 ISBN 记录")}</div>
+            {:else}
+                <svelte:component
+                    this={wereadManageISBN}
+                    {plugin}
+                    {customISBNBooks}
+                    {validISBNs}
+                    {validBookNames}
                     onConfirm={onConfirm}
                     onCancel={onCancel}
                 />

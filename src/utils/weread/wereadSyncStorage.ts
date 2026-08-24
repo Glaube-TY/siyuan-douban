@@ -6,11 +6,11 @@
  * - 读取旧数据时：若记录没有 bookID，仍兼容使用 syncID（历史旧数据）
  * - 新写入/去重合并/回写：一律只基于 bookID，不再保留 syncID
  */
-function getWereadStorageKey(record: any): string {
-    // 新逻辑主键：统一只认 bookID
-    if (record?.bookID) return record.bookID.toString();
-    // 读取兼容兜底：历史旧记录可能只有 syncID 没有 bookID
-    if (record?.syncID) return record.syncID.toString();
+export function getWereadStorageKey(record: any): string {
+    for (const value of [record?.bookID, record?.bookId, record?.syncID]) {
+        const key = String(value ?? "").trim();
+        if (key) return key;
+    }
     return "";
 }
 
@@ -19,27 +19,43 @@ function getWereadStorageKey(record: any): string {
  * 用于保存前清理历史遗留的 syncID，避免口径差异
  */
 function normalizeStorageRecord(record: any): any {
-    if (!record) return record;
-    // 只保留必要字段，移除 syncID 避免后续混淆
-    const { syncID, ...rest } = record;
-    return rest;
+    if (!record || typeof record !== "object") return record;
+    const bookID = getWereadStorageKey(record);
+    const { syncID, bookId, ...rest } = record;
+    return bookID ? { ...rest, bookID } : rest;
+}
+
+function normalizeIgnoredBooks(records: any[]): any[] {
+    const uniqueMap = new Map<string, any>();
+    for (const record of Array.isArray(records) ? records : []) {
+        const key = getWereadStorageKey(record);
+        if (!key) continue;
+        uniqueMap.set(key, normalizeStorageRecord(record));
+    }
+    return Array.from(uniqueMap.values());
+}
+
+export async function loadIgnoredBooks(plugin: any): Promise<any[]> {
+    const records = await plugin.loadData("weread_ignoredBooks");
+    return Array.isArray(records) ? records : [];
+}
+
+export function getIgnoredBookIDSet(ignoredBooks: any[] | null | undefined): Set<string> {
+    const bookIDs = new Set<string>();
+    for (const record of Array.isArray(ignoredBooks) ? ignoredBooks : []) {
+        const bookID = getWereadStorageKey(record);
+        if (bookID) bookIDs.add(bookID);
+    }
+    return bookIDs;
+}
+
+export async function replaceIgnoredBooks(plugin: any, records: any[]): Promise<void> {
+    await plugin.saveData("weread_ignoredBooks", normalizeIgnoredBooks(records));
 }
 
 export async function saveIgnoredBooks(plugin: any, newIgnoredBooks: any[]) {
-    const existingIgnored = await plugin.loadData('weread_ignoredBooks') || [];
-    const merged = [...existingIgnored, ...newIgnoredBooks];
-    const uniqueMap = new Map();
-    merged.forEach(book => {
-        const key = getWereadStorageKey(book);
-        if (key) {
-            uniqueMap.set(key, book);
-        }
-    });
-
-    // 回写时统一清理 syncID，只保留 bookID 作为主键
-    const finalIgnoredBooks = Array.from(uniqueMap.values()).map(normalizeStorageRecord);
-
-    await plugin.saveData('weread_ignoredBooks', finalIgnoredBooks);
+    const existingIgnored = await loadIgnoredBooks(plugin);
+    await replaceIgnoredBooks(plugin, [...existingIgnored, ...(Array.isArray(newIgnoredBooks) ? newIgnoredBooks : [])]);
 }
 
 // 保存自定义书籍ISBN

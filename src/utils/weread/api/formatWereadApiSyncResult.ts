@@ -25,12 +25,16 @@ export function formatWereadApiSyncResultSummary(
     parts.push(t(options?.i18nSource, "syncSummaryFailed", "失败 {count}", { count: result.failed }));
   }
 
-  if (result.success === 0 && result.skippedUnchanged > 0) {
+  if (result.success === 0 && result.skippedUnchanged > 0 && result.skippedIgnored === 0) {
     return t(options?.i18nSource, "syncSummaryNoChangesBooks", "无新变化，{count} 本已是最新", { count: result.skippedUnchanged });
   }
 
   if (result.skippedUnchanged > 0) {
     parts.push(t(options?.i18nSource, "syncSummaryUnchangedBooks", "无变化 {count} 本", { count: result.skippedUnchanged }));
+  }
+
+  if (result.skippedIgnored > 0) {
+    parts.push(t(options?.i18nSource, "syncSummaryIgnoredBooks", "已停止同步 {count} 本", { count: result.skippedIgnored }));
   }
 
   if (parts.length === 0) {
@@ -52,12 +56,15 @@ export function formatWereadApiAutoSyncResultSummary(
   const mpFailed = result.mpResult?.failed || 0;
   const normalUnchanged = result.normalResult?.skippedUnchanged || 0;
   const mpUnchanged = result.mpResult?.skippedUnchanged || 0;
+  const normalIgnored = result.normalResult?.skippedIgnored || 0;
+  const mpIgnored = result.mpResult?.skippedIgnored || 0;
 
   const totalSuccess = normalSuccess + mpSuccess;
   const totalFailed = normalFailed + mpFailed;
   const totalUnchanged = normalUnchanged + mpUnchanged;
+  const totalIgnored = normalIgnored + mpIgnored;
 
-  if (totalSuccess === 0 && totalUnchanged > 0 && totalFailed === 0) {
+  if (totalSuccess === 0 && totalUnchanged > 0 && totalIgnored === 0 && totalFailed === 0) {
     return t(options?.i18nSource, "syncSummaryNoChanges", "无新变化");
   }
 
@@ -90,6 +97,14 @@ export function formatWereadApiAutoSyncResultSummary(
 
   if (totalFailed > 0) {
     parts.push(t(options?.i18nSource, "syncSummaryFailed", "失败 {count}", { count: totalFailed }));
+  }
+
+  if (totalUnchanged > 0) {
+    parts.push(t(options?.i18nSource, "syncSummaryUnchanged", "无变化 {count} 个", { count: totalUnchanged }));
+  }
+
+  if (totalIgnored > 0) {
+    parts.push(t(options?.i18nSource, "syncSummaryIgnored", "已停止同步 {count} 个", { count: totalIgnored }));
   }
 
   if (parts.length === 0) {

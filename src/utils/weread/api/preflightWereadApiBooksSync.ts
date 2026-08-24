@@ -1,4 +1,5 @@
 import { findWereadApiBookTargetDoc } from "./findWereadApiBookTargetDoc";
+import { getIgnoredBookIDSet, loadIgnoredBooks } from "../wereadSyncStorage";
 
 interface WereadPluginLike {
   loadData: (key: string) => Promise<any>;
@@ -10,12 +11,13 @@ export async function preflightWereadApiBooksSync(plugin: WereadPluginLike): Pro
   checked: number;
   ready: number;
   skippedMp: number;
+  skippedIgnored: number;
   failed: number;
   items: Array<{
     bookID: string;
     title: string;
     sourceType: string;
-    status: "ready" | "skipped_mp" | "failed";
+    status: "ready" | "skipped_mp" | "skipped_ignored" | "failed";
     matchType?: "bookID" | "ISBN" | "title";
     blockID?: string;
     message: string;
@@ -29,6 +31,7 @@ export async function preflightWereadApiBooksSync(plugin: WereadPluginLike): Pro
       checked: 0,
       ready: 0,
       skippedMp: 0,
+      skippedIgnored: 0,
       failed: 1,
       items: [{
         bookID: "",
@@ -44,7 +47,7 @@ export async function preflightWereadApiBooksSync(plugin: WereadPluginLike): Pro
     bookID: string;
     title: string;
     sourceType: string;
-    status: "ready" | "skipped_mp" | "failed";
+    status: "ready" | "skipped_mp" | "skipped_ignored" | "failed";
     matchType?: "bookID" | "ISBN" | "title";
     blockID?: string;
     message: string;
@@ -52,10 +55,13 @@ export async function preflightWereadApiBooksSync(plugin: WereadPluginLike): Pro
 
   let ready = 0;
   let skippedMp = 0;
+  let skippedIgnored = 0;
   let failed = 0;
+  const ignoredBookIDs = getIgnoredBookIDSet(await loadIgnoredBooks(plugin));
+  const ignoredMessage = plugin.i18n.syncSkippedIgnored || "已设置为停止同步，跳过检测";
 
   for (const book of cache) {
-    const bookID = book?.bookID || book?.bookId || "";
+    const bookID = String(book?.bookID ?? book?.bookId ?? "").trim();
     const title = book?.title || "";
     const isbn = book?.isbn || "";
     const sourceType = book?.sourceType || "";
@@ -64,7 +70,7 @@ export async function preflightWereadApiBooksSync(plugin: WereadPluginLike): Pro
       continue;
     }
 
-    if (sourceType === "weread_mp_account") {
+    if (sourceType === "weread_mp_account" || bookID.startsWith("MP_WXS_")) {
       skippedMp++;
       items.push({
         bookID,
@@ -72,6 +78,18 @@ export async function preflightWereadApiBooksSync(plugin: WereadPluginLike): Pro
         sourceType,
         status: "skipped_mp",
         message: "公众号书籍跳过",
+      });
+      continue;
+    }
+
+    if (ignoredBookIDs.has(String(bookID))) {
+      skippedIgnored++;
+      items.push({
+        bookID,
+        title,
+        sourceType,
+        status: "skipped_ignored",
+        message: ignoredMessage,
       });
       continue;
     }
@@ -110,6 +128,7 @@ export async function preflightWereadApiBooksSync(plugin: WereadPluginLike): Pro
     checked: items.length,
     ready,
     skippedMp,
+    skippedIgnored,
     failed,
     items,
   };

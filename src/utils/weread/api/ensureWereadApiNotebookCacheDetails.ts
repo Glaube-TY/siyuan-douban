@@ -1,6 +1,7 @@
 import { callWereadApi } from "./wereadApiGateway";
 import type { RawBookInfoResponse } from "./types/raw";
 import PromiseLimitPool from "@/libs/promise-pool";
+import { getIgnoredBookIDSet, loadIgnoredBooks } from "../wereadSyncStorage";
 
 interface WereadPluginLike {
   loadData: (key: string) => Promise<any>;
@@ -31,6 +32,7 @@ export async function ensureWereadApiNotebookCacheDetails(
   const updatedCache = cache.map((item: any) => ({ ...item }));
 
   const customISBNBooks = await plugin.loadData("weread_customBooksISBN") || [];
+  const ignoredBookIDs = getIgnoredBookIDSet(await loadIgnoredBooks(plugin));
   const customISBNByBookID = new Map<string, string>();
   for (const item of customISBNBooks) {
     const bookID = getStoredBookID(item);
@@ -58,6 +60,8 @@ export async function ensureWereadApiNotebookCacheDetails(
     const sourceType = item?.sourceType || "";
     const isMpAccount = sourceType === "weread_mp_account" || bookID.startsWith("MP_WXS_");
     if (isMpAccount) continue;
+
+    if (ignoredBookIDs.has(bookID)) continue;
 
     if (item.isbn) continue;
 

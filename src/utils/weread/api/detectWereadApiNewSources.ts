@@ -2,6 +2,7 @@ import { sql, getAttributeView } from "@/api";
 import { ensureWereadApiNotebookCacheDetails } from "./ensureWereadApiNotebookCacheDetails";
 import { getAttributeViewValueText, normalizeBookTitle } from "../../bookHandling/bookDeduplication";
 import { findBookPrimaryKeyValue } from "../../bookHandling/bookDatabasePrimaryKey";
+import { getIgnoredBookIDSet, getWereadStorageKey, loadIgnoredBooks } from "../wereadSyncStorage";
 
 interface WereadPluginLike {
   loadData: (key: string) => Promise<any>;
@@ -38,10 +39,6 @@ function normalizeISBN(value: any): string {
     .replace(/[\s\-\u2014\u2013_]/g, "")
     .replace(/[０-９]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) - 0xfee0))
     .trim();
-}
-
-function getStoredBookID(record: any): string {
-  return String(record?.bookID ?? record?.bookId ?? record?.syncID ?? "").trim();
 }
 
 export async function detectWereadApiNewSources(
@@ -105,12 +102,17 @@ export async function detectWereadApiNewSources(
     }
   }
 
-  const ignoredBooks = await plugin.loadData("weread_ignoredBooks") || [];
-  const ignoredBookIDs = new Set<string>(
-    ignoredBooks.map((b: any) => b.bookID?.toString()).filter(Boolean)
+  const ignoredBooks = await loadIgnoredBooks(plugin);
+  const syncedNotebooks = await plugin.loadData("weread_notebooks");
+  const syncedBookIDSet = new Set<string>(
+    (Array.isArray(syncedNotebooks) ? syncedNotebooks : [])
+      .map(getWereadStorageKey)
+      .filter(Boolean)
   );
+  const ignoredBookIDs = getIgnoredBookIDSet(ignoredBooks);
   const ignoredISBNs = new Set<string>(
     ignoredBooks
+      .filter((record: any) => !syncedBookIDSet.has(getWereadStorageKey(record)))
       .map((b: any) => b.isbn?.toString())
       .filter(Boolean)
       .map((isbn: string) => normalizeISBN(isbn).toUpperCase())
@@ -119,7 +121,7 @@ export async function detectWereadApiNewSources(
   const customISBNBooks = await plugin.loadData("weread_customBooksISBN") || [];
   const customISBNByBookID = new Map<string, string>();
   for (const item of customISBNBooks) {
-    const bookID = getStoredBookID(item);
+    const bookID = getWereadStorageKey(item);
     const isbn = normalizeISBN(item?.customISBN ?? item?.isbn ?? "").toUpperCase();
     if (bookID && isbn) {
       customISBNByBookID.set(bookID, isbn);
@@ -128,12 +130,12 @@ export async function detectWereadApiNewSources(
 
   const useBookIDBooks = await plugin.loadData("weread_useBookIDBooks") || [];
   const useBookIDBookIDs = new Set<string>(
-    useBookIDBooks.map(getStoredBookID).filter(Boolean)
+    useBookIDBooks.map(getWereadStorageKey).filter(Boolean)
   );
 
   const candidates = notebooksList
     .map((item: any) => {
-      const bookID = item?.bookID || item?.bookId || "";
+      const bookID = getWereadStorageKey(item);
       if (!bookID) return null;
       return {
         title: item?.title || "",

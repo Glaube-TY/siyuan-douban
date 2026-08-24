@@ -1,22 +1,42 @@
 <script lang="ts">
+    import { showMessage } from "siyuan";
+    import { getWereadStorageKey, replaceIgnoredBooks } from "../../utils/weread/wereadSyncStorage";
+
     export let plugin;
     export let ignoredBooks: Array<{
-        title: string;
-        isbn: string;
-        bookID: string;
+        title?: string;
+        isbn?: string;
+        bookID?: string;
+        bookId?: string;
+        syncID?: string;
     }>;
     export let onConfirm: () => void;
     export let onCancel: () => void;
 
     // 创建本地副本用于操作
     let localIgnoredBooks = [...ignoredBooks];
+    let isSaving = false;
 
-    // 删除记录
-    const handleDelete = (bookID: string) => {
+    // 取消忽略；已同步来源的效果是恢复后续同步
+    const handleRestore = (bookID: string) => {
         localIgnoredBooks = localIgnoredBooks.filter(
-            (book) => book.bookID !== bookID,
+            (book) => getWereadStorageKey(book) !== bookID,
         );
     };
+
+    async function handleSave() {
+        if (isSaving) return;
+        isSaving = true;
+        try {
+            await replaceIgnoredBooks(plugin, localIgnoredBooks);
+            onConfirm();
+        } catch (error) {
+            console.error("[wereadIgnoredBooksDialog] 保存忽略书籍失败", error);
+            showMessage(plugin.i18n.syncedDataSaveFailed || "保存忽略书籍设置失败");
+        } finally {
+            isSaving = false;
+        }
+    }
 </script>
 
 <div class="ignored-books-dialog">
@@ -25,20 +45,21 @@
             <thead>
                 <tr>
                     <th>{plugin.i18n.bookTitle1}</th>
-                    <th>{plugin.i18n.delete}</th>
+                    <th>{plugin.i18n.ignoredRestoreSync || "取消忽略 / 恢复同步"}</th>
                 </tr>
             </thead>
             <tbody>
-                {#each localIgnoredBooks as book (book.bookID)}
+                {#each localIgnoredBooks as book (getWereadStorageKey(book))}
                     <tr>
-                        <td>{book.title}</td>
+                        <td>{book.title || getWereadStorageKey(book)}</td>
                         <td>
                             <button 
-                                on:click={() => handleDelete(book.bookID)}
+                                on:click={() => handleRestore(getWereadStorageKey(book))}
                                 class="delete-btn"
-                                title="{plugin.i18n.delete}"
+                                title={plugin.i18n.ignoredRestoreSync || "取消忽略 / 恢复同步"}
+                                aria-label={plugin.i18n.ignoredRestoreSync || "取消忽略 / 恢复同步"}
                             >
-                                🗑️
+                                ↩️
                             </button>
                         </td>
                     </tr>
@@ -49,14 +70,11 @@
 
     <div class="dialog-actions">
         <button
-            on:click={() => {
-                // 保存修改后的数据
-                plugin.saveData("weread_ignoredBooks", localIgnoredBooks);
-                onConfirm();
-            }}>{plugin.i18n.confirm}</button
+            disabled={isSaving}
+            on:click={handleSave}>{plugin.i18n.confirm}</button
         >
 
-        <button on:click={onCancel}>{plugin.i18n.cancel}</button>
+        <button disabled={isSaving} on:click={onCancel}>{plugin.i18n.cancel}</button>
     </div>
 </div>
 

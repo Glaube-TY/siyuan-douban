@@ -31,6 +31,7 @@ export async function autoSyncWereadApi(plugin: WereadPluginLike): Promise<Werea
     success: 0,
     failed: 0,
     skippedMp: 0,
+    skippedIgnored: 0,
     skippedNotReady: 0,
     skippedUnchanged: 0,
     items: [],

@@ -76,6 +76,7 @@ async function runWorkbenchManualWereadApiSyncInternal(
     success: 0,
     failed: 0,
     skippedMp: 0,
+    skippedIgnored: 0,
     skippedNotReady: 0,
     skippedUnchanged: 0,
     items: [],
@@ -199,6 +200,7 @@ async function runWorkbenchManualWereadApiSyncInternal(
         success: 0,
         failed: 1,
         skippedNormalBook: 0,
+        skippedIgnored: 0,
         skippedNotReady: 0,
         skippedUnchanged: 0,
         items: [{

@@ -11,6 +11,7 @@ import { syncWereadBookIncremental } from "../incremental/syncBookIncremental";
 import { loadWereadNoteUnitBlockIndex } from "../incremental/blockIndexStorage";
 import { hasUsableWereadSourceIndexForDoc } from "../incremental/indexValidation";
 import { hashText } from "../incremental/hash";
+import { getIgnoredBookIDSet, loadIgnoredBooks } from "../wereadSyncStorage";
 import type { WereadIncrementalSyncStats, WereadRenderModel } from "../incremental/types";
 import type { WereadSyncProgressCallback, WereadSyncPlanConfirmCallback, WereadSyncPlanItem } from "./wereadSyncProgress";
 
@@ -74,13 +75,14 @@ export interface WereadApiNormalBooksSyncResult {
   success: number;
   failed: number;
   skippedMp: number;
+  skippedIgnored: number;
   skippedNotReady: number;
   skippedUnchanged: number;
   cancelled?: boolean;
   items: Array<{
     bookID: string;
     title: string;
-    status: "success" | "failed" | "skipped_mp" | "skipped_not_ready" | "skipped_unchanged";
+    status: "success" | "failed" | "skipped_mp" | "skipped_ignored" | "skipped_not_ready" | "skipped_unchanged";
     blockID?: string;
     markdownLength?: number;
     addedItemCount?: number;
@@ -124,6 +126,7 @@ export async function syncWereadApiNormalBooks(
       success: 0,
       failed: 1,
       skippedMp: 0,
+      skippedIgnored: 0,
       skippedNotReady: 0,
       skippedUnchanged: 0,
       items: [{
@@ -139,9 +142,12 @@ export async function syncWereadApiNormalBooks(
 
   const readyItems = preflight.items.filter((i) => i.status === "ready");
   const mpItems = preflight.items.filter((i) => i.status === "skipped_mp");
+  const ignoredItems = preflight.items.filter((i) => i.status === "skipped_ignored");
   const notReadyItems = preflight.items.filter((i) => i.status === "failed");
 
-  const forceBookIDSet = new Set((options.forceBookIDs || []).filter(Boolean));
+  const forceBookIDSet = new Set((options.forceBookIDs || []).map((bookID) => String(bookID).trim()).filter(Boolean));
+  const ignoredBookIDs = getIgnoredBookIDSet(await loadIgnoredBooks(plugin));
+  const ignoredDetailMessage = plugin.i18n.syncSkippedIgnoredDetail || "已设置为停止同步，未参与本次检测";
 
   const readyMap = new Map<string, typeof readyItems[0]>();
   for (const item of readyItems) {
@@ -149,6 +155,7 @@ export async function syncWereadApiNormalBooks(
   }
 
   for (const forceBookID of forceBookIDSet) {
+    if (ignoredBookIDs.has(forceBookID)) continue;
     if (readyMap.has(forceBookID)) continue;
 
     const cacheRecord = cache.find((c: any) => (c?.bookID || c?.bookId) === forceBookID);
@@ -209,7 +216,7 @@ export async function syncWereadApiNormalBooks(
   const items: Array<{
     bookID: string;
     title: string;
-    status: "success" | "failed" | "skipped_mp" | "skipped_not_ready" | "skipped_unchanged";
+    status: "success" | "failed" | "skipped_mp" | "skipped_ignored" | "skipped_not_ready" | "skipped_unchanged";
     blockID?: string;
     markdownLength?: number;
     addedItemCount?: number;
@@ -299,6 +306,15 @@ export async function syncWereadApiNormalBooks(
     });
   }
 
+  for (const ignored of ignoredItems) {
+    items.push({
+      bookID: ignored.bookID,
+      title: ignored.title,
+      status: "skipped_ignored",
+      message: ignoredDetailMessage,
+    });
+  }
+
   for (const nr of notReadyItems) {
     if (forceBookIDSet.has(nr.bookID) && readyMap.has(nr.bookID)) continue;
     items.push({
@@ -334,11 +350,24 @@ export async function syncWereadApiNormalBooks(
     });
   }
 
+  for (const ignored of ignoredItems) {
+    options.onProgress?.({
+      stage: "item_skipped",
+      sourceType: "book",
+      bookID: ignored.bookID,
+      title: ignored.title,
+      message: `《${ignored.title || ignored.bookID}》${ignoredDetailMessage}`,
+      status: "skipped",
+    });
+  }
+
+  const skippedNotReadyCount = notReadyItems.filter((i) => !forceBookIDSet.has(i.bookID) || !readyMap.has(i.bookID)).length;
+
   options.onProgress?.({
     stage: "planning",
     sourceType: "book",
     total: plannedItems.length,
-    message: `普通书籍计划已生成：待同步 ${plannedItems.length}，无变化 ${skippedUnchanged}，未就绪 ${notReadyItems.length}`,
+    message: `普通书籍计划已生成：待同步 ${plannedItems.length}，无变化 ${skippedUnchanged}，已停止同步 ${ignoredItems.length}，未就绪 ${skippedNotReadyCount}`,
     status: "running",
   });
 
@@ -359,7 +388,8 @@ export async function syncWereadApiNormalBooks(
       success: 0,
       failed: 0,
       skippedMp: mpItems.length,
-      skippedNotReady: notReadyItems.filter((i) => !forceBookIDSet.has(i.bookID) || !readyMap.has(i.bookID)).length,
+      skippedIgnored: ignoredItems.length,
+      skippedNotReady: skippedNotReadyCount,
       skippedUnchanged,
       items,
     };
@@ -384,7 +414,7 @@ export async function syncWereadApiNormalBooks(
       sourceType: "book",
       title: "普通书籍同步",
       plannedItems: planItemsForConfirm,
-      skippedCount: skippedUnchanged + mpItems.length + notReadyItems.length,
+      skippedCount: skippedUnchanged + mpItems.length + ignoredItems.length + skippedNotReadyCount,
     });
     if (!confirmed) {
       // 用户取消，emit cancelled 事件
@@ -402,7 +432,8 @@ export async function syncWereadApiNormalBooks(
         success: 0,
         failed: 0,
         skippedMp: mpItems.length,
-        skippedNotReady: notReadyItems.length,
+        skippedIgnored: ignoredItems.length,
+        skippedNotReady: skippedNotReadyCount,
         skippedUnchanged,
         cancelled: true,
         items,
@@ -689,7 +720,8 @@ export async function syncWereadApiNormalBooks(
     success,
     failed,
     skippedMp: mpItems.length,
-    skippedNotReady: notReadyItems.filter((i) => !forceBookIDSet.has(i.bookID) || !readyMap.has(i.bookID)).length,
+    skippedIgnored: ignoredItems.length,
+    skippedNotReady: skippedNotReadyCount,
     skippedUnchanged,
     items,
   };
