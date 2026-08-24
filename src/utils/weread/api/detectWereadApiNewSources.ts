@@ -1,6 +1,7 @@
 import { sql, getAttributeView } from "@/api";
 import { ensureWereadApiNotebookCacheDetails } from "./ensureWereadApiNotebookCacheDetails";
 import { getAttributeViewValueText, normalizeBookTitle } from "../../bookHandling/bookDeduplication";
+import { findBookPrimaryKeyValue } from "../../bookHandling/bookDatabasePrimaryKey";
 
 interface WereadPluginLike {
   loadData: (key: string) => Promise<any>;
@@ -75,7 +76,7 @@ export async function detectWereadApiNewSources(
   const db = await getAttributeView(avID);
   const keyValues = db?.av?.keyValues || [];
 
-  const bookNameKey = keyValues.find((kv: any) => kv.key?.name === "书名");
+  const bookNameKey = findBookPrimaryKeyValue(keyValues);
   const isbnKey = keyValues.find((kv: any) => kv.key?.name === "ISBN");
   const bookIDKey = keyValues.find((kv: any) => kv.key?.name === "bookID");
 

@@ -1,3 +1,5 @@
+import { findBookPrimaryKeyValue } from "./bookDatabasePrimaryKey";
+
 export function normalizeBookTitle(value: unknown): string {
     return String(value || "")
         .normalize("NFKC")
@@ -21,7 +23,7 @@ export function findBookByNormalizedTitle(keyValues: any[], title: unknown): any
     const normalizedTitle = normalizeBookTitle(title);
     if (!normalizedTitle || !Array.isArray(keyValues)) return null;
 
-    const bookNameKey = keyValues.find((item: any) => item?.key?.name === "书名");
+    const bookNameKey = findBookPrimaryKeyValue(keyValues);
     return (bookNameKey?.values || []).find((value: any) => (
         normalizeBookTitle(getAttributeViewValueText(value)) === normalizedTitle
     )) || null;

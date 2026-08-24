@@ -1,6 +1,7 @@
 import { sql, renameDoc, getAttributeView, appendAttributeViewDetachedBlocksWithValues, setAttributeViewBlockAttr, createDocWithMd } from "@/api";
 import { ensureAttributeViewKeys } from '../bookHandling/ensureAttributeViewKeys';
 import { bindBookToNote } from '../bookHandling/bindBookToNote';
+import { BOOK_TITLE_KEY_NAME, findBookPrimaryKey, findBookPrimaryKeyValue } from '../bookHandling/bookDatabasePrimaryKey';
 
 /**
  * 公众号账号数据库列类型映射
@@ -12,7 +13,6 @@ import { bindBookToNote } from '../bookHandling/bindBookToNote';
  */
 function getAttributeType(name: string): string {
     const typeMap: Record<string, string> = {
-        "书名": "text",
         "封面": "mAsset",
         "作者": "text",
         "出版社": "text",
@@ -55,12 +55,15 @@ function buildAccountBlocksValues(keys: any[], record: MpAccountRecord): any[] {
             name: key.name
         };
 
+        if (key.type === "block") {
+            keyValue.block = {
+                content: record.accountTitle || ""
+            };
+            blockValues.push(keyValue);
+            continue;
+        }
+
         switch (key.name) {
-            case "书名":
-                keyValue.block = {
-                    content: record.accountTitle || ""
-                };
-                break;
             case "封面":
                 if (record.accountCover) {
                     keyValue.mAsset = [{
@@ -118,7 +121,7 @@ function buildAccountBlocksValues(keys: any[], record: MpAccountRecord): any[] {
  * @returns matchingValue 或 undefined
  */
 function getBookNameMatchingValue(keyValues: any[], blockID: string): any | undefined {
-    const bookNameKey = keyValues.find((kv: any) => kv.key?.name === "书名");
+    const bookNameKey = findBookPrimaryKeyValue(keyValues);
     return bookNameKey?.values?.find((v: any) => v.blockID === blockID);
 }
 
@@ -147,7 +150,7 @@ export async function ensureMpAccountInDatabase(
 ): Promise<MpAccountDbResult> {
     // 注意：这里的 rawBookID 实际就是 bookID，最终写入数据库 bookID 列
     // 数据库层公众号账号行只靠 bookID 识别，sourceType 属于本地同步缓存语义
-    const requiredAttributes = ["书名", "封面", "作者", "出版社", "bookID"];
+    const requiredAttributes = ["封面", "作者", "出版社", "bookID"];
 
     // 确保数据库包含所有必需列
     const databaseKeys = await ensureAttributeViewKeys(avID, requiredAttributes, getAttributeType);
@@ -247,8 +250,8 @@ export async function ensureMpAccountInDatabase(
     }
 
     // 预取书名列 keyID（用于安全绑定兜底）
-    const bookNameKeyFromDB = databaseKeys.find((k: any) => k.name === "书名");
-    const bookNameKeyFromKV = updatedKeyValues.find((kv: any) => kv.key?.name === "书名")?.key?.id;
+    const bookNameKeyFromDB = findBookPrimaryKey(databaseKeys);
+    const bookNameKeyFromKV = findBookPrimaryKeyValue(updatedKeyValues)?.key?.id;
     const bookNameKeyID = bookNameKeyFromDB?.id || bookNameKeyFromKV;
 
     // 创建空白文档
@@ -290,6 +293,8 @@ async function updateMpAccountRowFields(
     blockID: string,
     record: MpAccountRecord
 ): Promise<void> {
+    const primaryKey = findBookPrimaryKey(databaseKeys);
+
     // 构建字段名到 keyID 的映射
     const keyMap = new Map<string, string>();
     for (const key of databaseKeys) {
@@ -298,13 +303,13 @@ async function updateMpAccountRowFields(
         }
     }
 
-    // 获取现有行的 cellID 映射
+    // 获取现有行的 cellID 映射，按 keyID 保存以避免普通“书名”字段冲突
     const cellIDMap = new Map<string, string>();
     for (const kv of keyValues) {
-        if (kv.key?.name && kv.values) {
+        if (kv.key?.id && kv.values) {
             const cell = kv.values.find((v: any) => v.blockID === blockID);
             if (cell?.id) {
-                cellIDMap.set(kv.key.name, cell.id);
+                cellIDMap.set(kv.key.id, cell.id);
             }
         }
     }
@@ -312,8 +317,8 @@ async function updateMpAccountRowFields(
     // 定义要更新的字段（已收缩，只保留必需列）
     // 注意：历史数据库中可能仍存在 sourceType/syncID/rawBookID/mpArticleID 等旧列
     // 但当前逻辑不再更新它们，当前公众号账号行只靠 bookID 识别
-    const fieldsToUpdate: { keyName: string; valueType: string; content: any }[] = [
-        { keyName: "书名", valueType: "block", content: record.accountTitle || "" },
+    const fieldsToUpdate: { keyID?: string; keyName: string; valueType: string; content: any }[] = [
+        { keyID: primaryKey?.id, keyName: BOOK_TITLE_KEY_NAME, valueType: "block", content: record.accountTitle || "" },
         { keyName: "作者", valueType: "text", content: record.accountTitle || "" },
         { keyName: "出版社", valueType: "text", content: "微信公众号" },
         { keyName: "封面", valueType: "mAsset", content: record.accountCover || "" },
@@ -322,8 +327,8 @@ async function updateMpAccountRowFields(
 
     // 逐个更新字段
     for (const field of fieldsToUpdate) {
-        const keyID = keyMap.get(field.keyName);
-        const cellID = cellIDMap.get(field.keyName);
+        const keyID = field.keyID || keyMap.get(field.keyName);
+        const cellID = keyID ? cellIDMap.get(keyID) : undefined;
         if (!keyID) continue;
 
         const updatePayload: any = {
@@ -424,8 +429,8 @@ async function ensureMpAccountDocIntegrity(
     let matchingValue = getBookNameMatchingValue(keyValues, blockID);
 
     // 预取稳定的书名 keyID（用于 keyID 兜底）
-    const bookNameKeyFromDB = databaseKeys?.find((k: any) => k.name === "书名");
-    const bookNameKeyFromKV = keyValues.find((kv: any) => kv.key?.name === "书名")?.key?.id;
+    const bookNameKeyFromDB = databaseKeys ? findBookPrimaryKey(databaseKeys) : undefined;
+    const bookNameKeyFromKV = findBookPrimaryKeyValue(keyValues)?.key?.id;
     const bookNameKeyID = bookNameKeyFromDB?.id || bookNameKeyFromKV;
 
     // 2. 文档不存在：需要补建文档
@@ -451,7 +456,7 @@ async function ensureMpAccountDocIntegrity(
         // 重新获取 matchingValue（补建后可能需要刷新）
         const refreshedDb = await getAttributeView(avID);
         const refreshedKeyValues = refreshedDb?.av?.keyValues || [];
-        const refreshedBookNameKey = refreshedKeyValues.find((kv: any) => kv.key?.name === "书名");
+        const refreshedBookNameKey = findBookPrimaryKeyValue(refreshedKeyValues);
         matchingValue = refreshedBookNameKey?.values?.find((v: any) => v.blockID === blockID);
     }
 
@@ -475,7 +480,7 @@ async function ensureMpAccountDocIntegrity(
 
         // 主动补书名主键 cell
         if (databaseKeys && databaseKeys.length > 0) {
-            const bookNameKey = databaseKeys.find((k: any) => k.name === "书名");
+            const bookNameKey = findBookPrimaryKey(databaseKeys);
             if (bookNameKey) {
                 try {
                     await setAttributeViewBlockAttr({

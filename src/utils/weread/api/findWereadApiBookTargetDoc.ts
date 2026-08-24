@@ -4,6 +4,7 @@ import {
   getNoteDocumentBinding,
   validateNoteDocumentBindings,
 } from "../../readingManagement/noteDocumentBinding";
+import { findBookPrimaryKeyValue } from "../../bookHandling/bookDatabasePrimaryKey";
 
 interface WereadPluginLike {
   loadData: (key: string) => Promise<any>;
@@ -148,7 +149,7 @@ async function loadDatabaseView(plugin: WereadPluginLike): Promise<{ avID: strin
 
   let bookIDKey = keyValues.find((kv: any) => kv.key?.name === "bookID");
   let isbnKey = keyValues.find((kv: any) => kv.key?.name === "ISBN");
-  let titleKey = keyValues.find((kv: any) => kv.key?.name === "书名");
+  let titleKey = findBookPrimaryKeyValue(keyValues);
 
   let bookIDValues = bookIDKey?.values || [];
   let isbnValues = isbnKey?.values || [];
@@ -176,7 +177,7 @@ async function cleanOrphansAndReload(avID: string, titleValues: any[], isbnValue
 
     const bookIDKey = keyValues.find((kv: any) => kv.key?.name === "bookID");
     const isbnKey = keyValues.find((kv: any) => kv.key?.name === "ISBN");
-    const titleKey = keyValues.find((kv: any) => kv.key?.name === "书名");
+    const titleKey = findBookPrimaryKeyValue(keyValues);
 
     return {
       titleValues: titleKey?.values || [],

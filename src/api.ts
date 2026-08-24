@@ -544,6 +544,37 @@ export async function addAttributeViewKey(payload: any): Promise<any> {
 }
 
 
+/**
+ * 这是思源客户端自身使用的内部属性视图事务，不属于稳定公开的字段重命名 API；
+ * 业务层不得直接依赖 updateAttrViewCol，后续思源兼容性变化只需要修改这一层。
+ */
+export async function updateAttributeViewColumnName(
+    avID: string,
+    keyID: string,
+    keyName: string,
+    keyType: string,
+): Promise<any> {
+    const response: IWebSocketData = await fetchSyncPost('/api/transactions', {
+        reqId: Date.now(),
+        transactions: [{
+            doOperations: [{
+                action: 'updateAttrViewCol',
+                id: keyID,
+                avID,
+                name: keyName,
+                type: keyType,
+            }],
+        }],
+    });
+
+    if (response.code !== 0) {
+        throw new Error(response.msg || "属性视图字段改名失败");
+    }
+
+    return response.data;
+}
+
+
 export async function appendAttributeViewDetachedBlocksWithValues(avID: string, blocksValues: any[]): Promise<any> {
     return request('/api/av/appendAttributeViewDetachedBlocksWithValues', { avID, blocksValues });
 }

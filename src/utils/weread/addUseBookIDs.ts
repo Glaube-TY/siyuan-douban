@@ -4,6 +4,7 @@ import { downloadWereadCoverSafely } from './downloadWereadCover';
 import { ensureAttributeViewKeys, appendBookToAttributeView } from '../bookHandling/ensureAttributeViewKeys';
 import { bindBookToNote } from '../bookHandling/bindBookToNote';
 import { findBookByNormalizedTitle } from '../bookHandling/bookDeduplication';
+import { findBookPrimaryKeyValue } from '../bookHandling/bookDatabasePrimaryKey';
 import { renderBookNoteTemplate } from '../template/renderBookNoteTemplate';
 
 // 添加 useBookID 书籍到数据库
@@ -15,7 +16,7 @@ export async function addUseBookIDsToDatabase(plugin: any, avID: string, bookDet
     if (originalDatabasekeyValues && Array.isArray(originalDatabasekeyValues)) {
         // 查找 bookID 列
         const bookIDKey = originalDatabasekeyValues.find((kv: any) => kv.key?.name === "bookID");
-        const bookNameKey = originalDatabasekeyValues.find((kv: any) => kv.key?.name === "书名");
+        const bookNameKey = findBookPrimaryKeyValue(originalDatabasekeyValues);
 
         // 处理异常情况
         // 当用户直接删除读书笔记文档，数据库视图会同步删除，但是本地数据库文件中还保留了除书名以外的其他列内容
@@ -68,7 +69,7 @@ export async function addUseBookIDsToDatabase(plugin: any, avID: string, bookDet
     }
 
     // 定义书籍属性列
-    const requiredBookAttributes = ["书名", "封面", "作者", "译者", "出版社", "出版年", "ISBN", "定价", "书籍分类", "微信读书评分", "微信读书评分人数", "bookID"].reverse();
+    const requiredBookAttributes = ["封面", "作者", "译者", "出版社", "出版年", "ISBN", "定价", "书籍分类", "微信读书评分", "微信读书评分人数", "bookID"].reverse();
 
     // 确保数据库包含所有必需的属性列
     const databaseKeys = await ensureAttributeViewKeys(avID, requiredBookAttributes, getAttributeType);
@@ -174,13 +175,15 @@ function buildBlocksValues(databaseKeys: any[], bookDetail: any, _rowID: string)
             name: key.name
         };
 
-        switch (key.name) {
-            case "书名":
-                keyValue.block = {
-                    content: bookDetail.title || ""
-                };
-                break;
+        if (key.type === "block") {
+            keyValue.block = {
+                content: bookDetail.title || ""
+            };
+            blockValues.push(keyValue);
+            continue;
+        }
 
+        switch (key.name) {
             case "作者":
                 keyValue.text = {
                     content: bookDetail.authors || ""

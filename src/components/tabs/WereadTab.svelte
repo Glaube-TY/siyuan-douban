@@ -1,6 +1,8 @@
 <script lang="ts">
     import { showMessage, I18N } from "siyuan";
     import { sql, getAttributeView, removeAttributeViewBlocks } from "@/api";
+    import { getAttributeViewValueText } from "@/utils/bookHandling/bookDeduplication";
+    import { findBookPrimaryKeyValue } from "@/utils/bookHandling/bookDatabasePrimaryKey";
     import { onMount } from "svelte";
     import { svelteDialog } from "@/libs/dialog";
     import {
@@ -64,7 +66,7 @@
 
             const isbnKey = keyValues.find((item: any) => item.key?.name === "ISBN");
             const bookIDKey = keyValues.find((item: any) => item.key?.name === "bookID");
-            const bookNameKey = keyValues.find((item: any) => item.key?.name === "书名");
+            const bookNameKey = findBookPrimaryKeyValue(keyValues);
 
             let ISBNColumn = isbnKey?.values || [];
             let bookIDColumn = bookIDKey?.values || [];
@@ -88,7 +90,7 @@
 
                 const updatedISBNKey = keyValues.find((item: any) => item.key?.name === "ISBN");
                 const updatedBookIDKey = keyValues.find((item: any) => item.key?.name === "bookID");
-                const updatedBookNameKey = keyValues.find((item: any) => item.key?.name === "书名");
+                const updatedBookNameKey = findBookPrimaryKeyValue(keyValues);
                 ISBNColumn = updatedISBNKey?.values || [];
                 bookIDColumn = updatedBookIDKey?.values || [];
                 bookNameColumn = updatedBookNameKey?.values || [];
@@ -106,7 +108,7 @@
             );
             const validBookNames = new Set<string>(
                 bookNameColumn
-                    .map((item: any) => item.text?.content?.toString().trim())
+                    .map((item: any) => getAttributeViewValueText(item))
                     .filter((v): v is string => !!v)
             );
 

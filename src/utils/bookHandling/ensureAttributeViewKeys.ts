@@ -2,6 +2,7 @@ import { getAttributeViewKeysByAvID, addAttributeViewKey, appendAttributeViewDet
 import { getFrontend } from "siyuan";
 import { changeMainKeyName } from './changeMainKeyName';
 import { generateUniqueBlocked } from '../core/formatOp';
+import { BOOK_TITLE_KEY_NAME, findBookPrimaryKey, findBookPrimaryKeyValue } from './bookDatabasePrimaryKey';
 
 /**
  * 确保数据库包含所有必需的属性列
@@ -13,29 +14,52 @@ import { generateUniqueBlocked } from '../core/formatOp';
 export async function ensureAttributeViewKeys(
     avID: string,
     requiredAttributes: string[],
-    getAttributeType: (name: string) => string
+    getAttributeType: (name: string) => string | undefined
 ): Promise<any[]> {
-    let databaseKeys: any;
+    let databaseKeys = await getAttributeViewKeysByAvID(avID);
 
-    // 获取数据库详细列配置
-    databaseKeys = await getAttributeViewKeysByAvID(avID);
+    if (!Array.isArray(databaseKeys)) {
+        throw new Error("属性视图字段配置无效，无法确保数据库结构");
+    }
 
-    // 检查数据库主键是否为书名
-    if (databaseKeys[0].name !== "书名") {
-        await changeMainKeyName(avID);
+    const primaryKey = findBookPrimaryKey(databaseKeys);
+    if (!primaryKey || primaryKey.type !== "block") {
+        throw new Error("属性视图中未找到 type=block 的数据库主键");
+    }
+
+    if (primaryKey.name !== BOOK_TITLE_KEY_NAME) {
+        try {
+            await changeMainKeyName(avID);
+        } catch (error: any) {
+            console.warn(`[ensureAttributeViewKeys] 数据库主键自动改名失败，继续使用 type=block 主键: ${error?.message || error}`);
+        }
+
+        databaseKeys = await getAttributeViewKeysByAvID(avID);
+        if (!Array.isArray(databaseKeys)) {
+            throw new Error("数据库主键改名后字段回查结果无效");
+        }
     }
 
     // 检查并添加缺失的属性列
     for (const attributeName of requiredAttributes) {
+        if (attributeName === BOOK_TITLE_KEY_NAME) {
+            continue;
+        }
+
         const existingAttribute = databaseKeys.find((key: { name: string }) => key.name === attributeName);
 
         // 如果不存在，则添加该属性列
         if (!existingAttribute) {
+            const keyType = getAttributeType(attributeName);
+            if (!keyType) {
+                throw new Error(`未定义属性“${attributeName}”的字段类型，拒绝创建未知字段`);
+            }
+
             await addAttributeViewKey({
                 avID: avID,
                 keyID: generateUniqueBlocked(),
                 keyName: attributeName,
-                keyType: getAttributeType(attributeName),
+                keyType,
                 keyIcon: "",
                 previousKeyID: databaseKeys.at(-1)?.id || "",
             });
@@ -44,6 +68,9 @@ export async function ensureAttributeViewKeys(
 
     // 获取更新后的数据库列配置
     databaseKeys = await getAttributeViewKeysByAvID(avID);
+    if (!Array.isArray(databaseKeys)) {
+        throw new Error("数据库结构更新后字段回查结果无效");
+    }
 
     return databaseKeys;
 }
@@ -103,7 +130,7 @@ export async function appendBookToAttributeView(
                 const updatedDatabase = await getAttributeView(avID);
                 const updatedDatabaseKeyValues = updatedDatabase.av.keyValues;
 
-                const bookNameKeyNew = updatedDatabaseKeyValues.find((kv: any) => kv.key.name === "书名");
+                const bookNameKeyNew = findBookPrimaryKeyValue(updatedDatabaseKeyValues);
                 if (!bookNameKeyNew) {
                     lastError = new Error("数据库中找不到书名列");
                     continue;
@@ -145,7 +172,7 @@ export async function appendBookToAttributeView(
         const updatedDatabase = await getAttributeView(avID);
         const updatedDatabaseKeyValues = updatedDatabase.av.keyValues;
 
-        const bookNameKeyNew = updatedDatabaseKeyValues.find((kv: any) => kv.key.name === "书名");
+        const bookNameKeyNew = findBookPrimaryKeyValue(updatedDatabaseKeyValues);
         let blockID: string | null = null;
         let matchingValue = null;
 

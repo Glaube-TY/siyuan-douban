@@ -1,4 +1,6 @@
 import { sql, getAttributeView, removeAttributeViewBlocks } from "@/api";
+import { getAttributeViewValueText } from "../bookHandling/bookDeduplication";
+import { findBookPrimaryKeyValue } from "../bookHandling/bookDatabasePrimaryKey";
 
 export async function getCurrentValidBookIdentifiers(plugin: any): Promise<{
     validISBNs: Set<string>;
@@ -37,7 +39,7 @@ export async function getCurrentValidBookIdentifiers(plugin: any): Promise<{
 
         const isbnKey = keyValues.find((item: any) => item.key?.name === "ISBN");
         const bookIDKey = keyValues.find((item: any) => item.key?.name === "bookID");
-        const bookNameKey = keyValues.find((item: any) => item.key?.name === "书名");
+        const bookNameKey = findBookPrimaryKeyValue(keyValues);
 
         let ISBNColumn = isbnKey?.values || [];
         let bookIDColumn = bookIDKey?.values || [];
@@ -61,7 +63,7 @@ export async function getCurrentValidBookIdentifiers(plugin: any): Promise<{
 
             const updatedISBNKey = keyValues.find((item: any) => item.key?.name === "ISBN");
             const updatedBookIDKey = keyValues.find((item: any) => item.key?.name === "bookID");
-            const updatedBookNameKey = keyValues.find((item: any) => item.key?.name === "书名");
+            const updatedBookNameKey = findBookPrimaryKeyValue(keyValues);
             ISBNColumn = updatedISBNKey?.values || [];
             bookIDColumn = updatedBookIDKey?.values || [];
             bookNameColumn = updatedBookNameKey?.values || [];
@@ -79,7 +81,7 @@ export async function getCurrentValidBookIdentifiers(plugin: any): Promise<{
         );
         const validBookNames = new Set<string>(
             bookNameColumn
-                .map((item: any) => item.text?.content?.toString().trim())
+                .map((item: any) => getAttributeViewValueText(item))
                 .filter((v): v is string => !!v),
         );
 

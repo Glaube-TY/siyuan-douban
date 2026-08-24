@@ -4,6 +4,7 @@ import {
     getNoteDocumentBinding,
     validateNoteDocumentBindings,
 } from "../readingManagement/noteDocumentBinding";
+import { findBookPrimaryKeyValue } from "./bookDatabasePrimaryKey";
 
 function getTextValue(v: any): string {
     if (!v) return "";
@@ -63,7 +64,7 @@ export async function loadLocalBookShelfBooks(avID: string) {
 
     const findKey = (name: string) => keyValues.find((kv: any) => kv.key?.name === name);
 
-    const titleKey = findKey("书名");
+    const titleKey = findBookPrimaryKeyValue(keyValues);
     const coverKey = findKey("封面");
     const authorKey = findKey("作者");
     const publisherKey = findKey("出版社");

@@ -2,6 +2,7 @@ import { sql } from "../../api";
 import { DEFAULT_SETTINGS, loadPluginData } from "../core/configDefaults";
 import type { WorkbenchDatabaseStatus } from "../../types/workbench";
 import { t } from "../i18n";
+import { changeMainKeyName } from "../bookHandling/changeMainKeyName";
 
 type PluginLike = {
     loadData: (key: string) => Promise<any>;
@@ -62,6 +63,13 @@ export async function loadDatabaseSettings(plugin: PluginLike): Promise<Workbenc
 export async function saveDatabaseSettings(plugin: PluginLike, blockID: string): Promise<WorkbenchDatabaseStatus> {
     const current = await loadPluginData(plugin, "settings.json", DEFAULT_SETTINGS);
     const status = await validateDatabaseBlock(blockID, plugin);
+    if (status.valid && status.avID) {
+        try {
+            await changeMainKeyName(status.avID);
+        } catch (error: any) {
+            console.warn(`[databaseSettings] 数据库主键自动改名失败，保留有效连接: ${error?.message || error}`);
+        }
+    }
     await plugin.saveData("settings.json", {
         ...current,
         bookDatabaseID: status.valid ? status.blockID : String(blockID || "").trim(),

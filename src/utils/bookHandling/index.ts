@@ -4,6 +4,7 @@ import { getImage, downloadCover } from "@/utils/core/getImg";
 import { ensureAttributeViewKeys, appendBookToAttributeView } from './ensureAttributeViewKeys';
 import { bindBookToNote } from './bindBookToNote';
 import { findBookByNormalizedTitle } from './bookDeduplication';
+import { findBookPrimaryKeyValue } from './bookDatabasePrimaryKey';
 import { renderBookNoteTemplate } from '../template/renderBookNoteTemplate';
 
 export async function loadAVData(avID: string, fullData: any, plugin: any) {
@@ -16,7 +17,7 @@ export async function loadAVData(avID: string, fullData: any, plugin: any) {
         if (originalDatabasekeyValues && Array.isArray(originalDatabasekeyValues)) {
             // 查找 ISBN 列
             const isbnKey = originalDatabasekeyValues.find((kv: any) => kv.key?.name === "ISBN");
-            const bookNameKey = originalDatabasekeyValues.find((kv: any) => kv.key?.name === "书名");
+            const bookNameKey = findBookPrimaryKeyValue(originalDatabasekeyValues);
 
             // 处理异常情况
             // 当用户直接删除读书笔记文档，数据库视图会同步删除，但是本地数据库文件中还保留了除书名以外的其他列内容
@@ -69,7 +70,7 @@ export async function loadAVData(avID: string, fullData: any, plugin: any) {
         }
 
         // 定义书籍属性列
-        const requiredBookAttributes = ["书名", "封面", "副标题", "原作名", "作者", "译者", "出版社", "出版年", "出品方", "丛书", "ISBN", "豆瓣评分", "评分人数", "定价", "页数", "装帧", "我的评分", "书籍分类", "阅读状态", "开始日期", "读完日期", "书籍简介", "作者介绍"].reverse();
+        const requiredBookAttributes = ["封面", "副标题", "原作名", "作者", "译者", "出版社", "出版年", "出品方", "丛书", "ISBN", "豆瓣评分", "评分人数", "定价", "页数", "装帧", "我的评分", "书籍分类", "阅读状态", "开始日期", "读完日期", "书籍简介", "作者介绍"].reverse();
 
         // 确保数据库包含所有必需的属性列
         const databaseKeys = await ensureAttributeViewKeys(avID, requiredBookAttributes, getAttributeType);
@@ -194,13 +195,15 @@ function buildBlocksValues(databaseKeys: any[], fullData: any, _rowID: string) {
             name: key.name
         };
 
-        switch (key.name) {
-            case "书名":
-                keyValue.block = {
-                    content: fullData.title || ""
-                };
-                break;
+        if (key.type === "block") {
+            keyValue.block = {
+                content: fullData.title || ""
+            };
+            blockValues.push(keyValue);
+            continue;
+        }
 
+        switch (key.name) {
             case "副标题":
                 keyValue.text = {
                     content: fullData.subtitle || ""
