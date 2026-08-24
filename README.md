@@ -186,7 +186,7 @@
 <a href="https://glaube-ty.top/sites/siyuan-reading-notes/index.html" style="display:inline-block;padding:10px 18px;background:#7a3f18;color:#fff8e7;border-radius:9px;text-decoration:none;font-weight:600;">🌐 Official Website</a>
 <a href="https://glaube-ty.top/tutorials/siyuan-reading-notes/" style="display:inline-block;padding:10px 18px;background:#5b3a1e;color:#fff8e7;border-radius:9px;text-decoration:none;font-weight:600;">📖 User Guide</a>
 <a href="https://glaube-ty.top/tutorials/siyuan-reading-notes/changelog/" style="display:inline-block;padding:10px 18px;background:#31572c;color:#f7f1df;border-radius:9px;text-decoration:none;font-weight:600;">📅 Changelog</a>
-<a href="https://pd.qq.com/s/2ks4079x0" style="display:inline-block;padding:10px 18px;background:#334155;color:#f7f1df;border-radius:9px;text-decoration:none;font-weight:600;">💬 Discussion Channel</a>
+<a href="https://qm.qq.com/q/uVcJ5zLyGQ" style="display:inline-block;padding:10px 18px;background:#334155;color:#f7f1df;border-radius:9px;text-decoration:none;font-weight:600;">💬 QQ Group 1080145391</a>
 <a href="https://glaube-ty.top/da-shang/" style="display:inline-block;padding:10px 18px;background:#a16207;color:#fff8e7;border-radius:9px;text-decoration:none;font-weight:600;">💖 Support Development</a>
 </div>
 </div>
@@ -204,12 +204,12 @@
 
 <div style="margin-top:1.4em;padding:1.45em;background:#f3f8ed;border-left:5px solid #4d7c0f;border-radius:14px;">
 <h2 style="margin:0 0 .8em;color:#365314;">💬 Join the Discussion</h2>
-<p style="margin:.5em 0;color:#53633d;">I currently develop several SiYuan plugins. To keep communication and management in one place, these projects share the same Tencent channel. You are welcome to report issues, share your experience, or suggest features.</p>
+<p style="margin:.5em 0;color:#53633d;">I currently develop several SiYuan plugins. To keep communication and management in one place, these projects share the same QQ group. You are welcome to report issues, share your experience, or suggest features.</p>
 <div style="margin:1em 0;text-align:center;">
-<img src="https://glaube-ty.top/uploads/attachments/halo/efd8396d-eed5-40cd-a464-eb0da83fc008.webp" alt="Tencent Discussion Channel QR Code" loading="lazy" style="width:210px;max-width:100%;height:auto;border-radius:12px;border:1px solid #c9d9b6;box-shadow:0 8px 22px rgba(77,124,15,.14);">
+<img src="https://glaube-ty.oss-cn-chengdu.aliyuncs.com/img/QQGroup.jpg" alt="QQ Group 1080145391 QR code" loading="lazy" style="width:210px;max-width:100%;height:auto;border-radius:12px;border:1px solid #c9d9b6;box-shadow:0 8px 22px rgba(77,124,15,.14);">
 </div>
 <div style="text-align:center;">
-<a href="https://pd.qq.com/s/2ks4079x0" style="display:inline-block;padding:10px 20px;background:#4d7c0f;color:white;border-radius:9px;text-decoration:none;font-weight:600;">👥 Join the Tencent Discussion Channel</a>
+<a href="https://qm.qq.com/q/uVcJ5zLyGQ" style="display:inline-block;padding:10px 20px;background:#4d7c0f;color:white;border-radius:9px;text-decoration:none;font-weight:600;">👥 Join QQ Group (1080145391)</a>
 </div>
 </div>
 

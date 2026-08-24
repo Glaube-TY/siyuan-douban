@@ -59,7 +59,7 @@
                         </svg>
                         GitHub Issues
                     </a>
-                    <a href="https://pd.qq.com/s/2ks4079x0" target="_blank" class="tip-link">
+                    <a href="https://qm.qq.com/q/uVcJ5zLyGQ" target="_blank" rel="noopener noreferrer" class="tip-link">
                         👥 {plugin.i18n.firstDialog10}
                     </a>
                 </div>

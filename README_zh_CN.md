@@ -186,7 +186,7 @@
 <a href="https://glaube-ty.top/sites/siyuan-reading-notes/index.html" style="display:inline-block;padding:10px 18px;background:#7a3f18;color:#fff8e7;border-radius:9px;text-decoration:none;font-weight:600;">🌐 插件官网</a>
 <a href="https://glaube-ty.top/tutorials/siyuan-reading-notes/" style="display:inline-block;padding:10px 18px;background:#5b3a1e;color:#fff8e7;border-radius:9px;text-decoration:none;font-weight:600;">📖 使用教程</a>
 <a href="https://glaube-ty.top/tutorials/siyuan-reading-notes/changelog/" style="display:inline-block;padding:10px 18px;background:#31572c;color:#f7f1df;border-radius:9px;text-decoration:none;font-weight:600;">📅 更新日志</a>
-<a href="https://pd.qq.com/s/2ks4079x0" style="display:inline-block;padding:10px 18px;background:#334155;color:#f7f1df;border-radius:9px;text-decoration:none;font-weight:600;">💬 讨论频道</a>
+<a href="https://qm.qq.com/q/uVcJ5zLyGQ" style="display:inline-block;padding:10px 18px;background:#334155;color:#f7f1df;border-radius:9px;text-decoration:none;font-weight:600;">💬 QQ群 1080145391</a>
 <a href="https://glaube-ty.top/da-shang/" style="display:inline-block;padding:10px 18px;background:#a16207;color:#fff8e7;border-radius:9px;text-decoration:none;font-weight:600;">💖 支持开发</a>
 </div>
 </div>
@@ -204,12 +204,12 @@
 
 <div style="margin-top:1.4em;padding:1.45em;background:#f3f8ed;border-left:5px solid #4d7c0f;border-radius:14px;">
 <h2 style="margin:0 0 .8em;color:#365314;">💬 加入讨论</h2>
-<p style="margin:.5em 0;color:#53633d;">目前我在开发多个思源插件，为了方便统一交流与管理，这些项目共用同一个腾讯频道。欢迎反馈问题、分享使用经验或提出功能建议。</p>
+<p style="margin:.5em 0;color:#53633d;">目前我在开发多个思源插件，为了方便统一交流与管理，这些项目共用同一个 QQ 群。欢迎反馈问题、分享使用经验或提出功能建议。</p>
 <div style="margin:1em 0;text-align:center;">
-<img src="https://glaube-ty.top/uploads/attachments/halo/efd8396d-eed5-40cd-a464-eb0da83fc008.webp" alt="腾讯讨论频道二维码" loading="lazy" style="width:210px;max-width:100%;height:auto;border-radius:12px;border:1px solid #c9d9b6;box-shadow:0 8px 22px rgba(77,124,15,.14);">
+<img src="https://glaube-ty.oss-cn-chengdu.aliyuncs.com/img/QQGroup.jpg" alt="QQ群 1080145391 二维码" loading="lazy" style="width:210px;max-width:100%;height:auto;border-radius:12px;border:1px solid #c9d9b6;box-shadow:0 8px 22px rgba(77,124,15,.14);">
 </div>
 <div style="text-align:center;">
-<a href="https://pd.qq.com/s/2ks4079x0" style="display:inline-block;padding:10px 20px;background:#4d7c0f;color:white;border-radius:9px;text-decoration:none;font-weight:600;">👥 加入腾讯讨论频道</a>
+<a href="https://qm.qq.com/q/uVcJ5zLyGQ" style="display:inline-block;padding:10px 20px;background:#4d7c0f;color:white;border-radius:9px;text-decoration:none;font-weight:600;">👥 加入 QQ 群（1080145391）</a>
 </div>
 </div>
 

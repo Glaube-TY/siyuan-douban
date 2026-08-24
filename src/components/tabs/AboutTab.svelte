@@ -12,7 +12,7 @@
         douban: "https://book.douban.com/",
         weread: "https://weread.qq.com/",
         issues: "https://github.com/Glaube-TY/siyuan-douban/issues",
-        tencent: "https://pd.qq.com/s/2ks4079x0",
+        qqGroup: "https://qm.qq.com/q/uVcJ5zLyGQ",
         tutorial: READING_NOTES_LINKS.tutorial,
         donate: READING_NOTES_LINKS.donate,
     };
@@ -66,7 +66,7 @@
                 <span class="label">{i18n.pluginFeedback}：</span>
                 <a href={LINKS.issues} class="link">{i18n.pluginFeedbackLink1}</a>
                 <span>/</span>
-                <a href={LINKS.tencent} class="link">{i18n.pluginFeedbackLink2}</a>
+                <a href={LINKS.qqGroup} class="link" target="_blank" rel="noopener noreferrer">{i18n.pluginFeedbackLink2}</a>
             </div>
         </div>
     </div>
