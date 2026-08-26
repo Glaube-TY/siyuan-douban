@@ -8,6 +8,7 @@
     import DoubanBookDetailDialog from "../bookSearch/DoubanBookDetailDialog.svelte";
     import type { WorkbenchAction, WorkbenchSearchResult } from "../../types/workbench";
     import { addEditedDoubanBookToDatabase, loadDoubanBookDetail, loadDoubanBookPreferences, searchDoubanBook } from "../../utils/bookSearch/doubanSearchService";
+    import { inspectDoubanLocalBookMatch, updateEditedDoubanBookInDatabase } from "../../utils/bookSearch/doubanBookUpdateService";
     import { openLocalBookResult, searchLocalBooks } from "../../utils/bookSearch/localBookSearchService";
     import { openWereadBookResult, searchWereadLibraryBooks } from "../../utils/bookSearch/wereadBookSearchService";
     import { getImage } from "../../utils/core/getImg";
@@ -184,7 +185,7 @@
         const detailResult = result;
         const detailRequestId = searchRequestId;
         const detailKeyword = query.trim();
-        let addedSuccessfully = false;
+        let actionCompletedSuccessfully = false;
         const isDetailContextCurrent = () =>
             detailRequestId === searchRequestId
             && query.trim() === detailKeyword
@@ -204,21 +205,42 @@
                 clearStaleDetailState();
                 return;
             }
-            const preferences = await loadDoubanBookPreferences(plugin);
-            if (!isDetailContextCurrent()) {
-                clearStaleDetailState();
-                return;
-            }
             const bookRaw = result.raw as any;
             const bookInfo = {
                 ...bookRaw,
                 addNotes: bookRaw.addNotes ?? true,
             };
+            const localMatch = await inspectDoubanLocalBookMatch(plugin, bookInfo);
+            if (!isDetailContextCurrent()) {
+                clearStaleDetailState();
+                return;
+            }
+            if (localMatch.status === "ambiguous") {
+                const message = tx(
+                    "bookDuplicateIsbnAmbiguous",
+                    "本地存在多个相同 ISBN 的书籍，无法安全更新，请先整理数据库。",
+                );
+                clearStaleDetailState();
+                statusText = message;
+                showMessage(message);
+                return;
+            }
+            const preferences = await loadDoubanBookPreferences(plugin);
+            if (!isDetailContextCurrent()) {
+                clearStaleDetailState();
+                return;
+            }
+            const actionMode = localMatch.status === "matched" ? "update" : "add";
+            let alreadySubmitting = false;
 
-            statusText = tx("searchDetailOpened", "已打开豆瓣图书详情，请确认修改后添加");
+            statusText = actionMode === "update"
+                ? tx("bookLocalExistsUpdate", "本地已存在相同 ISBN 的书籍，可增量更新豆瓣字段")
+                : tx("searchDetailOpened", "已打开豆瓣图书详情，请确认修改后添加");
 
             const dialogRef = svelteDialog({
-                title: tx("searchConfirmTitle", "确认添加：{title}", { title: bookInfo.title || tx("searchDoubanBook", "豆瓣图书") }),
+                title: actionMode === "update"
+                    ? tx("bookUpdateConfirmTitle", "确认更新：{title}", { title: bookInfo.title || tx("searchDoubanBook", "豆瓣图书") })
+                    : tx("searchConfirmTitle", "确认添加：{title}", { title: bookInfo.title || tx("searchDoubanBook", "豆瓣图书") }),
                 width: mobile ? "100vw" : "min(780px, 94vw)",
                 height: mobile ? "100dvh" : "min(780px, 88vh)",
                 constructor: (container: HTMLElement) =>
@@ -231,6 +253,9 @@
                             customReadingStatuses: preferences.statuses,
                             i18n: plugin.i18n,
                             mobile,
+                            actionMode,
+                            localMatch: localMatch.status === "matched" ? localMatch : null,
+                            submitting: false,
                             close: () => dialogRef.close(),
                         },
                     }),
@@ -238,7 +263,7 @@
                     isDoubanDetailOpen = false;
                     selectedResult = null;
                     if (
-                        !addedSuccessfully
+                        !actionCompletedSuccessfully
                         && detailRequestId === searchRequestId
                         && query.trim() === detailKeyword
                         && hasSearched
@@ -251,23 +276,48 @@
                 dialogRef.dialog.element.classList.add("siyuan-douban-mobile-detail-dialog");
             }
 
+            const setDialogSubmitting = (submitting: boolean) => {
+                try {
+                    dialogRef.component?.$set({ submitting });
+                } catch {
+                }
+            };
+
             dialogRef.component.$on("confirm", async (event: CustomEvent<any>) => {
+                if (alreadySubmitting) return;
+                alreadySubmitting = true;
+                setDialogSubmitting(true);
                 const editedBookInfo = event.detail;
                 try {
-                    const saveResult = await addEditedDoubanBookToDatabase(plugin, editedBookInfo);
+                    const saveResult: any = actionMode === "update"
+                        ? await updateEditedDoubanBookInDatabase(plugin, editedBookInfo, localMatch)
+                        : await addEditedDoubanBookToDatabase(plugin, editedBookInfo);
                     showMessage(saveResult?.msg || (saveResult?.code === 0
-                        ? tx("searchAddSuccess", "书籍添加成功")
-                        : tx("searchAddFailed", "书籍添加失败")));
+                        ? actionMode === "update"
+                            ? tx("bookUpdateSuccess", "书籍字段更新成功")
+                            : tx("searchAddSuccess", "书籍添加成功")
+                        : actionMode === "update"
+                            ? tx("bookUpdateFailed", "书籍字段更新失败")
+                            : tx("searchAddFailed", "书籍添加失败")));
                     if (saveResult?.code === 0) {
-                        addedSuccessfully = true;
+                        actionCompletedSuccessfully = true;
                         selectedResult = null;
                         isDoubanDetailOpen = false;
-                        statusText = tx("searchAddSuccess", "书籍添加成功");
+                        statusText = actionMode === "update"
+                            ? (saveResult.updatedFields?.length
+                                ? tx("bookUpdateSuccess", "书籍字段更新成功")
+                                : tx("bookUpdateNoChanges", "本地字段已是最新，无需更新"))
+                            : tx("searchAddSuccess", "书籍添加成功");
                         dispatch("refresh");
                         dialogRef.close();
                     }
-                } catch (e) {
-                    showMessage(tx("searchAddFailedDetail", "添加失败：{error}", { error: e?.message || tx("uiUnknownError", "未知错误") }));
+                } catch (e: any) {
+                    showMessage(actionMode === "update"
+                        ? tx("bookUpdateFailedDetail", "更新失败：{error}", { error: e?.message || tx("uiUnknownError", "未知错误") })
+                        : tx("searchAddFailedDetail", "添加失败：{error}", { error: e?.message || tx("uiUnknownError", "未知错误") }));
+                } finally {
+                    alreadySubmitting = false;
+                    if (!actionCompletedSuccessfully) setDialogSubmitting(false);
                 }
             });
         } catch (error: any) {

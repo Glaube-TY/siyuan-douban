@@ -10,14 +10,16 @@
     export let mobile = false;
     export let i18n: any = {};
     export let close: () => void = () => {};
+    export let actionMode: "add" | "update" = "add";
+    export let localMatch: { title?: string; isbn?: string } | null = null;
+    export let submitting = false;
 
     const dispatch = createEventDispatcher<{ confirm: any }>();
-    const tx = (key: string, fallback: string) => t(i18n, key, fallback);
+    const tx = (key: string, fallback: string, params: Record<string, string | number> = {}) => t(i18n, key, fallback, params);
 
     let coverData = "";
     let showCover = false;
     let loadedCoverUrl = "";
-    let isAdding = false;
     let myRatingIndex = 0;
     let bookCategoryIndex = 0;
     let readingStatusIndex = 0;
@@ -42,26 +44,28 @@
         showCover = false;
     }
 
-    async function handleAdd() {
-        if (!bookInfo) return;
-        isAdding = true;
-        try {
-            dispatch("confirm", {
-                ...bookInfo,
+    function handleAdd() {
+        if (!bookInfo || submitting) return;
+        dispatch("confirm", {
+            ...bookInfo,
+            ...(actionMode === "add" ? {
                 myRating: customRatings[myRatingIndex] || "",
                 bookCategory: customCategories[bookCategoryIndex] || "",
                 readingStatus: customReadingStatuses[readingStatusIndex] || "",
                 startDate: bookInfo.startDate || "",
                 finishDate: bookInfo.finishDate || "",
                 publishDate: bookInfo.publishDate || "",
-            });
-        } finally {
-            isAdding = false;
-        }
+            } : {}),
+        });
     }
 </script>
 
 <div class="douban-detail-dialog" class:douban-detail-dialog-mobile={mobile}>
+    {#if actionMode === "update"}
+        <div class="book-update-notice">
+            <strong>{tx("bookLocalExistsUpdate", "匹配到已经存在的 ISBN 的同样书籍，可以进行增量更新")}</strong>
+        </div>
+    {/if}
     {#if mobile}
         <div class="douban-detail-body douban-detail-mobile-body">
             <section class="mobile-book-summary">
@@ -104,20 +108,22 @@
                 </div>
             </details>
 
-            <details class="mobile-detail-section" open>
-                <summary><span>{tx("bookMyReading", "我的阅读记录")}</span><small>{tx("bookMyReadingDesc", "分类、状态与日期")}</small></summary>
-                <div class="mobile-note-toggle">
-                    <span><strong>{tx("bookGenerateNote", "生成读书笔记")}</strong><small>{tx("bookGenerateNoteDesc", "添加书籍后创建对应笔记文档")}</small></span>
-                    <input type="checkbox" bind:checked={bookInfo.addNotes} />
-                </div>
-                <div class="mobile-detail-fields">
-                    <label><span>{tx("bookMyRating", "我的评分")}</span><select class="b3-select" bind:value={myRatingIndex}>{#each customRatings as rating, index}<option value={index}>{rating}</option>{/each}</select></label>
-                    <label><span>{tx("bookCategory", "书籍分类")}</span><select class="b3-select" bind:value={bookCategoryIndex}>{#each customCategories as category, index}<option value={index}>{category}</option>{/each}</select></label>
-                    <label><span>{tx("bookReadingStatus", "阅读状态")}</span><select class="b3-select" bind:value={readingStatusIndex}>{#each customReadingStatuses as status, index}<option value={index}>{status}</option>{/each}</select></label>
-                    <label><span>{tx("bookStartDate", "开始日期")}</span><input type="date" class="b3-text-field" bind:value={bookInfo.startDate} /></label>
-                    <label><span>{tx("bookFinishDate", "读完日期")}</span><input type="date" class="b3-text-field" bind:value={bookInfo.finishDate} /></label>
-                </div>
-            </details>
+            {#if actionMode === "add"}
+                <details class="mobile-detail-section" open>
+                    <summary><span>{tx("bookMyReading", "我的阅读记录")}</span><small>{tx("bookMyReadingDesc", "分类、状态与日期")}</small></summary>
+                    <div class="mobile-note-toggle">
+                        <span><strong>{tx("bookGenerateNote", "生成读书笔记")}</strong><small>{tx("bookGenerateNoteDesc", "添加书籍后创建对应笔记文档")}</small></span>
+                        <input type="checkbox" bind:checked={bookInfo.addNotes} />
+                    </div>
+                    <div class="mobile-detail-fields">
+                        <label><span>{tx("bookMyRating", "我的评分")}</span><select class="b3-select" bind:value={myRatingIndex}>{#each customRatings as rating, index}<option value={index}>{rating}</option>{/each}</select></label>
+                        <label><span>{tx("bookCategory", "书籍分类")}</span><select class="b3-select" bind:value={bookCategoryIndex}>{#each customCategories as category, index}<option value={index}>{category}</option>{/each}</select></label>
+                        <label><span>{tx("bookReadingStatus", "阅读状态")}</span><select class="b3-select" bind:value={readingStatusIndex}>{#each customReadingStatuses as status, index}<option value={index}>{status}</option>{/each}</select></label>
+                        <label><span>{tx("bookStartDate", "开始日期")}</span><input type="date" class="b3-text-field" bind:value={bookInfo.startDate} /></label>
+                        <label><span>{tx("bookFinishDate", "读完日期")}</span><input type="date" class="b3-text-field" bind:value={bookInfo.finishDate} /></label>
+                    </div>
+                </details>
+            {/if}
 
             <details class="mobile-detail-section">
                 <summary><span>{tx("bookContentIntro", "内容简介")}</span><small>{tx("bookContentIntroDesc", "展开查看和修改长文本")}</small></summary>
@@ -145,10 +151,12 @@
                                 {:else}
                                     <div class="book-cover book-cover-placeholder">{tx("bookNoCover", "暂无封面")}</div>
                                 {/if}
-                                <label class="book-cover-note-toggle">
-                                    <span>{tx("bookGenerateNote", "生成读书笔记")}</span>
-                                    <input type="checkbox" class="book-note-checkbox" bind:checked={bookInfo.addNotes} />
-                                </label>
+                                {#if actionMode === "add"}
+                                    <label class="book-cover-note-toggle">
+                                        <span>{tx("bookGenerateNote", "生成读书笔记")}</span>
+                                        <input type="checkbox" class="book-note-checkbox" bind:checked={bookInfo.addNotes} />
+                                    </label>
+                                {/if}
                             </div>
                             <div class="book-title-panel">
                                 <div class="field field-full">
@@ -199,41 +207,43 @@
                         </div>
                     </div>
 
-                    <div class="book-section">
-                        <div class="book-section-title">{tx("bookPersonalRecord", "个人记录")}</div>
-                        <div class="book-info-grid">
-                            <div class="field field-third">
-                                <label>
-                                    <span>{tx("bookMyRating", "我的评分")}</span>
-                                    <select class="b3-select" bind:value={myRatingIndex}>
-                                        {#each customRatings as rating, index}<option value={index}>{rating}</option>{/each}
-                                    </select>
-                                </label>
-                            </div>
-                            <div class="field field-third">
-                                <label>
-                                    <span>{tx("bookCategory", "书籍分类")}</span>
-                                    <select class="b3-select" bind:value={bookCategoryIndex}>
-                                        {#each customCategories as category, index}<option value={index}>{category}</option>{/each}
-                                    </select>
-                                </label>
-                            </div>
-                            <div class="field field-third">
-                                <label>
-                                    <span>{tx("bookReadingStatus", "阅读状态")}</span>
-                                    <select class="b3-select" bind:value={readingStatusIndex}>
-                                        {#each customReadingStatuses as status, index}<option value={index}>{status}</option>{/each}
-                                    </select>
-                                </label>
-                            </div>
-                            <div class="field field-half">
-                                <label><span>{tx("bookStartDate", "开始日期")}</span><input type="date" class="b3-text-field" bind:value={bookInfo.startDate} /></label>
-                            </div>
-                            <div class="field field-half">
-                                <label><span>{tx("bookFinishDate", "读完日期")}</span><input type="date" class="b3-text-field" bind:value={bookInfo.finishDate} /></label>
+                    {#if actionMode === "add"}
+                        <div class="book-section">
+                            <div class="book-section-title">{tx("bookPersonalRecord", "个人记录")}</div>
+                            <div class="book-info-grid">
+                                <div class="field field-third">
+                                    <label>
+                                        <span>{tx("bookMyRating", "我的评分")}</span>
+                                        <select class="b3-select" bind:value={myRatingIndex}>
+                                            {#each customRatings as rating, index}<option value={index}>{rating}</option>{/each}
+                                        </select>
+                                    </label>
+                                </div>
+                                <div class="field field-third">
+                                    <label>
+                                        <span>{tx("bookCategory", "书籍分类")}</span>
+                                        <select class="b3-select" bind:value={bookCategoryIndex}>
+                                            {#each customCategories as category, index}<option value={index}>{category}</option>{/each}
+                                        </select>
+                                    </label>
+                                </div>
+                                <div class="field field-third">
+                                    <label>
+                                        <span>{tx("bookReadingStatus", "阅读状态")}</span>
+                                        <select class="b3-select" bind:value={readingStatusIndex}>
+                                            {#each customReadingStatuses as status, index}<option value={index}>{status}</option>{/each}
+                                        </select>
+                                    </label>
+                                </div>
+                                <div class="field field-half">
+                                    <label><span>{tx("bookStartDate", "开始日期")}</span><input type="date" class="b3-text-field" bind:value={bookInfo.startDate} /></label>
+                                </div>
+                                <div class="field field-half">
+                                    <label><span>{tx("bookFinishDate", "读完日期")}</span><input type="date" class="b3-text-field" bind:value={bookInfo.finishDate} /></label>
+                                </div>
                             </div>
                         </div>
-                    </div>
+                    {/if}
 
                     <div class="book-section">
                         <div class="book-section-title">{tx("bookDescription", "书籍简介")}</div>
@@ -252,8 +262,10 @@
 
     <div class="douban-detail-footer">
         <button class="b3-button b3-button--outline" on:click={close}>{tx("cancel", "取消")}</button>
-        <button class="b3-button b3-button--primary" on:click={handleAdd} disabled={isAdding}>
-            {isAdding ? tx("bookAdding", "添加中...") : tx("bookAdd", "添加书籍")}
+        <button class="b3-button b3-button--primary" on:click={handleAdd} disabled={submitting}>
+            {submitting
+                ? (actionMode === "update" ? tx("bookUpdating", "更新中...") : tx("bookAdding", "添加中..."))
+                : (actionMode === "update" ? tx("bookUpdateFields", "更新字段") : tx("bookAdd", "添加书籍"))}
         </button>
     </div>
 </div>
@@ -268,6 +280,28 @@
         overflow: hidden;
         box-sizing: border-box;
         color: var(--b3-theme-on-background);
+    }
+
+    .book-update-notice {
+        display: grid;
+        flex: 0 0 auto;
+        margin: 12px 16px 0;
+        padding: 10px 12px;
+        border: 1px solid color-mix(in srgb, var(--b3-theme-primary) 28%, var(--b3-border-color));
+        border-radius: 6px;
+        background: var(--b3-theme-surface);
+        color: var(--b3-theme-on-surface);
+        font-size: 12px;
+        line-height: 1.45;
+    }
+
+    .book-update-notice strong {
+        color: var(--b3-theme-primary);
+        font-weight: 600;
+    }
+
+    .douban-detail-dialog-mobile .book-update-notice {
+        margin: 12px 12px 0;
     }
 
     .douban-detail-body {

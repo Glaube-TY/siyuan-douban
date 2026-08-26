@@ -595,6 +595,21 @@ export async function setAttributeViewBlockAttr(payload: {
 }
 
 
+export async function setAttributeViewBlockAttrStrict(payload: {
+    avID: string;
+    keyID: string;
+    itemID: string;
+    cellID?: string;
+    value: any;
+}): Promise<any> {
+    const response: IWebSocketData = await fetchSyncPost('/api/av/setAttributeViewBlockAttr', payload);
+    if (response.code !== 0) {
+        throw new Error(response.msg || "数据库字段更新失败");
+    }
+    return response.data;
+}
+
+
 // **************************************** UI ****************************************
 
 export async function reloadAttributeView(id: string): Promise<any> {
