@@ -10,6 +10,8 @@ export interface WorkbenchSearchResult {
     bookID?: string;
     noteDocId?: string;
     description?: string;
+    matchScore?: number;
+    matchPercent?: number;
     raw?: unknown;
 }
 

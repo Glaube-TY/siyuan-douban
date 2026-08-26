@@ -4,9 +4,11 @@
     import SiYuanIcon from "../common/SiYuanIcon.svelte";
     import ContextTutorialLink from "../common/ContextTutorialLink.svelte";
     import { READING_NOTES_LINKS } from "../../utils/core/externalLinks";
+    import { secureExternalImageUrl } from "../../utils/core/externalImageUrl";
     import DoubanBookDetailDialog from "../bookSearch/DoubanBookDetailDialog.svelte";
     import type { WorkbenchAction, WorkbenchSearchResult } from "../../types/workbench";
     import { addEditedDoubanBookToDatabase, loadDoubanBookDetail, loadDoubanBookPreferences, searchDoubanBook } from "../../utils/bookSearch/doubanSearchService";
+    import { openLocalBookResult, searchLocalBooks } from "../../utils/bookSearch/localBookSearchService";
     import { getImage } from "../../utils/core/getImg";
     import { svelteDialog } from "../../libs/dialog";
     import { t } from "../../utils/i18n";
@@ -17,50 +19,108 @@
     const dispatch = createEventDispatcher<{ action: WorkbenchAction; refresh: void }>();
 
     let query = "";
-    let results: WorkbenchSearchResult[] = [];
+    let localResults: WorkbenchSearchResult[] = [];
+    let doubanResults: WorkbenchSearchResult[] = [];
     let selectedResult: WorkbenchSearchResult | null = null;
     const tx = (key: string, fallback: string, params: Record<string, string | number> = {}) =>
         t(plugin, key, fallback, params);
-    let statusText = tx("searchIntro", "搜索豆瓣书名、ISBN 或作者后导入本地数据库");
-    let isSearching = false;
+    let statusText = tx("searchIntro", "优先搜索本地书籍与笔记内容，需要时可继续搜索豆瓣书籍。");
+    let isLocalSearching = false;
+    let isDoubanSearching = false;
+    let hasLocalSearched = false;
     let isDoubanDetailOpen = false;
     let previewCovers: Record<string, string> = {};
 
-    async function loadResultCoverPreviews(items: WorkbenchSearchResult[]) {
+    function resultKey(result: WorkbenchSearchResult): string {
+        return `${result.source}:${result.id}`;
+    }
+
+    function isSelected(result: WorkbenchSearchResult): boolean {
+        return selectedResult?.source === result.source && selectedResult?.id === result.id;
+    }
+
+    function handleQueryInput() {
+        localResults = [];
+        doubanResults = [];
+        previewCovers = {};
+        selectedResult = null;
+        hasLocalSearched = false;
+        statusText = tx("searchIntro", "优先搜索本地书籍与笔记内容，需要时可继续搜索豆瓣书籍。");
+    }
+
+    async function loadDoubanCoverPreviews(items: WorkbenchSearchResult[]) {
         const next: Record<string, string> = {};
         await Promise.all(items.slice(0, 10).map(async (item) => {
-            if (!item.cover) return;
+            if (item.source !== "douban" || !item.cover) return;
             const data = await getImage(item.cover, `https://book.douban.com/subject/${item.id}/`);
-            if (data) next[item.id] = data;
+            if (data) next[resultKey(item)] = data;
         }));
         previewCovers = { ...previewCovers, ...next };
     }
 
-    async function runSearch() {
-        if (isSearching) return;
-        isSearching = true;
+    async function runLocalSearch() {
+        if (isLocalSearching || isDoubanSearching) return;
+        const keyword = query.trim();
+        localResults = [];
+        doubanResults = [];
+        previewCovers = {};
         selectedResult = null;
+        hasLocalSearched = false;
+        if (!keyword) {
+            statusText = tx("searchEnterQuery", "请输入搜索内容");
+            return;
+        }
+
+        isLocalSearching = true;
         try {
-            results = await searchDoubanBook(plugin, query);
-            statusText = results.length
-                ? tx("searchFound", "找到 {count} 条结果", { count: results.length })
-                : tx("searchNoResult", "暂无匹配结果");
-            previewCovers = {};
-            void loadResultCoverPreviews(results);
-            if (results.length === 1 && (results[0].raw as any)?.detailLoaded) {
-                await openDoubanDetailDialog(results[0]);
-            }
+            const nextResults = await searchLocalBooks(plugin, keyword);
+            if (query.trim() !== keyword) return;
+            localResults = nextResults;
+            hasLocalSearched = true;
+            statusText = nextResults.length
+                ? tx("searchLocalFound", "本地找到 {count} 本匹配书籍", { count: nextResults.length })
+                : tx("searchLocalNoResult", "本地暂无匹配内容，可继续搜索豆瓣书籍");
         } catch (error: any) {
-            results = [];
+            if (query.trim() !== keyword) return;
+            localResults = [];
+            hasLocalSearched = true;
             statusText = error?.message || tx("searchFailed", "搜索失败");
             showMessage(statusText);
         } finally {
-            isSearching = false;
+            isLocalSearching = false;
+        }
+    }
+
+    async function runDoubanSearch() {
+        const keyword = query.trim();
+        if (!keyword || isDoubanSearching) return;
+        isDoubanSearching = true;
+        selectedResult = null;
+        try {
+            const nextResults = await searchDoubanBook(plugin, keyword);
+            if (query.trim() !== keyword) return;
+            doubanResults = nextResults;
+            statusText = nextResults.length
+                ? tx("searchDoubanFound", "豆瓣找到 {count} 本匹配书籍", { count: nextResults.length })
+                : tx("searchDoubanNoResult", "豆瓣暂无匹配结果");
+            previewCovers = {};
+            void loadDoubanCoverPreviews(nextResults);
+            if (nextResults.length === 1 && (nextResults[0].raw as any)?.detailLoaded) {
+                await openDoubanDetailDialog(nextResults[0]);
+            }
+        } catch (error: any) {
+            if (query.trim() !== keyword) return;
+            doubanResults = [];
+            previewCovers = {};
+            statusText = error?.message || tx("searchFailed", "搜索失败");
+            showMessage(statusText);
+        } finally {
+            isDoubanSearching = false;
         }
     }
 
     async function openDoubanDetailDialog(result: WorkbenchSearchResult) {
-        if (!result || !result.raw) return;
+        if (!result || result.source !== "douban" || !result.raw) return;
         selectedResult = result;
         isDoubanDetailOpen = true;
         statusText = tx("searchLoadingDetail", "正在加载豆瓣书籍详情...");
@@ -95,7 +155,8 @@
                     }),
                 callback: () => {
                     isDoubanDetailOpen = false;
-                    results = [];
+                    doubanResults = [];
+                    previewCovers = {};
                     selectedResult = null;
                 },
             });
@@ -111,7 +172,8 @@
                         ? tx("searchAddSuccess", "书籍添加成功")
                         : tx("searchAddFailed", "书籍添加失败")));
                     if (saveResult?.code === 0) {
-                        results = [];
+                        doubanResults = [];
+                        previewCovers = {};
                         selectedResult = null;
                         isDoubanDetailOpen = false;
                         statusText = tx("searchAddSuccess", "书籍添加成功");
@@ -131,7 +193,9 @@
 
     async function chooseResult(result: WorkbenchSearchResult) {
         selectedResult = result;
-        if (result.raw) {
+        if (result.source === "local") {
+            openLocalBookResult(plugin, result);
+        } else if (result.source === "douban") {
             await openDoubanDetailDialog(result);
         }
     }
@@ -159,13 +223,14 @@
                 inputmode="search"
                 enterkeyhint="search"
                 autocomplete="off"
-                placeholder={tx("searchInputPlaceholder", "搜索书名、ISBN 或作者")}
-                on:keydown={(event) => event.key === "Enter" && runSearch()}
+                placeholder={tx("searchInputPlaceholder", "搜索书名、作者、简介、笔记内容等")}
+                on:input={handleQueryInput}
+                on:keydown={(event) => event.key === "Enter" && runLocalSearch()}
             />
         </label>
-        <button class="workbench-button workbench-button-primary" on:click={runSearch} disabled={isSearching}>
+        <button class="workbench-button workbench-button-primary" on:click={runLocalSearch} disabled={isLocalSearching || isDoubanSearching}>
             <SiYuanIcon name="search" size={15} />
-            <span>{isSearching ? tx("searchSearching", "搜索中") : t(plugin, "searchButton", "搜索")}</span>
+            <span>{isLocalSearching ? tx("searchSearching", "搜索中") : t(plugin, "searchButton", "搜索")}</span>
         </button>
     </div>
 
@@ -173,26 +238,71 @@
         <span>{statusText}</span>
     </div>
 
-    {#if results.length > 0 && !isDoubanDetailOpen}
-        <div class="workbench-search-results">
-            {#each results as result (result.id)}
-                <button
-                    class:active={selectedResult?.id === result.id}
-                    class="workbench-search-result"
-                    on:click={() => chooseResult(result)}
-                >
-                    {#if previewCovers[result.id]}
-                        <img src={previewCovers[result.id]} alt="" />
-                    {:else}
-                        <span class="workbench-search-result-placeholder"><SiYuanIcon name="book" size={18} /></span>
-                    {/if}
-                    <span class="workbench-search-result-main">
-                        <strong>{result.title}</strong>
-                        <em>{result.author || result.isbn || result.description || tx("searchNoSummary", "暂无摘要")}</em>
-                    </span>
-                    <span class="workbench-search-result-source">{tx("searchDoubanBook", "豆瓣图书")}</span>
+    {#if hasLocalSearched && !isDoubanDetailOpen}
+        <div class="workbench-search-results-group">
+            <h3>{tx("searchLocalResults", "本地搜索结果")}</h3>
+            {#if localResults.length > 0}
+                <div class="workbench-search-results">
+                    {#each localResults as result (result.source + ":" + result.id)}
+                        <button
+                            type="button"
+                            class:active={isSelected(result)}
+                            class="workbench-search-result"
+                            on:click={() => chooseResult(result)}
+                        >
+                            {#if result.cover}
+                                <img src={secureExternalImageUrl(result.cover)} alt="" />
+                            {:else}
+                                <span class="workbench-search-result-placeholder"><SiYuanIcon name="book" size={18} /></span>
+                            {/if}
+                            <span class="workbench-search-result-main">
+                                <strong>{result.title}</strong>
+                            </span>
+                            <span class="workbench-search-result-meta">
+                                <span class="workbench-search-result-source">{tx("searchLocalBook", "本地书籍")}</span>
+                                {#if result.matchPercent !== undefined}
+                                    <span class="workbench-search-result-match">{tx("searchMatchPercent", "命中度 {percent}%", { percent: result.matchPercent })}</span>
+                                {/if}
+                            </span>
+                        </button>
+                    {/each}
+                </div>
+            {:else}
+                <div class="workbench-search-empty">{tx("searchLocalNoResult", "本地暂无匹配内容，可继续搜索豆瓣书籍")}</div>
+            {/if}
+            {#if query.trim()}
+                <button type="button" class="workbench-button workbench-search-douban-button" on:click={runDoubanSearch} disabled={isDoubanSearching}>
+                    <SiYuanIcon name="search" size={15} />
+                    <span>{isDoubanSearching ? tx("searchDoubanSearching", "搜索豆瓣中") : tx("searchDoubanContinue", "搜索豆瓣书籍")}</span>
                 </button>
-            {/each}
+            {/if}
+        </div>
+    {/if}
+
+    {#if doubanResults.length > 0 && !isDoubanDetailOpen}
+        <div class="workbench-search-results-group">
+            <h3>{tx("searchDoubanResults", "豆瓣搜索结果")}</h3>
+            <div class="workbench-search-results">
+                {#each doubanResults as result (result.source + ":" + result.id)}
+                    <button
+                        type="button"
+                        class:active={isSelected(result)}
+                        class="workbench-search-result"
+                        on:click={() => chooseResult(result)}
+                    >
+                        {#if previewCovers[resultKey(result)]}
+                            <img src={previewCovers[resultKey(result)]} alt="" />
+                        {:else}
+                            <span class="workbench-search-result-placeholder"><SiYuanIcon name="book" size={18} /></span>
+                        {/if}
+                        <span class="workbench-search-result-main">
+                            <strong>{result.title}</strong>
+                            <em>{result.author || result.isbn || result.description || tx("searchNoSummary", "暂无摘要")}</em>
+                        </span>
+                        <span class="workbench-search-result-source">{tx("searchDoubanBook", "豆瓣图书")}</span>
+                    </button>
+                {/each}
+            </div>
         </div>
     {/if}
 </section>
@@ -316,6 +426,27 @@
         font-size: 12px;
     }
 
+    .workbench-search-results-group {
+        display: grid;
+        gap: 8px;
+    }
+
+    .workbench-search-results-group h3 {
+        margin: 0;
+        color: var(--b3-theme-on-background);
+        font-size: 13px;
+        line-height: 1.3;
+    }
+
+    .workbench-search-empty {
+        color: var(--b3-theme-on-surface-light);
+        font-size: 12px;
+    }
+
+    .workbench-search-douban-button {
+        justify-self: start;
+    }
+
     .workbench-search-results {
         display: grid;
         grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -380,9 +511,19 @@
         font-style: normal;
     }
 
-    .workbench-search-result-source {
+    .workbench-search-result-meta {
+        display: grid;
+        gap: 2px;
+        justify-items: end;
+        min-width: max-content;
+    }
+
+    .workbench-search-result-source,
+    .workbench-search-result-match {
         color: var(--b3-theme-on-surface-light);
         font-size: 11px;
+        line-height: 1.3;
+        white-space: nowrap;
     }
 
     @media (max-width: 980px) {
@@ -441,7 +582,26 @@
         height: 60px;
     }
 
-    .workbench-search-mobile .workbench-search-result-source {
-        display: none;
+    .workbench-search-mobile .workbench-search-result-meta {
+        grid-column: 2;
+        grid-row: 2;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+        align-self: start;
+        justify-self: start;
+        min-width: 0;
+        max-width: 100%;
+    }
+
+    .workbench-search-mobile .workbench-search-result-match::before {
+        content: "·";
+        margin-right: 4px;
+        color: var(--b3-theme-on-surface-light);
+    }
+
+    .workbench-search-mobile .workbench-search-result-source,
+    .workbench-search-mobile .workbench-search-result-match {
+        display: inline-block;
     }
 </style>

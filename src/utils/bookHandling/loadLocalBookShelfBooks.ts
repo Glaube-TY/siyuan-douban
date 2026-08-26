@@ -54,6 +54,12 @@ function getSelectValue(v: any): string {
     return "";
 }
 
+function getSearchValue(v: any): string {
+    return [getTextValue(v), getNumberValue(v), getDateValue(v), getSelectValue(v)]
+        .filter(Boolean)
+        .join(" ");
+}
+
 function getDocCandidateID(v: any): string {
     return getAttributeViewNoteDocumentCandidate(v);
 }
@@ -106,6 +112,8 @@ export async function loadLocalBookShelfBooks(avID: string) {
             ratingCount: "",
             category: "",
             readingStatus: "",
+            localSearchText: "",
+            localSearchFields: {} as Record<string, string>,
         });
     }
 
@@ -145,6 +153,23 @@ export async function loadLocalBookShelfBooks(avID: string) {
     fillColumn(categoryKey, getSelectValue);
     fillColumn(readingStatusKey, getSelectValue);
 
+    for (const columnKey of keyValues) {
+        for (const cv of columnKey.values || []) {
+            const row = rowMap.get(cv.blockID || "");
+            if (!row) continue;
+            const value = getSearchValue(cv);
+            if (value) {
+                const fieldName = String(columnKey.key?.name || "").trim();
+                if (fieldName) {
+                    row.localSearchFields[fieldName] = row.localSearchFields[fieldName]
+                        ? `${row.localSearchFields[fieldName]} ${value}`
+                        : value;
+                }
+                row.localSearchText += `${row.localSearchText ? " " : ""}${value}`;
+            }
+        }
+    }
+
     const bindings = await validateNoteDocumentBindings(docCandidateIDs);
 
     return Array.from(rowMap.values()).map((row) => {
@@ -162,6 +187,8 @@ export async function loadLocalBookShelfBooks(avID: string) {
             ratingCount: row.ratingCount,
             category: row.category,
             readingStatus: row.readingStatus,
+            localSearchText: row.localSearchText,
+            localSearchFields: row.localSearchFields,
             localDocBlockID: binding.documentId || "",
             localDocCandidateID: binding.candidateId || "",
             noteDocumentBindingState: binding.state,
