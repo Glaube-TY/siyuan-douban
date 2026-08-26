@@ -161,9 +161,9 @@
         <WorkbenchHero {plugin} on:action={action} />
 
         <nav class="workbench-section-tabs" aria-label={tx("workbenchDesktopNavLabel", "阅读总控台导航")}>
-            <button type="button" class:active={activeSection === "overview"} on:click={() => activeSection = "overview"}><span>{tx("workbenchOverview", "总控台")}</span><em>{tx("workbenchOverviewDesc", "检索、同步与整理")}</em></button>
-            <button type="button" class:active={activeSection === "shelf-hub"} on:click={() => activeSection = "shelf-hub"}><span>{tx("workbenchShelfCenter", "书架中心")}</span><em>{tx("workbenchShelfCenterDesc", "书架资产与笔记入口")}</em></button>
-            <button type="button" class:active={activeSection === "weread-stats"} on:click={() => activeSection = "weread-stats"}><span>{tx("workbenchWereadData", "微信读书数据")}</span><em>{tx("workbenchWereadDataDesc", "阅读统计与同步覆盖")}</em></button>
+            <button type="button" class:active={activeSection === "overview"} on:click={() => activeSection = "overview"}><span>{tx("workbenchOverview", "总控台")}</span></button>
+            <button type="button" class:active={activeSection === "shelf-hub"} on:click={() => activeSection = "shelf-hub"}><span>{tx("workbenchShelfCenter", "书架中心")}</span></button>
+            <button type="button" class:active={activeSection === "weread-stats"} on:click={() => activeSection = "weread-stats"}><span>{tx("workbenchWereadData", "微信读书数据")}</span></button>
         </nav>
 
         {#if activeSection === "overview"}
@@ -277,9 +277,10 @@
 
     .workbench-section-tabs {
         display: flex;
+        flex-wrap: nowrap;
         gap: 8px;
         max-width: 100%;
-        padding: 6px;
+        padding: 4px 6px;
         overflow-x: auto;
         border: 1px solid var(--b3-border-color);
         border-radius: 8px;
@@ -288,10 +289,12 @@
     }
 
     .workbench-section-tabs button {
-        display: grid;
-        gap: 2px;
-        min-width: 148px;
-        padding: 10px 14px;
+        display: inline-flex;
+        flex: 0 0 auto;
+        align-items: center;
+        justify-content: center;
+        min-width: 0;
+        padding: 7px 14px;
         border: 1px solid transparent;
         border-radius: 7px;
         background: transparent;
@@ -319,13 +322,6 @@
         line-height: 1.25;
     }
 
-    .workbench-section-tabs em {
-        color: var(--b3-theme-on-surface-light);
-        font-size: 12px;
-        font-style: normal;
-        line-height: 1.3;
-    }
-
     .workbench-assets-grid {
         display: grid;
         grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
@@ -346,14 +342,4 @@
         }
     }
 
-    @media (max-width: 560px) {
-        .workbench-section-tabs {
-            flex-wrap: nowrap;
-        }
-
-        .workbench-section-tabs button {
-            min-width: 132px;
-            padding: 9px 11px;
-        }
-    }
 </style>
