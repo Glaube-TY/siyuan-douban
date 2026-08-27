@@ -16,23 +16,6 @@ export interface LocatedBlock {
     docBlockID?: string;
 }
 
-export type BookHealthLevel = "healthy" | "attention" | "warning" | "error";
-
-export type BookHealthReason =
-    | "bound"
-    | "unbound"
-    | "document_missing"
-    | "document_invalid"
-    | "has_new_notes"
-    | "sync_failed"
-    | "index_missing"
-    | "index_broken"
-    | "template_changed"
-    | "not_ready"
-    | "ignored"
-    | "mp_skipped"
-    | "normal_book_skipped";
-
 export type BookIndexStatus = "ok" | "missing" | "broken" | "unknown";
 
 export interface ReadingManagementSummary {
@@ -197,34 +180,6 @@ export interface SyncChangeReportView {
     blockOperationCount: number;
     rebuiltCount: number;
     items: SyncChangeSummaryView[];
-}
-
-export interface BookHealthView {
-    id: string;
-    sourceKey: string;
-    bookID?: string;
-    title: string;
-    author?: string;
-    isbn?: string;
-    sourceType: ReadingManagementSourceType;
-    sourceLabel: string;
-    level: BookHealthLevel;
-    levelLabel: string;
-    reasons: BookHealthReason[];
-    reasonLabels: string[];
-    bound: boolean;
-    noteDocId?: string;
-    indexStatus: BookIndexStatus;
-    indexStatusLabel: string;
-    lastSyncStatus?: string;
-    lastSyncTime?: number;
-    lastSyncMessage?: string;
-    inboxPendingCount: number;
-    addedItemCount: number;
-    changedItemCount: number;
-    deletedItemCount: number;
-    noteCount?: number;
-    recommendedAction: string;
 }
 
 export interface CacheStatusView {

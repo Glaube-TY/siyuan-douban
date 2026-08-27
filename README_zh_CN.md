@@ -94,7 +94,7 @@
 <p style="margin:.25em 0 0;color:#665640;">同步窗口会展示当前阶段、完成进度与处理明细，便于了解正在检查、匹配或写入哪些内容。</p>
 </div>
 </div>
-<img src="https://glaube-ty.top/uploads/attachments/halo/662560d6-cb65-4cad-ab20-6a394ea8d375.webp" alt="微信读书同步结果与待办界面" loading="lazy" style="display:block;width:100%;height:auto;border-radius:12px;border:1px solid #ddcce2;box-shadow:0 8px 22px rgba(109,63,120,.1);filter:saturate(.94) sepia(.04);">
+<img src="https://glaube-ty.top/uploads/attachments/halo/662560d6-cb65-4cad-ab20-6a394ea8d375.webp" alt="阅读待办中心界面" loading="lazy" style="display:block;width:100%;height:auto;border-radius:12px;border:1px solid #ddcce2;box-shadow:0 8px 22px rgba(109,63,120,.1);filter:saturate(.94) sepia(.04);">
 <p style="margin:.75em 0 0;padding:.7em .85em;background:#f7eff9;border-radius:9px;color:#694b70;">操作提示：同步期间请根据确认窗口完成选择；主动取消或关闭同步窗口后，可以重新发起同步任务。</p>
 </div>
 </div>

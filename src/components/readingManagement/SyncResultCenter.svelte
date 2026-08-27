@@ -14,12 +14,14 @@
         SyncOutcomeNewContentGroup,
         SyncOutcomeRecord,
     } from "../../utils/readingManagement/types";
-    import { openLocatedBlock, openSiyuanDoc } from "../../utils/readingManagement/blockLocator";
+    import type { InboxMutationResult } from "../../utils/readingManagement/inboxActions";
     import {
-        markSourceInboxItemsProcessed,
-        updateReadingInboxItemStatus,
-        updateReadingInboxItemsStatus,
-    } from "../../utils/storage/readingStorage";
+        markInboxSourceProcessedStrict,
+        setInboxItemStatusStrict,
+        setInboxItemsStatusStrict,
+    } from "../../utils/readingManagement/inboxActions";
+    import { addRecentNoteToReview } from "../../utils/readingCenter/readingReviewService";
+    import { openLocatedBlock, openSiyuanDoc } from "../../utils/readingManagement/blockLocator";
     import {
         buildDiagnosticSummary,
         cleanupProcessedInboxItems,
@@ -30,7 +32,7 @@
     import { READING_NOTES_LINKS } from "../../utils/core/externalLinks";
 
     export let plugin: any;
-    export let initialView: "todo" | "records" = "todo";
+    export let initialView: "todo" | "issues" | "records" = "todo";
     export let focus: "new" | "issues" | "diagnostics" | "changes" = "new";
 
     const dispatch = createEventDispatcher<{
@@ -42,13 +44,16 @@
     let data: SyncOutcomeData | null = null;
     let diagnostics: DiagnosticSummary | null = null;
     let isLoading = true;
-    let activeView: "todo" | "records" = initialView;
+    let loadError = "";
+    let isInboxMutating = false;
+    let reviewMutatingId: string | null = null;
+    let isCleaningReports = false;
+    let activeView: "todo" | "issues" | "records" = initialView;
     let recordsFilter: "changed" | "problem" = focus === "issues" || focus === "diagnostics" ? "problem" : "changed";
     let diagnosticsOpen = focus === "diagnostics";
     let expandedGroups = new Set<string>();
     let selectedIds = new Set<string>();
     let resultCenterEl: HTMLElement | null = null;
-    let issueSectionEl: HTMLElement | null = null;
     const tx = (key: string, fallback: string, params: Record<string, string | number> = {}) =>
         t(plugin, key, fallback, params);
 
@@ -90,16 +95,28 @@
         return tx("syncIssueOpenRecords", "查看同步记录");
     }
 
+    function errorMessage(error: unknown): string {
+        return error instanceof Error ? error.message : String(error);
+    }
+
+    function showBookStatusWarning(result: InboxMutationResult) {
+        if (!result.bookStatusWarning) return;
+        showMessage(tx("syncResultSavedWithStatusWarning", "待办状态已保存，但书籍摘要状态刷新失败：{error}", {
+            error: result.bookStatusWarning,
+        }));
+    }
+
+    function showMutationError(error: unknown) {
+        showMessage(tx("syncResultUpdateFailed", "待办状态更新失败：{error}", { error: errorMessage(error) }));
+    }
+
     onMount(async () => {
         await load();
-        if (initialView === "todo" && focus === "issues") {
-            await tick();
-            issueSectionEl?.scrollIntoView({ block: "start" });
-        }
     });
 
     async function load() {
         isLoading = true;
+        loadError = "";
         try {
             [data, diagnostics] = await Promise.all([
                 buildSyncOutcomeData(plugin),
@@ -110,13 +127,14 @@
             console.error("[SyncResultCenter] load failed:", error);
             data = null;
             diagnostics = null;
-            showMessage(tx("syncResultLoadFailedMessage", "同步结果与待办加载失败，请稍后重试"));
+            loadError = error instanceof Error ? error.message : String(error);
+            showMessage(tx("syncResultLoadFailedMessage", "阅读待办中心加载失败，请稍后重试"));
         } finally {
             isLoading = false;
         }
     }
 
-    async function switchView(view: "todo" | "records") {
+    async function switchView(view: "todo" | "issues" | "records") {
         activeView = view;
         await tick();
         resultCenterEl?.scrollIntoView({ block: "start" });
@@ -149,25 +167,66 @@
     }
 
     async function setItemStatus(item: RecentNoteView, status: ReadingInboxStatus) {
-        await updateReadingInboxItemStatus(plugin, item.id, status);
-        await load();
-        showMessage(status === "processed"
-            ? tx("syncResultProcessedMessage", "已标记为已处理")
-            : tx("syncResultLaterMessage", "已设为稍后处理"));
+        if (isInboxMutating) return;
+        isInboxMutating = true;
+        try {
+            let result: InboxMutationResult;
+            try {
+                result = await setInboxItemStatusStrict(plugin, item.id, status);
+            } catch (error) {
+                showMutationError(error);
+                return;
+            }
+            showMessage(status === "processed"
+                ? tx("syncResultProcessedMessage", "已标记为已处理")
+                : tx("syncResultLaterMessage", "已设为稍后处理"));
+            showBookStatusWarning(result);
+            await load();
+        } finally {
+            isInboxMutating = false;
+        }
     }
 
     async function markGroupProcessed(group: SyncOutcomeNewContentGroup) {
-        await markSourceInboxItemsProcessed(plugin, group.sourceKey);
-        await load();
-        showMessage(tx("syncResultGroupProcessedMessage", "《{title}》的新增内容已全部处理", { title: group.title }));
+        if (isInboxMutating) return;
+        isInboxMutating = true;
+        try {
+            let result: InboxMutationResult;
+            try {
+                result = await markInboxSourceProcessedStrict(plugin, group.sourceKey);
+            } catch (error) {
+                showMutationError(error);
+                return;
+            }
+            showMessage(tx("syncResultGroupProcessedMessage", "《{title}》的新增内容已全部处理", { title: group.title }));
+            showBookStatusWarning(result);
+            await load();
+        } finally {
+            isInboxMutating = false;
+        }
     }
 
     async function batchSetStatus(status: "processed" | "later") {
         const ids = Array.from(selectedIds);
         if (ids.length === 0) return;
-        await updateReadingInboxItemsStatus(plugin, ids, status);
-        await load();
-        showMessage(tx("syncResultBatchProcessedMessage", "已处理 {count} 条内容", { count: ids.length }));
+        if (isInboxMutating) return;
+        isInboxMutating = true;
+        try {
+            let result: InboxMutationResult;
+            try {
+                result = await setInboxItemsStatusStrict(plugin, ids, status);
+            } catch (error) {
+                showMutationError(error);
+                return;
+            }
+            showMessage(status === "processed"
+                ? tx("syncResultBatchProcessedMessage", "已处理 {count} 条内容", { count: ids.length })
+                : tx("syncResultBatchLaterMessage", "已将 {count} 条内容设为稍后处理", { count: ids.length }));
+            showBookStatusWarning(result);
+            await load();
+        } finally {
+            isInboxMutating = false;
+        }
     }
 
     async function copyText(text: string, message: string) {
@@ -197,6 +256,26 @@
         dispatch("addToTopic", { item: item.rawItem });
     }
 
+    async function addToReview(item: RecentNoteView) {
+        const mutationId = item.rawItem.id;
+        if (reviewMutatingId) return;
+        reviewMutatingId = mutationId;
+        try {
+            const result = await addRecentNoteToReview(plugin, item);
+            if (result.alreadyExists) {
+                showMessage(tx("reviewAlreadyQueued", "该内容已在复习队列中"));
+            } else if (result.reactivated) {
+                showMessage(tx("reviewReactivated", "已重新加入复习"));
+            } else {
+                showMessage(tx("reviewAdded", "已加入复习，将在约 1 天后进入首次复习"));
+            }
+        } catch (error) {
+            showMessage(tx("reviewAddFailed", "加入复习失败：{error}", { error: errorMessage(error) }));
+        } finally {
+            reviewMutatingId = null;
+        }
+    }
+
     async function handleIssue(issue: SyncOutcomeIssue) {
         if (issue.action === "open_records") {
             recordsFilter = "problem";
@@ -224,15 +303,43 @@
     }
 
     async function cleanProcessed() {
-        const result = await cleanupProcessedInboxItems(plugin);
-        await load();
-        showMessage(tx("syncResultProcessedCleaned", "已清理 {count} 条已处理记录", { count: result.removed }));
+        if (isInboxMutating) return;
+        isInboxMutating = true;
+        try {
+            let result: { removed: number; remaining: number };
+            try {
+                result = await cleanupProcessedInboxItems(plugin);
+            } catch (error) {
+                showMessage(tx("syncResultCleanupFailed", "清理失败：{error}", {
+                    error: error instanceof Error ? error.message : String(error),
+                }));
+                return;
+            }
+            showMessage(tx("syncResultProcessedCleaned", "已清理 {count} 条已处理记录", { count: result.removed }));
+            await load();
+        } finally {
+            isInboxMutating = false;
+        }
     }
 
     async function cleanReports() {
-        const result = await keepRecentSyncReports(plugin, 10);
-        await load();
-        showMessage(tx("syncResultReportsCleaned", "已清理 {count} 条旧同步报告", { count: result.removed }));
+        if (isCleaningReports) return;
+        isCleaningReports = true;
+        try {
+            let result: { removed: number; remaining: number };
+            try {
+                result = await keepRecentSyncReports(plugin, 10);
+            } catch (error) {
+                showMessage(tx("syncResultCleanupFailed", "清理失败：{error}", {
+                    error: error instanceof Error ? error.message : String(error),
+                }));
+                return;
+            }
+            showMessage(tx("syncResultReportsCleaned", "已清理 {count} 条旧同步报告", { count: result.removed }));
+            await load();
+        } finally {
+            isCleaningReports = false;
+        }
     }
 
     function formatTime(timestamp?: number): string {
@@ -262,8 +369,8 @@
     <header class="page-header">
         <button type="button" class="back-button" on:click={() => dispatch("back")}>{tx("uiBackOverview", "返回总览")}</button>
         <div>
-            <h2>{tx("syncResultTitle", "同步结果与待办")}</h2>
-            <p>{tx("syncResultSubtitle", "查看新增内容、需要处理的问题和最近同步记录")}</p>
+            <h2>{tx("syncResultTitle", "阅读待办中心")}</h2>
+            <p>{tx("syncResultSubtitle", "集中处理新内容、同步问题和历史记录")}</p>
         </div>
         <ContextTutorialLink
             href={READING_NOTES_LINKS.wereadResultsTutorial}
@@ -272,18 +379,42 @@
         />
     </header>
 
-    <nav class="main-tabs" aria-label={tx("syncResultViewLabel", "同步结果视图")}>
-        <button type="button" class:active={activeView === "todo"} on:click={() => switchView("todo")}>
+    <nav class="main-tabs" aria-label={tx("syncResultViewLabel", "阅读待办中心视图")}>
+        <button
+            type="button"
+            class:active={activeView === "todo"}
+            aria-current={activeView === "todo" ? "page" : undefined}
+            on:click={() => switchView("todo")}
+        >
             {tx("syncResultTodo", "待处理")}
-            {#if data}<span>{data.summary.pendingContentCount + data.summary.actionableIssueCount}</span>{/if}
+            {#if data}<span>{data.summary.pendingContentCount}</span>{/if}
         </button>
-        <button type="button" class:active={activeView === "records"} on:click={() => switchView("records")}>{tx("syncResultRecords", "同步记录")}</button>
+        <button
+            type="button"
+            class:active={activeView === "issues"}
+            aria-current={activeView === "issues" ? "page" : undefined}
+            on:click={() => switchView("issues")}
+        >
+            {tx("syncResultIssuesTab", "问题")}
+            {#if data}<span>{data.issues.length}</span>{/if}
+        </button>
+        <button
+            type="button"
+            class:active={activeView === "records"}
+            aria-current={activeView === "records" ? "page" : undefined}
+            on:click={() => switchView("records")}
+        >{tx("syncResultRecords", "记录")}</button>
     </nav>
 
     {#if isLoading}
-        <div class="empty-state">{tx("syncResultLoading", "正在汇总同步结果...")}</div>
-    {:else if !data}
-        <div class="empty-state">{tx("syncResultLoadFailed", "同步结果加载失败")}</div>
+        <div class="empty-state" role="status" aria-live="polite">{tx("syncResultLoading", "正在汇总同步结果...")}</div>
+    {:else if loadError || !data}
+        <div class="empty-state error-state" role="alert">
+            <strong>{tx("syncResultDataLoadFailed", "阅读待办中心读取失败")}</strong>
+            <p>{tx("syncResultDataLoadFailedDesc", "部分本地状态无法读取，系统没有将异常数据当作空内容处理。")}</p>
+            {#if loadError}<small>{loadError}</small>{/if}
+            <button type="button" on:click={load}>{tx("uiRetry", "重试")}</button>
+        </div>
     {:else if activeView === "todo"}
         <div class="todo-view">
             <section class="content-section">
@@ -295,8 +426,8 @@
                 {#if selectedIds.size > 0}
                     <div class="batch-bar">
                         <span>{tx("syncResultSelected", "已选 {count} 条", { count: selectedIds.size })}</span>
-                        <button type="button" on:click={() => batchSetStatus("processed")}>{tx("syncResultMarkProcessed", "标记已处理")}</button>
-                        <button type="button" on:click={() => batchSetStatus("later")}>{tx("syncResultLater", "稍后处理")}</button>
+                        <button type="button" disabled={isInboxMutating} on:click={() => batchSetStatus("processed")}>{tx("syncResultMarkProcessed", "标记已处理")}</button>
+                        <button type="button" disabled={isInboxMutating} on:click={() => batchSetStatus("later")}>{tx("syncResultLater", "稍后处理")}</button>
                     </div>
                 {/if}
 
@@ -321,7 +452,7 @@
                                     <div class="group-actions">
                                         <button type="button" disabled={!group.noteDocId} on:click={() => openGroupDoc(group)}>{tx("uiOpenNote", "打开笔记")}</button>
                                         <button type="button" on:click={() => toggleGroup(group.sourceKey)}>{expandedGroups.has(group.sourceKey) ? tx("syncResultCollapse", "收起内容") : tx("syncResultViewContent", "查看新增内容")}</button>
-                                        <button type="button" on:click={() => markGroupProcessed(group)}>{tx("syncResultMarkGroupProcessed", "全部标记已处理")}</button>
+                                        <button type="button" disabled={isInboxMutating} on:click={() => markGroupProcessed(group)}>{tx("syncResultMarkGroupProcessed", "全部标记已处理")}</button>
                                     </div>
                                 </div>
 
@@ -339,14 +470,23 @@
                                                     <p>{item.comment || item.content || tx("syncResultNoContent", "暂无内容")}</p>
                                                 </button>
                                                 <div class="item-actions">
-                                                    <button type="button" on:click={() => setItemStatus(item, "processed")}>{tx("syncResultMarkProcessed", "标记已处理")}</button>
+                                                    <button type="button" disabled={isInboxMutating} on:click={() => setItemStatus(item, "processed")}>{tx("syncResultMarkProcessed", "标记已处理")}</button>
                                                     <details class="more-menu">
                                                         <summary>{tx("uiMore", "更多")}</summary>
                                                         <div>
-                                                            <button type="button" on:click={() => setItemStatus(item, "later")}>{tx("syncResultLater", "稍后处理")}</button>
+                                                            <button type="button" disabled={isInboxMutating} on:click={() => setItemStatus(item, "later")}>{tx("syncResultLater", "稍后处理")}</button>
+                                                            <button type="button" on:click={() => addToTopic(item)}>{tx("syncResultAddTopic", "加入主题")}</button>
+                                                            <button
+                                                                type="button"
+                                                                disabled={reviewMutatingId !== null}
+                                                                on:click={() => void addToReview(item)}
+                                                            >
+                                                                {reviewMutatingId === item.rawItem.id
+                                                                    ? tx("syncResultAddingReview", "加入中...")
+                                                                    : tx("syncResultAddReview", "加入复习")}
+                                                            </button>
                                                             <button type="button" on:click={() => copyText(buildQuote(item), tx("syncResultCopiedQuote", "已复制引用"))}>{tx("syncResultCopyQuote", "复制引用")}</button>
                                                             <button type="button" on:click={() => copyText(buildMarkdown(item), tx("syncResultCopiedMarkdown", "已复制 Markdown"))}>{tx("syncResultCopyMarkdown", "复制 Markdown")}</button>
-                                                            <button type="button" on:click={() => addToTopic(item)}>{tx("syncResultAddTopic", "加入主题")}</button>
                                                         </div>
                                                     </details>
                                                 </div>
@@ -360,7 +500,10 @@
                 {/if}
             </section>
 
-            <section class="issue-section" bind:this={issueSectionEl}>
+        </div>
+    {:else if activeView === "issues"}
+        <div class="issues-view">
+            <section class="issue-section">
                 <div class="section-heading">
                     <div><h3>{tx("syncResultIssues", "需要处理的问题")}</h3><p>{tx("syncResultIssuesDesc", "这里只显示会影响同步或文档打开的问题")}</p></div>
                     <strong>{data.issues.length}</strong>
@@ -457,8 +600,8 @@
                 {/if}
                 <div class="diagnostic-actions">
                     <button type="button" on:click={copyDiagnostics}>{tx("syncResultCopyDiagnostics", "复制诊断摘要")}</button>
-                    <button type="button" on:click={cleanProcessed}>{tx("syncResultCleanProcessed", "清理已处理记录")}</button>
-                    <button type="button" on:click={cleanReports}>{tx("syncResultCleanReports", "清理旧同步报告")}</button>
+                    <button type="button" disabled={isInboxMutating} on:click={cleanProcessed}>{tx("syncResultCleanProcessed", "清理已处理记录")}</button>
+                    <button type="button" disabled={isCleaningReports} on:click={cleanReports}>{tx("syncResultCleanReports", "清理旧同步报告")}</button>
                 </div>
             </details>
         </div>
@@ -570,6 +713,7 @@
     }
 
     .todo-view,
+    .issues-view,
     .records-view,
     .content-section,
     .issue-section,
@@ -579,10 +723,6 @@
     .content-items {
         display: grid;
         gap: 12px;
-    }
-
-    .issue-section {
-        margin-top: 18px;
     }
 
     .section-heading {
@@ -843,6 +983,26 @@
         color: var(--b3-theme-on-surface-light);
         text-align: center;
         font-size: 13px;
+    }
+
+    .error-state {
+        display: grid;
+        gap: 8px;
+        border-color: var(--b3-theme-error);
+        background: color-mix(in srgb, var(--b3-theme-error) 8%, var(--b3-theme-surface));
+    }
+
+    .error-state strong {
+        color: var(--b3-theme-error);
+    }
+
+    .error-state p,
+    .error-state small {
+        overflow-wrap: anywhere;
+    }
+
+    .error-state button {
+        justify-self: center;
     }
 
     .compact-empty.success {

@@ -4,6 +4,8 @@
     import type { WorkbenchAction } from "../../types/workbench";
     import type { ReadingManagementSummary } from "../../utils/readingManagement/types";
     import { buildReadingManagementSummary } from "../../utils/readingManagement/managementData";
+    import type { ReadingReviewQueueSummary } from "../../utils/readingCenter/readingReviewService";
+    import { loadReadingReviewQueueSummaryStrict } from "../../utils/readingCenter/readingReviewService";
     import { t } from "../../utils/i18n";
 
     export let plugin: any;
@@ -11,12 +13,29 @@
 
     const dispatch = createEventDispatcher<{ action: WorkbenchAction }>();
     let summary: ReadingManagementSummary | null = null;
+    let reviewSummary: ReadingReviewQueueSummary | null = null;
+    let isLoading = true;
+    let loadError = "";
     let lastRefreshKey = refreshKey;
     const tx = (key: string, fallback: string, params: Record<string, string | number> = {}) =>
         t(plugin, key, fallback, params);
 
     async function load() {
-        summary = await buildReadingManagementSummary(plugin);
+        isLoading = true;
+        loadError = "";
+        try {
+            [summary, reviewSummary] = await Promise.all([
+                buildReadingManagementSummary(plugin),
+                loadReadingReviewQueueSummaryStrict(plugin),
+            ]);
+        } catch (error) {
+            summary = null;
+            reviewSummary = null;
+            loadError = error instanceof Error ? error.message : String(error);
+            console.error("[WorkbenchReviewPanel] load failed:", error);
+        } finally {
+            isLoading = false;
+        }
     }
 
     function formatTime(timestamp?: number): string {
@@ -51,35 +70,53 @@
         <div class="panel-title">
             <SiYuanIcon name="review" size={18} />
             <div>
-                <div class="panel-title-line">
-                    <h2>{tx("workbenchSyncTodo", "同步结果与待办")}</h2>
-                    <span class="experimental-badge">{tx("reviewExperimentalBadge", "实验性功能 · 开发中")}</span>
-                </div>
-                <p>{getStatusText(summary?.lastSyncStatus)}</p>
+                <h2>{tx("workbenchSyncTodo", "阅读待办中心")}</h2>
+                <p>
+                    {#if isLoading}
+                        {tx("reviewLoading", "正在读取最近同步结果...")}
+                    {:else if loadError}
+                        {tx("workbenchReviewLoadFailed", "待办数据读取失败")}
+                    {:else}
+                        {getStatusText(summary?.lastSyncStatus)}
+                    {/if}
+                </p>
             </div>
         </div>
         <button class="records-link" type="button" on:click={() => dispatch("action", "open-sync-changes")}>{tx("reviewViewRecords", "查看同步记录")}</button>
     </div>
 
-    {#if summary}
+    {#if isLoading}
+        <div class="loading" aria-live="polite">{tx("reviewLoading", "正在读取最近同步结果...")}</div>
+    {:else if loadError}
+        <div class="load-error" role="alert">
+            <strong>{tx("workbenchReviewLoadFailed", "待办数据读取失败")}</strong>
+            <p>{tx("workbenchReviewLoadFailedDesc", "当前无法确认待处理内容，为避免误判未显示为空。")}</p>
+            <small>{loadError}</small>
+            <button type="button" on:click={load}>{tx("uiRetry", "重试")}</button>
+        </div>
+    {:else if summary}
         <div class="sync-summary">
             <span>{formatTime(summary.lastSyncTime)}</span>
             <span>{tx("reviewSuccessBooks", "成功 {count} 本", { count: summary.latestSuccessCount })}</span>
-            <span>{tx("reviewAdded", "新增 {count}", { count: summary.latestAddedItemCount })}</span>
+            <span>{tx("reviewLatestAdded", "新增 {count}", { count: summary.latestAddedItemCount })}</span>
             <span>{tx("reviewUpdated", "更新 {count}", { count: summary.latestChangedItemCount })}</span>
         </div>
 
-        {#if summary.pendingContentCount > 0 || summary.actionableIssueCount > 0}
+        {#if summary.pendingContentCount > 0 || summary.actionableIssueCount > 0 || (reviewSummary && reviewSummary.dueCount > 0)}
             <div class="todo-summary">
                 {#if summary.pendingContentCount > 0}<strong>{tx("reviewPendingContent", "{count} 条新增内容待查看", { count: summary.pendingContentCount })}</strong>{/if}
                 {#if summary.actionableIssueCount > 0}<strong class="problem">{tx("reviewPendingIssues", "{count} 项需要处理", { count: summary.actionableIssueCount })}</strong>{/if}
+                {#if reviewSummary && reviewSummary.dueCount > 0}<strong>{tx("reviewDueToday", "{count} 条内容今日待复习", { count: reviewSummary.dueCount })}</strong>{/if}
             </div>
             <div class="primary-actions">
+                {#if reviewSummary && reviewSummary.dueCount > 0}
+                    <button type="button" on:click={() => dispatch("action", "open-review")}>{tx("reviewStart", "开始复习")}</button>
+                {/if}
                 {#if summary.pendingContentCount > 0}
                     <button type="button" on:click={() => dispatch("action", "open-inbox")}>{tx("reviewHandleContent", "处理新增内容")}</button>
                 {/if}
                 {#if summary.actionableIssueCount > 0}
-                    <button type="button" class="secondary" on:click={() => dispatch("action", "open-diagnostics")}>{tx("reviewViewIssues", "查看问题")}</button>
+                    <button type="button" class="secondary" on:click={() => dispatch("action", "open-issues")}>{tx("reviewViewIssues", "查看问题")}</button>
                 {/if}
             </div>
         {:else}
@@ -88,8 +125,6 @@
                 <span>{tx("reviewAllClear", "当前无需处理")}</span>
             </div>
         {/if}
-    {:else}
-        <div class="loading">{tx("reviewLoading", "正在读取最近同步结果...")}</div>
     {/if}
 </section>
 
@@ -129,28 +164,6 @@
         min-width: 0;
     }
 
-    .panel-title-line {
-        display: flex;
-        flex-wrap: wrap;
-        align-items: center;
-        gap: 6px;
-    }
-
-    .experimental-badge {
-        display: inline-flex;
-        align-items: center;
-        min-height: 20px;
-        padding: 0 7px;
-        border: 1px solid color-mix(in srgb, var(--b3-card-warning-color) 48%, var(--b3-border-color));
-        border-radius: 999px;
-        background: color-mix(in srgb, var(--b3-card-warning-color) 10%, var(--b3-theme-surface));
-        color: var(--b3-card-warning-color);
-        font-size: 10px;
-        font-weight: 700;
-        line-height: 1;
-        white-space: nowrap;
-    }
-
     h2,
     p {
         margin: 0;
@@ -166,6 +179,29 @@
     .loading {
         color: var(--b3-theme-on-surface-light);
         font-size: 12px;
+    }
+
+    .load-error {
+        display: grid;
+        gap: 8px;
+        padding: 12px;
+        border: 1px solid var(--b3-theme-error);
+        border-radius: 8px;
+        background: color-mix(in srgb, var(--b3-theme-error) 8%, var(--b3-theme-surface));
+    }
+
+    .load-error strong {
+        color: var(--b3-theme-error);
+        font-size: 13px;
+    }
+
+    .load-error p,
+    .load-error small {
+        overflow-wrap: anywhere;
+    }
+
+    .load-error button {
+        width: fit-content;
     }
 
     .sync-summary,

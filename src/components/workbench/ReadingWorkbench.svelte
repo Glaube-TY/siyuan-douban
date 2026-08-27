@@ -138,7 +138,7 @@
                         <div class="mobile-group-content"><WorkbenchWereadAssets {plugin} summary={wereadSummary} pluginName={plugin.name} on:action={action} /></div>
                     </details>
                     <details>
-                        <summary><span><strong>{tx("workbenchSyncTodo", "同步结果与待办")}</strong><small>{tx("workbenchSyncTodoDesc", "新增内容、问题与同步记录")}</small></span><em>{tx("workbenchExpand", "展开")}</em></summary>
+                        <summary><span><strong>{tx("workbenchSyncTodo", "阅读待办中心")}</strong><small>{tx("workbenchSyncTodoDesc", "待处理内容、问题与同步记录")}</small></span><em>{tx("workbenchExpand", "展开")}</em></summary>
                         <div class="mobile-group-content">
                             <WorkbenchReviewPanel {plugin} {refreshKey} on:action={action} />
                         </div>

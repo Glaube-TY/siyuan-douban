@@ -94,7 +94,7 @@
 <p style="margin:.25em 0 0;color:#665640;">The sync window shows the current stage, completion progress, and processing details, so you can see what is being checked, matched, or written.</p>
 </div>
 </div>
-<img src="https://glaube-ty.top/uploads/attachments/halo/662560d6-cb65-4cad-ab20-6a394ea8d375.webp" alt="WeRead Sync Results and Follow-up Tasks" loading="lazy" style="display:block;width:100%;height:auto;border-radius:12px;border:1px solid #ddcce2;box-shadow:0 8px 22px rgba(109,63,120,.1);filter:saturate(.94) sepia(.04);">
+<img src="https://glaube-ty.top/uploads/attachments/halo/662560d6-cb65-4cad-ab20-6a394ea8d375.webp" alt="Reading Task Center" loading="lazy" style="display:block;width:100%;height:auto;border-radius:12px;border:1px solid #ddcce2;box-shadow:0 8px 22px rgba(109,63,120,.1);filter:saturate(.94) sepia(.04);">
 <p style="margin:.75em 0 0;padding:.7em .85em;background:#f7eff9;border-radius:9px;color:#694b70;">Operation tip: respond to confirmation dialogs during synchronization. If you cancel or close the sync window, you can start the task again.</p>
 </div>
 </div>

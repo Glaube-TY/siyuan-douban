@@ -54,7 +54,7 @@
     let databaseStatus: "success" | "error" | "" = "";
     let workbenchRefreshKey = 0;
     let isWorkbenchSyncing = false;
-    let syncResultInitialView: "todo" | "records" = "todo";
+    let syncResultInitialView: "todo" | "issues" | "records" = "todo";
     let syncResultFocus: "new" | "issues" | "diagnostics" | "changes" = "new";
     const tx = (key: string, fallback: string, params: Record<string, string | number> = {}) => t(plugin, key, fallback, params);
 
@@ -96,7 +96,7 @@
     }
 
     function openSyncResult(
-        view: "todo" | "records",
+        view: "todo" | "issues" | "records",
         focus: "new" | "issues" | "diagnostics" | "changes"
     ) {
         syncResultInitialView = view;
@@ -322,16 +322,14 @@
             }
         } else if (action === "open-inbox") {
             openSyncResult("todo", "new");
+        } else if (action === "open-issues") {
+            openSyncResult("issues", "issues");
         } else if (action === "open-sync-changes") {
             openSyncResult("records", "changes");
         } else if (action === "open-unbound-books") {
-            openSyncResult("todo", "issues");
-        } else if (action === "open-book-health") {
-            openSyncResult("todo", "issues");
+            openSyncResult("issues", "issues");
         } else if (action === "open-maintenance") {
             openSyncResult("records", "diagnostics");
-        } else if (action === "open-diagnostics") {
-            openSyncResult("todo", "issues");
         } else if (action === "open-database-settings") {
             openDatabaseSettings();
         } else if (action === "open-book-preferences") {
