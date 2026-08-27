@@ -16,6 +16,7 @@
 
     export let plugin: any;
     export let refreshKey = 0;
+    export let embedded = false;
 
     type ShelfType = "local" | "weread-notes" | "weread-shelf";
     const tx = (key: string, fallback: string, params: Record<string, string | number> = {}) => t(plugin, key, fallback, params);
@@ -208,26 +209,28 @@
     }
 </script>
 
-<section class="workbench-panel shelf-hub">
-    <div class="workbench-panel-head">
-        <div class="workbench-panel-title">
-            <SiYuanIcon name="localShelf" size={18} />
-            <h2>{tx("workbenchShelfCenter", "书架中心")}</h2>
+<section class="workbench-panel shelf-hub" class:shelf-hub-embedded={embedded}>
+    {#if !embedded}
+        <div class="workbench-panel-head">
+            <div class="workbench-panel-title">
+                <SiYuanIcon name="localShelf" size={18} />
+                <h2>{tx("workbenchShelfCenter", "书架中心")}</h2>
+            </div>
+            <div class="shelf-hub-actions">
+                <ContextTutorialLink
+                    href={READING_NOTES_LINKS.shelfTutorial}
+                    label={tx("tutorialShelf", "查看书架教程")}
+                    compact
+                />
+                {#if activeTab === "weread-shelf"}
+                    <button class="workbench-panel-link" on:click={refreshShelf} disabled={isLoading}>
+                        <SiYuanIcon name="sync" size={14} />
+                        <span>{tx("shelfRefreshWeread", "刷新微信读书书架")}</span>
+                    </button>
+                {/if}
+            </div>
         </div>
-        <div class="shelf-hub-actions">
-            <ContextTutorialLink
-                href={READING_NOTES_LINKS.shelfTutorial}
-                label={tx("tutorialShelf", "查看书架教程")}
-                compact
-            />
-            {#if activeTab === "weread-shelf"}
-                <button class="workbench-panel-link" on:click={refreshShelf} disabled={isLoading}>
-                    <SiYuanIcon name="sync" size={14} />
-                    <span>{tx("shelfRefreshWeread", "刷新微信读书书架")}</span>
-                </button>
-            {/if}
-        </div>
-    </div>
+    {/if}
 
     <div class="shelf-hub-tabs" role="tablist">
         {#each tabs as tab (tab.key)}
@@ -257,10 +260,19 @@
                 placeholder={tx("shelfSearchPlaceholder", "搜索书名、作者、ISBN")}
             />
         </div>
-        <button class="workbench-panel-link" on:click={activeTab === "weread-shelf" ? refreshShelf : init} disabled={isLoading}>
-            <SiYuanIcon name="refresh" size={14} />
-            <span>{activeTab === "weread-shelf" ? tx("shelfRefreshShelf", "刷新书架") : tx("uiRefresh", "刷新")}</span>
-        </button>
+        <div class="shelf-hub-toolbar-actions">
+            {#if embedded}
+                <ContextTutorialLink
+                    href={READING_NOTES_LINKS.shelfTutorial}
+                    label={tx("tutorialShelf", "查看书架教程")}
+                    compact
+                />
+            {/if}
+            <button class="workbench-panel-link" on:click={activeTab === "weread-shelf" ? refreshShelf : init} disabled={isLoading}>
+                <SiYuanIcon name="refresh" size={14} />
+                <span>{activeTab === "weread-shelf" ? tx("shelfRefreshShelf", "刷新书架") : tx("uiRefresh", "刷新")}</span>
+            </button>
+        </div>
     </div>
 
     <div class="shelf-hub-content">
@@ -319,6 +331,12 @@
         border: 1px solid var(--b3-border-color);
         border-radius: 8px;
         background: var(--b3-theme-surface);
+    }
+
+    .workbench-panel.shelf-hub-embedded {
+        padding: 0;
+        border: 0;
+        background: transparent;
     }
 
     .workbench-panel-head {
@@ -421,6 +439,14 @@
         display: flex;
         gap: 8px;
         align-items: center;
+    }
+
+    .shelf-hub-toolbar-actions {
+        display: flex;
+        flex: 0 0 auto;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 8px;
     }
 
     .shelf-hub-search {
@@ -580,6 +606,18 @@
     }
 
     @media (max-width: 640px) {
+        .shelf-hub-toolbar {
+            flex-wrap: wrap;
+        }
+
+        .shelf-hub-search {
+            flex-basis: 100%;
+        }
+
+        .shelf-hub-toolbar-actions {
+            width: 100%;
+        }
+
         .shelf-hub-tabs {
             flex-wrap: wrap;
         }

@@ -10,7 +10,7 @@
     import WorkbenchLocalAssets from "./WorkbenchLocalAssets.svelte";
     import WorkbenchWereadAssets from "./WorkbenchWereadAssets.svelte";
     import WorkbenchReviewPanel from "./WorkbenchReviewPanel.svelte";
-    import WorkbenchShelfHub from "./WorkbenchShelfHub.svelte";
+    import WorkbenchReadingLibrary from "./WorkbenchReadingLibrary.svelte";
     import ReadingStatsCenter from "../readingCenter/ReadingStatsCenter.svelte";
     import { loadLocalBookSearchState } from "../../utils/bookSearch/localBookSearchService";
     import { getWereadCacheSummary } from "../../utils/bookSearch/wereadBookSearchService";
@@ -26,7 +26,7 @@
 
     const dispatch = createEventDispatcher<{ action: WorkbenchAction; refresh: void }>();
 
-    type WorkbenchSection = "overview" | "shelf-hub" | "weread-stats";
+    type WorkbenchSection = "overview" | "library" | "weread-stats";
 
     let localSummary: WorkbenchLocalAssetSummary | null = null;
     let wereadSummary: WorkbenchWereadAssetSummary | null = null;
@@ -144,8 +144,8 @@
                         </div>
                     </details>
                 </div>
-            {:else if activeSection === "shelf-hub"}
-                <WorkbenchShelfHub {plugin} {refreshKey} />
+            {:else if activeSection === "library"}
+                <WorkbenchReadingLibrary {plugin} {refreshKey} {mobile} on:action={action} />
             {:else}
                 <ReadingStatsCenter {plugin} {refreshKey} embedded={true} showBack={false} on:action={action} />
             {/if}
@@ -153,7 +153,7 @@
 
         <nav class="mobile-workbench-nav" aria-label={tx("workbenchNavLabel", "移动端阅读工作台导航")}>
             <button type="button" class:active={activeSection === "overview"} on:click={() => activeSection = "overview"}><span>⌂</span><em>{tx("workbenchNavHome", "工作台")}</em></button>
-            <button type="button" class:active={activeSection === "shelf-hub"} on:click={() => activeSection = "shelf-hub"}><span>▤</span><em>{tx("workbenchNavShelf", "书架")}</em></button>
+            <button type="button" class:active={activeSection === "library"} on:click={() => activeSection = "library"}><span>▤</span><em>{tx("workbenchNavLibrary", "资料库")}</em></button>
             <button type="button" class:active={activeSection === "weread-stats"} on:click={() => activeSection = "weread-stats"}><span>◫</span><em>{tx("workbenchNavData", "数据")}</em></button>
             <button type="button" on:click={() => triggerAction("open-about")}><span>ⓘ</span><em>{tx("workbenchNavAbout", "关于")}</em></button>
         </nav>
@@ -162,7 +162,7 @@
 
         <nav class="workbench-section-tabs" aria-label={tx("workbenchDesktopNavLabel", "阅读总控台导航")}>
             <button type="button" class:active={activeSection === "overview"} on:click={() => activeSection = "overview"}><span>{tx("workbenchOverview", "总控台")}</span></button>
-            <button type="button" class:active={activeSection === "shelf-hub"} on:click={() => activeSection = "shelf-hub"}><span>{tx("workbenchShelfCenter", "书架中心")}</span></button>
+            <button type="button" class:active={activeSection === "library"} on:click={() => activeSection = "library"}><span>{tx("workbenchReadingLibrary", "阅读资料库")}</span></button>
             <button type="button" class:active={activeSection === "weread-stats"} on:click={() => activeSection = "weread-stats"}><span>{tx("workbenchWereadData", "微信读书数据")}</span></button>
         </nav>
 
@@ -175,8 +175,8 @@
             <div class="workbench-operations-grid">
                 <WorkbenchReviewPanel {plugin} {refreshKey} on:action={action} />
             </div>
-        {:else if activeSection === "shelf-hub"}
-            <WorkbenchShelfHub {plugin} {refreshKey} />
+        {:else if activeSection === "library"}
+            <WorkbenchReadingLibrary {plugin} {refreshKey} mobile={false} on:action={action} />
         {:else if activeSection === "weread-stats"}
             <ReadingStatsCenter {plugin} {refreshKey} embedded={true} showBack={false} on:action={action} />
         {/if}

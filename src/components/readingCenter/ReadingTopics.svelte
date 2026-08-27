@@ -9,6 +9,7 @@
 
     export let plugin: any;
     export let pendingInboxItem: ReadingInboxItem | null = null;
+    export let embedded = false;
 
     const dispatch = createEventDispatcher();
     const tx = (key: string, fallback: string, params: Record<string, string | number> = {}) => t(plugin, key, fallback, params);
@@ -104,14 +105,16 @@
     $: selectedTopicItems = selectedTopic ? topicItems.filter((item) => item.topicId === selectedTopic.id) : [];
 </script>
 
-<div class="reading-page">
-    <div class="page-header">
-        <button class="back-btn" on:click={() => dispatch("back")}>{tx("uiBackOverview", "返回总览")}</button>
-        <div>
-            <h2>{tx("topicsTitle", "主题阅读")}</h2>
-            <p>{tx("topicsDesc", "手动创建主题，把不同书里的摘录和想法聚合到一起")}</p>
+<div class="reading-page" class:reading-page-embedded={embedded}>
+    {#if !embedded}
+        <div class="page-header">
+            <button class="back-btn" on:click={() => dispatch("back")}>{tx("uiBackOverview", "返回总览")}</button>
+            <div>
+                <h2>{tx("topicsTitle", "主题阅读")}</h2>
+                <p>{tx("topicsDesc", "手动创建主题，把不同书里的摘录和想法聚合到一起")}</p>
+            </div>
         </div>
-    </div>
+    {/if}
 
     <div class="topic-layout">
         <aside class="topic-sidebar">
@@ -176,6 +179,7 @@
 
 <style>
     .reading-page { max-width: 1180px; margin: 0 auto; padding: clamp(16px, 2vw, 28px); }
+    .reading-page-embedded { max-width: none; margin: 0; padding: 0; }
     .page-header { display: flex; align-items: center; gap: 16px; margin-bottom: 16px; }
     h2, h3, p { margin: 0; }
     h2 { font-size: 20px; margin-bottom: 4px; }
