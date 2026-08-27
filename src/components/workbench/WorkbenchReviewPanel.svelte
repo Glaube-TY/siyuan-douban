@@ -125,6 +125,13 @@
                 <span>{tx("reviewAllClear", "当前无需处理")}</span>
             </div>
         {/if}
+
+        {#if reviewSummary && reviewSummary.activeCount > 0 && reviewSummary.dueCount === 0}
+            <div class="review-queue-footer" role="status">
+                <span>{tx("reviewQueuePending", "{count} 条内容已加入复习，暂无今日到期", { count: reviewSummary.activeCount })}</span>
+                <button type="button" class="secondary" on:click={() => dispatch("action", "open-review")}>{tx("reviewViewReview", "查看复习")}</button>
+            </div>
+        {/if}
     {/if}
 </section>
 
@@ -144,7 +151,8 @@
     .sync-summary,
     .todo-summary,
     .primary-actions,
-    .all-clear {
+    .all-clear,
+    .review-queue-footer {
         display: flex;
         align-items: center;
     }
@@ -264,6 +272,20 @@
         font-size: 13px;
     }
 
+    .review-queue-footer {
+        justify-content: space-between;
+        gap: 12px;
+        padding: 10px 12px;
+        border: 1px solid var(--b3-border-color);
+        border-radius: 8px;
+        background: var(--b3-theme-background);
+    }
+
+    .review-queue-footer span {
+        color: var(--b3-theme-on-surface-light);
+        font-size: 12px;
+    }
+
     @media (max-width: 600px) {
         .review-panel {
             padding: 12px;
@@ -271,6 +293,11 @@
 
         .panel-heading {
             align-items: flex-start;
+        }
+
+        .review-queue-footer {
+            align-items: flex-start;
+            flex-direction: column;
         }
 
         .primary-actions button {

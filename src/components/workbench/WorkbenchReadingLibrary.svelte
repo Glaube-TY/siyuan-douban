@@ -1,6 +1,7 @@
 <script lang="ts">
     import { createEventDispatcher } from "svelte";
     import ReadingAnnotations from "../readingCenter/ReadingAnnotations.svelte";
+    import ReadingReview from "../readingCenter/ReadingReview.svelte";
     import ReadingTopics from "../readingCenter/ReadingTopics.svelte";
     import type { WorkbenchAction } from "../../types/workbench";
     import { t } from "../../utils/i18n";
@@ -10,7 +11,7 @@
     export let refreshKey = 0;
     export let mobile = false;
 
-    type LibrarySection = "books" | "annotations" | "topics";
+    type LibrarySection = "books" | "annotations" | "topics" | "review";
 
     const dispatch = createEventDispatcher<{ action: WorkbenchAction }>();
     const tx = (key: string, fallback: string, params: Record<string, string | number> = {}) =>
@@ -19,6 +20,7 @@
         { key: "books", labelKey: "readingLibraryBooks", fallback: "书籍" },
         { key: "annotations", labelKey: "readingLibraryAnnotations", fallback: "批注" },
         { key: "topics", labelKey: "readingLibraryTopics", fallback: "主题" },
+        { key: "review", labelKey: "readingLibraryReview", fallback: "复习" },
     ];
 
     let activeSection: LibrarySection = "books";
@@ -50,11 +52,13 @@
                 on:requestFullSync={() => dispatch("action", "sync-weread-all")}
                 on:requestOpenTopics={() => (activeSection = "topics")}
             />
-        {:else}
+        {:else if activeSection === "topics"}
             <ReadingTopics
                 {plugin}
                 embedded={true}
             />
+        {:else}
+            <ReadingReview {plugin} embedded={true} />
         {/if}
     </div>
 </div>
