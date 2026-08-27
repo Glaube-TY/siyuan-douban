@@ -286,7 +286,7 @@
                     showMessage(tx("centerUpdateNoWork", "更新同步完成，无需处理的来源"));
                 }
             } catch (e) {
-                showMessage(tx("centerUpdateFailed", "更新同步失败：{error}", { error: e?.message || tx("uiUnknownError", "未知错误") }));
+                showMessage(tx("centerUpdateFailed", "更新同步失败：{error}", { error: localizeKnownUiText(plugin, e?.message || tx("uiUnknownError", "未知错误")) }));
             } finally {
                 isWorkbenchSyncing = false;
                 await refreshAll();
@@ -315,7 +315,7 @@
                     showMessage(tx("centerFullNoWork", "全部同步完成，无需处理的来源"));
                 }
             } catch (e) {
-                showMessage(tx("centerFullFailed", "全部同步失败：{error}", { error: e?.message || tx("uiUnknownError", "未知错误") }));
+                showMessage(tx("centerFullFailed", "全部同步失败：{error}", { error: localizeKnownUiText(plugin, e?.message || tx("uiUnknownError", "未知错误")) }));
             } finally {
                 isWorkbenchSyncing = false;
                 await refreshAll();

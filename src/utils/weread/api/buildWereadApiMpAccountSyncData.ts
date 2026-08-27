@@ -1,4 +1,4 @@
-import { callWereadApi } from "./wereadApiGateway";
+import { callWereadApi, isWereadRateLimitError } from "./wereadApiGateway";
 import type { RawBookInfoResponse } from "./types/raw";
 import { buildMpArticleSyncUnits, type MpBookInfo, type MpArticleSyncUnit } from "../mpArticleSync";
 import { fetchWereadApiMpArticleInfo } from "./fetchWereadApiMpArticleInfo";
@@ -92,7 +92,8 @@ async function enrichMpArticleUnitsWithTitles(
                 unit.articleTitle = info.title;
                 enriched++;
             }
-        } catch {
+        } catch (error) {
+            if (isWereadRateLimitError(error)) throw error;
             // 单篇失败不影响其他文章
         }
     }

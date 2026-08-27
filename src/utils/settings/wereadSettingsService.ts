@@ -11,6 +11,7 @@ import {
     isEncryptedWereadApiKey,
 } from "./wereadApiKeyCrypto";
 import { localizeKnownUiText, t } from "../i18n";
+import { loadWereadDeviceSettings, saveWereadDeviceSettings } from "./wereadDeviceSettingsService";
 
 type PluginLike = {
     loadData: (key: string) => Promise<any>;
@@ -129,8 +130,9 @@ export async function clearWereadApiKey(plugin: PluginLike): Promise<WereadAuthS
 
 export async function loadWereadSyncOptions(plugin: PluginLike): Promise<WereadSyncOptions> {
     const settings = await loadPluginData(plugin, "weread_settings", DEFAULT_WEREAD_SETTINGS);
+    const deviceSettings = loadWereadDeviceSettings();
     return {
-        autoSync: !!settings.autoSync,
+        autoSync: deviceSettings.autoSync,
         skipNewBookCheck: !!settings.skipNewBookCheck,
     };
 }
@@ -141,9 +143,13 @@ export async function saveWereadSyncOptions(plugin: PluginLike, next: WereadSync
         autoSync: !!next.autoSync,
         skipNewBookCheck: !!next.skipNewBookCheck,
     };
-    await plugin.saveData("weread_settings", {
-        ...current,
-        ...normalized,
-    });
+
+    saveWereadDeviceSettings({ autoSync: normalized.autoSync });
+    if (!!current.skipNewBookCheck !== normalized.skipNewBookCheck) {
+        await plugin.saveData("weread_settings", {
+            ...current,
+            skipNewBookCheck: normalized.skipNewBookCheck,
+        });
+    }
     return normalized;
 }

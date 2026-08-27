@@ -40,6 +40,8 @@ export function localizeKnownUiText(source: I18nSource, value: unknown): string 
 
     const exact: Record<string, [string, string]> = {
         "同步已取消": ["wereadSyncCancelled", "同步已取消"],
+        "微信读书自动同步正在进行，请稍后再试。": ["wereadSyncAutoBusy", "微信读书自动同步正在进行，请稍后再试。"],
+        "微信读书同步正在进行，请稍后再试。": ["wereadSyncBusy", "微信读书同步正在进行，请稍后再试。"],
         "无变化跳过": ["syncTextUnchangedSkipped", "无变化跳过"],
         "普通书跳过": ["syncTextNormalBookSkipped", "普通书跳过"],
         "公众号书籍跳过": ["syncTextMpSkipped", "公众号书籍跳过"],

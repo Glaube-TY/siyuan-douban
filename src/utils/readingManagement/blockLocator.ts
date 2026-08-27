@@ -40,21 +40,33 @@ export function locateInboxItemBlock(
 ): LocatedBlock | null {
     const sourceKey = normalizeSourceKeyForBlockIndex(inboxItem.sourceKey, inboxItem.sourceType, inboxItem.bookID);
     const sourceIndex = blockIndex?.sources?.[sourceKey];
-    if (!sourceIndex?.items) return null;
-
-    const ids = new Set(
-        [
+    return locateIndexedSourceItemBlock(sourceIndex, {
+        ids: [
             inboxItem.originalId,
             (inboxItem as any).bookmarkId,
             (inboxItem as any).reviewId,
             (inboxItem as any).itemId,
-        ]
-            .map((value) => String(value || "").trim())
-            .filter(Boolean)
-    );
-    const range = String((inboxItem as any).range || "").trim();
-    const articleID = String((inboxItem as any).articleID || (inboxItem as any).articleId || "").trim();
+        ].map((value) => String(value || "").trim()).filter(Boolean),
+        range: String((inboxItem as any).range || "").trim(),
+        articleID: String((inboxItem as any).articleID || (inboxItem as any).articleId || "").trim(),
+    });
+}
 
+export interface IndexedSourceItemLocateHints {
+    ids: string[];
+    range?: string;
+    articleID?: string;
+}
+
+export function locateIndexedSourceItemBlock(
+    sourceIndex: WereadSourceBlockIndex | null | undefined,
+    hints: IndexedSourceItemLocateHints,
+): LocatedBlock | null {
+    if (!sourceIndex?.items) return null;
+
+    const ids = new Set(hints.ids.map((value) => String(value || "").trim()).filter(Boolean));
+    const range = String(hints.range || "").trim();
+    const articleID = String(hints.articleID || "").trim();
     for (const indexed of Object.values(sourceIndex.items)) {
         if (matchesIndexedItem(indexed, ids, range, articleID)) {
             return toLocatedBlock(indexed, sourceIndex);
@@ -135,18 +147,11 @@ function matchesIndexedItem(
         .filter(Boolean);
 
     if (metaIds.some((id) => ids.has(id))) return true;
-    if (range && String(meta.range || "").trim() === range) {
-        // range 命中即可（普通书/公众号 note 的辅助匹配）
-        return true;
+    if (articleID && range) {
+        return String(meta.articleID || meta.articleId || "").trim() === articleID &&
+            String(meta.range || "").trim() === range;
     }
-    // articleID 不能单独命中，必须和 range 同时命中
-    if (articleID && range &&
-        String(meta.articleID || meta.articleId || "").trim() === articleID &&
-        String(meta.range || "").trim() === range) {
-        return true;
-    }
-
-    return false;
+    return !!range && String(meta.range || "").trim() === range;
 }
 
 function toStringArray(value: unknown): string[] {

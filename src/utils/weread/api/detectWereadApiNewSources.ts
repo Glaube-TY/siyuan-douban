@@ -1,5 +1,4 @@
 import { sql, getAttributeView } from "@/api";
-import { ensureWereadApiNotebookCacheDetails } from "./ensureWereadApiNotebookCacheDetails";
 import { getAttributeViewValueText, normalizeBookTitle } from "../../bookHandling/bookDeduplication";
 import { findBookPrimaryKeyValue } from "../../bookHandling/bookDatabasePrimaryKey";
 import { getIgnoredBookIDSet, getWereadStorageKey, loadIgnoredBooks } from "../wereadSyncStorage";
@@ -42,17 +41,12 @@ function normalizeISBN(value: any): string {
 }
 
 export async function detectWereadApiNewSources(
-  plugin: WereadPluginLike,
-  apiKey?: string
+  plugin: WereadPluginLike
 ): Promise<{
   newSources: WereadApiNewSourceItem[];
   normalBooks: WereadApiNewSourceItem[];
   mpAccounts: WereadApiNewSourceItem[];
 }> {
-  if (apiKey) {
-    await ensureWereadApiNotebookCacheDetails(plugin, apiKey, { limit: 100 });
-  }
-
   const notebooksList = await plugin.loadData("temporary_weread_notebooksList");
   if (!Array.isArray(notebooksList) || notebooksList.length === 0) {
     return { newSources: [], normalBooks: [], mpAccounts: [] };
@@ -161,9 +155,11 @@ export async function detectWereadApiNewSources(
     const isbn = item.isbn || storedCustomISBN;
     const isMpAccount = item.sourceType === "weread_mp_account" || bookID.startsWith("MP_WXS_");
 
+    if (ignoredBookIDs.has(bookID)) continue;
+    if (syncedBookIDSet.has(bookID)) continue;
+
     if (isMpAccount) {
       if (validBookIDsInDB.has(bookID)) continue;
-      if (ignoredBookIDs.has(bookID)) continue;
       mpAccounts.push({
         title: item.title,
         isbn: "",
@@ -177,7 +173,6 @@ export async function detectWereadApiNewSources(
       });
     } else {
       const normalizedIsbn = normalizeISBN(isbn).toUpperCase();
-      if (ignoredBookIDs.has(bookID)) continue;
       if (normalizedIsbn && ignoredISBNs.has(normalizedIsbn)) continue;
       if (customISBNByBookID.has(bookID)) continue;
       if (useBookIDBookIDs.has(bookID)) continue;

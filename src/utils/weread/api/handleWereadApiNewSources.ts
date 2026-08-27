@@ -44,7 +44,7 @@ export async function showWereadApiNewSourcesDialogAndSync(
         message: t(plugin, "newSourcesChecking", "正在比对本地数据库并检查新书籍和公众号..."),
         status: "running",
       });
-      const result = await detectWereadApiNewSources(plugin, apiKey);
+      const result = await detectWereadApiNewSources(plugin);
       newSources = result.newSources;
     } catch (e) {
       showMessage(plugin.i18n?.wereadApiCheckNewSourcesFailed || "检查新来源失败");

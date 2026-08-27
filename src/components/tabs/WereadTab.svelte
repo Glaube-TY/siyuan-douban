@@ -12,14 +12,14 @@
         createWereadReadingStatsDialog,
     } from "@/utils/weread/wereadDialogs";
     import {
-        loadPluginData,
-        DEFAULT_WEREAD_SETTINGS,
         normalizeWereadPositionMark,
     } from "@/utils/core/configDefaults";
     import {
         loadWereadAuthState as loadWereadAuthStateFromService,
         verifyAndSaveWereadApiKey as verifyAndSaveWereadApiKeyFromService,
         clearWereadApiKey as clearWereadApiKeyFromService,
+        loadWereadSyncOptions as loadWereadSyncOptionsFromService,
+        saveWereadSyncOptions as saveWereadSyncOptionsFromService,
     } from "@/utils/settings/wereadSettingsService";
     import {
         maskWereadApiKey,
@@ -40,12 +40,14 @@
     import WereadSyncProgressDialog from "@/components/common/WereadSyncProgressDialog.svelte";
     import { READING_NOTES_LINKS } from "@/utils/core/externalLinks";
     import ContextTutorialLink from "@/components/common/ContextTutorialLink.svelte";
+    import { localizeKnownUiText } from "@/utils/i18n";
 
     import wereadManageISBN from "@/components/common/wereadManageISBN.svelte";
     import wereadIgnoredBooksDialog from "@/components/common/wereadIgnoredBooksDialog.svelte";
     import wereadUseBookIDBooksDialog from "@/components/common/wereadUseBookIDBooksDialog.svelte";
     import WereadBookManagementDialog from "@/components/common/WereadBookManagementDialog.svelte";
     import { loadIgnoredBooks } from "@/utils/weread/wereadSyncStorage";
+    import { tryRunWereadSync } from "@/utils/weread/api/wereadSyncRunGuard";
 
     async function getCurrentValidBookIdentifiers(plugin: any): Promise<{ validISBNs: Set<string>, validBookIDs: Set<string>, validBookNames: Set<string> }> {
         const settings = await plugin.loadData("settings.json") || {};
@@ -383,6 +385,16 @@
 
     async function handleWereadApiManualSyncWithNewSourceDialog(mode: "all" | "update") {
         if (isSyncing || isPreparingWereadApiSync) return;
+        try {
+            await tryRunWereadSync("manual", () => runWereadApiManualSyncWithNewSourceDialog(mode));
+        } catch (error) {
+            const message = localizeKnownUiText(plugin, error?.message || i18nText("wereadApiManualSyncFailed", "同步失败"));
+            showMessage(`${i18n.wereadApiManualSyncFailed || "同步失败"}：${message}`);
+        }
+    }
+
+    async function runWereadApiManualSyncWithNewSourceDialog(mode: "all" | "update") {
+        if (isSyncing || isPreparingWereadApiSync) return;
         if (!isNotebookListReady) {
             showMessage(i18n.showMessage15);
             return;
@@ -439,7 +451,7 @@
         // 加载本地配置
         const savedPositionMark = await plugin.loadData("weread_position_mark");
         wereadPositionMark = normalizeWereadPositionMark(savedPositionMark);
-        const wereadSetting = await loadPluginData(plugin, "weread_settings", DEFAULT_WEREAD_SETTINGS);
+        const wereadSetting = await loadWereadSyncOptionsFromService(plugin);
         autoSync = wereadSetting.autoSync;
         skipNewBookCheck = wereadSetting.skipNewBookCheck;
         const savedTemplates = await plugin.loadData("weread_templates");
@@ -1238,8 +1250,7 @@
                             title={i18n.skipNewBookCheckTip}
                             bind:checked={skipNewBookCheck}
                             on:change={async () => {
-                                const current = await loadPluginData(plugin, "weread_settings", DEFAULT_WEREAD_SETTINGS);
-                                await plugin.saveData("weread_settings", { ...current, skipNewBookCheck });
+                                await saveWereadSyncOptionsFromService(plugin, { autoSync, skipNewBookCheck });
                             }}
                         />
                         <span class="settings-switch-track">
@@ -1261,8 +1272,7 @@
                             title={i18n.autoSyncTip}
                             bind:checked={autoSync}
                             on:change={async () => {
-                                const current = await loadPluginData(plugin, "weread_settings", DEFAULT_WEREAD_SETTINGS);
-                                await plugin.saveData("weread_settings", { ...current, autoSync });
+                                await saveWereadSyncOptionsFromService(plugin, { autoSync, skipNewBookCheck });
                             }}
                         />
                         <span class="settings-switch-track">

@@ -84,18 +84,20 @@ export class wereadApiProvider implements WereadProvider {
     return normalizeChapters(result);
   }
 
-  async getHighlights(bookId: string): Promise<NormalizedWereadHighlight[]> {
-    const chapterResult = await callWereadApi<RawChapterInfoResponse>(
-      this.apiKey,
-      "/book/chapterinfo",
-      { bookId }
-    );
+  async getHighlights(bookId: string, preloadedChapters?: NormalizedWereadChapter[]): Promise<NormalizedWereadHighlight[]> {
+    const chapters = preloadedChapters !== undefined
+      ? preloadedChapters
+      : (await callWereadApi<RawChapterInfoResponse>(
+        this.apiKey,
+        "/book/chapterinfo",
+        { bookId }
+      )).chapters;
     const bookmarkResult = await callWereadApi<RawBookmarkListResponse>(
       this.apiKey,
       "/book/bookmarklist",
       { bookId }
     );
-    return normalizeHighlights(bookmarkResult, chapterResult.chapters);
+    return normalizeHighlights(bookmarkResult, chapters);
   }
 
   async getReviews(bookId: string): Promise<NormalizedWereadReview[]> {

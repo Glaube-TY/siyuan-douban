@@ -1,9 +1,9 @@
-import type { RawBookmarkListResponse, RawBookmarkItem, RawChapterItem } from "../types/raw";
+import type { RawBookmarkListResponse, RawBookmarkItem } from "../types/raw";
 import type { NormalizedWereadHighlight } from "../types/normalized";
 
 export function normalizeHighlights(
   raw: RawBookmarkListResponse,
-  chapters?: RawChapterItem[]
+  chapters?: Array<{ chapterUid: number; title?: string }>
 ): NormalizedWereadHighlight[] {
   const chapterTitleMap = new Map<number, string>();
   if (Array.isArray(chapters)) {

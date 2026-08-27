@@ -1,6 +1,6 @@
 <script lang="ts">
     import { createEventDispatcher } from "svelte";
-    import SiYuanIcon from "../common/SiYuanIcon.svelte";
+    import ReadingAnnotations from "../readingCenter/ReadingAnnotations.svelte";
     import ReadingTopics from "../readingCenter/ReadingTopics.svelte";
     import type { WorkbenchAction } from "../../types/workbench";
     import { t } from "../../utils/i18n";
@@ -43,16 +43,18 @@
         {#if activeSection === "books"}
             <WorkbenchShelfHub {plugin} {refreshKey} embedded={true} />
         {:else if activeSection === "annotations"}
-            <section class="reading-library-placeholder" aria-labelledby="reading-library-annotations-title">
-                <h3 id="reading-library-annotations-title">{tx("readingLibraryAnnotationsTitle", "批注")}</h3>
-                <p>{tx("readingLibraryAnnotationsDesc", "这里将用于浏览全部历史阅读批注。当前新增划线、评论和公众号笔记仍可从新增内容处理中查看。")}</p>
-                <button type="button" class="reading-library-action" on:click={() => dispatch("action", "open-inbox")}>
-                    <SiYuanIcon name="inbox" size={14} />
-                    <span>{tx("readingLibraryOpenInbox", "打开新增内容")}</span>
-                </button>
-            </section>
+            <ReadingAnnotations
+                {plugin}
+                {refreshKey}
+                {mobile}
+                on:requestFullSync={() => dispatch("action", "sync-weread-all")}
+                on:requestOpenTopics={() => (activeSection = "topics")}
+            />
         {:else}
-            <ReadingTopics {plugin} embedded={true} />
+            <ReadingTopics
+                {plugin}
+                embedded={true}
+            />
         {/if}
     </div>
 </div>
@@ -111,61 +113,13 @@
         color: var(--b3-theme-primary);
     }
 
-    .reading-library-tabs button:focus-visible,
-    .reading-library-action:focus-visible {
+    .reading-library-tabs button:focus-visible {
         outline: 2px solid var(--b3-theme-primary);
         outline-offset: 1px;
     }
 
     .reading-library-content {
         min-width: 0;
-    }
-
-    .reading-library-placeholder {
-        display: grid;
-        gap: 10px;
-        padding: 20px;
-        border: 1px solid var(--b3-border-color);
-        border-radius: 8px;
-        background: var(--b3-theme-surface);
-    }
-
-    .reading-library-placeholder h3,
-    .reading-library-placeholder p {
-        margin: 0;
-    }
-
-    .reading-library-placeholder h3 {
-        font-size: 16px;
-    }
-
-    .reading-library-placeholder p {
-        max-width: 720px;
-        color: var(--b3-theme-on-surface-light);
-        font-size: 13px;
-        line-height: 1.6;
-    }
-
-    .reading-library-action {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        gap: 6px;
-        width: fit-content;
-        min-height: 30px;
-        padding: 0 10px;
-        border: 1px solid var(--b3-border-color);
-        border-radius: 7px;
-        background: var(--b3-theme-background);
-        color: var(--b3-theme-on-background);
-        cursor: pointer;
-        font-size: 12px;
-        font-weight: 600;
-    }
-
-    .reading-library-action:hover {
-        border-color: var(--b3-theme-primary);
-        color: var(--b3-theme-primary);
     }
 
     @media (prefers-reduced-motion: reduce) {

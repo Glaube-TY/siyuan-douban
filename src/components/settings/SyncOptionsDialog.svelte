@@ -42,7 +42,7 @@
         <div class="settings-dialog-icon"><SiYuanIcon name="sync" size={20} /></div>
         <div>
             <h2>{tx("settingsSyncOptionsTitle", "同步选项")}</h2>
-            <p>{tx("settingsSyncOptionsDesc", "只调整已有同步开关，不改动自动同步和手动同步主链路。")}</p>
+            <p>{tx("settingsSyncOptionsDesc", "管理本设备自动同步与新来源确认选项。")}</p>
             <ContextTutorialLink
                 href={READING_NOTES_LINKS.wereadSyncTutorial}
                 label={tx("tutorialSyncOptions", "查看同步方式教程")}
@@ -57,8 +57,8 @@
         <div class="settings-dialog-body">
             <label class="settings-dialog-switch-row">
                 <span>
-                    <strong>{tx("settingsAutoSync", "自动同步")}</strong>
-                    <em>{tx("settingsAutoSyncDesc", "布局就绪后按原有逻辑检查 API Key 并执行自动同步。")}</em>
+                    <strong>{tx("settingsAutoSync", "本设备自动同步")}</strong>
+                    <em>{tx("settingsAutoSyncDesc", "仅对当前设备生效。若思源数据同步已启用，将在本次会话首次同步成功后执行一次微信读书更新同步。建议仅在一个常用设备开启。")}</em>
                 </span>
                 <input type="checkbox" class="settings-switch" bind:checked={autoSync} />
                 <span class="settings-switch-track"><span class="settings-switch-thumb"></span></span>

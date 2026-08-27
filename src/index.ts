@@ -4,11 +4,7 @@ import firstPage from "./components/common/firstDialog.svelte";
 import ReadingCenter from "./components/readingCenter/ReadingCenter.svelte";
 
 import { svelteDialog } from "./libs/dialog";
-import { loadPluginData, DEFAULT_WEREAD_SETTINGS } from "./utils/core/configDefaults";
-import { autoSyncWereadApi } from "./utils/weread/api/autoSyncWereadApi";
-import { formatWereadApiAutoSyncResultSummary } from "./utils/weread/api/formatWereadApiSyncResult";
-import { loadWereadAuthState } from "./utils/settings/wereadSettingsService";
-import { localizeKnownUiText } from "./utils/i18n";
+import { WereadAutoSyncCoordinator } from "./utils/weread/api/wereadAutoSyncCoordinator";
 
 const STORAGE_NAME = "menu-config";
 
@@ -27,9 +23,11 @@ export default class PluginDouban extends Plugin {
     private readingCenterTabObserver: MutationObserver | null = null;
     private isOpeningReadingCenterTab: boolean = false;
     private mobileReadingCenterDialog: ReturnType<typeof svelteDialog> | null = null;
+    private wereadAutoSyncCoordinator: WereadAutoSyncCoordinator | null = null;
 
     async onload() {
         this.data[STORAGE_NAME] = { readonlyText: "Readonly" };
+        this.wereadAutoSyncCoordinator = new WereadAutoSyncCoordinator(this);
 
         const frontEnd = getFrontend();
         this.isMobile = frontEnd === "mobile" || frontEnd === "browser-mobile";
@@ -66,32 +64,13 @@ export default class PluginDouban extends Plugin {
     }
 
     async onLayoutReady() {
-        // 继续原有自动同步逻辑
-        const wereadSetting = await loadPluginData(this, "weread_settings", DEFAULT_WEREAD_SETTINGS);
-        const autoSync = wereadSetting.autoSync;
-
-        if (!autoSync) {
-            return;
-        }
-
-        const auth = await loadWereadAuthState(this);
-
-        if (auth.verified && auth.apiKey) {
-            try {
-                showMessage(this.i18n.wereadApiAutoSyncStart || "微信读书自动同步开始");
-                const result = await autoSyncWereadApi(this);
-                const summary = formatWereadApiAutoSyncResultSummary(result, { maxTitles: 3, i18nSource: this });
-                showMessage(summary || (this.i18n.wereadApiAutoSyncSuccess || "微信读书自动同步完成"));
-            } catch (error: any) {
-                showMessage(`${this.i18n.wereadApiAutoSyncFailed || "微信读书自动同步失败"}：${localizeKnownUiText(this, error?.message || "")}`);
-            }
-            return;
-        }
-
-        showMessage(this.i18n.wereadVerifyApiKeyFirst || "请先验证微信读书 API Key");
+        await this.wereadAutoSyncCoordinator?.markLayoutReady();
     }
 
     onunload() {
+        this.wereadAutoSyncCoordinator?.destroy();
+        this.wereadAutoSyncCoordinator = null;
+
         // 清理标签页组件实例
         this.destroyReadingCenterInstance();
         this.mobileReadingCenterDialog?.close?.();

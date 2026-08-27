@@ -4,6 +4,8 @@ import { findWereadApiBookTargetDoc } from "./findWereadApiBookTargetDoc";
 import { preflightWereadApiMpSync } from "./preflightWereadApiMpSync";
 import PromiseLimitPool from "@/libs/promise-pool";
 import { recordMpAccountInboxDiff } from "../../storage/readingInboxDiff";
+import { replaceReadingAnnotationSource } from "../../storage/readingAnnotationStorage";
+import { buildMpAnnotationSource } from "../../readingCenter/readingAnnotationArchiveBuilder";
 import type { MpArticleSyncUnit } from "../mpArticleSync";
 import { buildWereadMpRenderModel } from "../incremental/buildMpRenderModel";
 import { renderModelToMarkdown } from "../incremental/buildBookRenderModel";
@@ -16,6 +18,7 @@ import type { WereadIncrementalSyncStats, WereadRenderModel } from "../increment
 import type { WereadSyncProgressCallback, WereadSyncPlanConfirmCallback, WereadSyncPlanItem } from "./wereadSyncProgress";
 
 interface WereadPluginLike {
+    name: string;
     loadData: (key: string) => Promise<any>;
     saveData: (key: string, value: any) => Promise<void>;
     i18n: Record<string, string>;
@@ -460,7 +463,7 @@ export async function syncWereadApiMpAccounts(
       });
     }
 
-    const pool = new PromiseLimitPool<PreparedMpSyncItem>(2);
+    const pool = new PromiseLimitPool<PreparedMpSyncItem>(1);
     let preparedCompleted = 0;
 
     for (let i = 0; i < plannedItems.length; i++) {
@@ -604,6 +607,21 @@ export async function syncWereadApiMpAccounts(
           model: prepared.model,
         });
         const stats: WereadIncrementalSyncStats = incremental.stats;
+        let annotationArchiveWarning = "";
+        try {
+          await replaceReadingAnnotationSource(plugin, buildMpAnnotationSource({
+            bookID: prepared.bookID,
+            title: prepared.title,
+            noteDocId: prepared.targetBlockID,
+            articleUnits: prepared.articleUnits,
+            sourceIndex: incremental.sourceIndex,
+            syncedAt: Date.now(),
+          }));
+        } catch (error: any) {
+          const detail = error?.message || "未知错误";
+          annotationArchiveWarning = `；历史批注索引更新失败：${detail}`;
+          console.warn("[weread] mp annotation archive update failed:", error);
+        }
 
         let newBookmarkCount = 0;
         let newReviewCount = 0;
@@ -638,7 +656,7 @@ export async function syncWereadApiMpAccounts(
           rebuilt: stats.rebuilt,
           newBookmarkCount,
           newReviewCount,
-          message: `同步成功：新增 ${stats.added} 条，更新 ${stats.changed} 条，删除 ${stats.deleted} 条，未变化 ${stats.unchanged} 条`,
+          message: `同步成功：新增 ${stats.added} 条，更新 ${stats.changed} 条，删除 ${stats.deleted} 条，未变化 ${stats.unchanged} 条${annotationArchiveWarning}`,
         });
         if (options.onProgress) {
           options.onProgress({
@@ -648,7 +666,7 @@ export async function syncWereadApiMpAccounts(
             title: prepared.title,
             index: writeIndex,
             total: orderedResults.length,
-            message: `《${prepared.title || prepared.bookID}》同步完成：新增 ${stats.added} / 更新 ${stats.changed} / 删除 ${stats.deleted}`,
+            message: `《${prepared.title || prepared.bookID}》同步完成：新增 ${stats.added} / 更新 ${stats.changed} / 删除 ${stats.deleted}${annotationArchiveWarning}`,
             status: "success",
           });
         }

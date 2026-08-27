@@ -6,6 +6,7 @@ import { loadWereadAuthState } from "../../settings/wereadSettingsService";
 import { buildWereadSyncReport, saveWereadSyncReportAndApplyStatus } from "../../storage/syncReportBuilder";
 
 interface WereadPluginLike {
+  name: string;
   loadData: (key: string) => Promise<any>;
   saveData: (key: string, value: any) => Promise<void>;
   i18n: Record<string, string>;

@@ -2,9 +2,10 @@ import { normalizeWereadPositionMark } from "../../core/configDefaults";
 import { buildWereadApiEnhancedNotebook } from "./buildWereadApiEnhancedNotebook";
 import { findWereadApiBookTargetDoc } from "./findWereadApiBookTargetDoc";
 import { preflightWereadApiBooksSync } from "./preflightWereadApiBooksSync";
-import { ensureWereadApiNotebookCacheDetails } from "./ensureWereadApiNotebookCacheDetails";
 import PromiseLimitPool from "@/libs/promise-pool";
 import { recordNormalBookInboxDiff } from "../../storage/readingInboxDiff";
+import { replaceReadingAnnotationSource } from "../../storage/readingAnnotationStorage";
+import { buildNormalBookAnnotationSource } from "../../readingCenter/readingAnnotationArchiveBuilder";
 import { buildWereadBookRenderModel } from "../incremental/buildBookRenderModel";
 import { renderModelToMarkdown } from "../incremental/buildBookRenderModel";
 import { syncWereadBookIncremental } from "../incremental/syncBookIncremental";
@@ -16,6 +17,7 @@ import type { WereadIncrementalSyncStats, WereadRenderModel } from "../increment
 import type { WereadSyncProgressCallback, WereadSyncPlanConfirmCallback, WereadSyncPlanItem } from "./wereadSyncProgress";
 
 interface WereadPluginLike {
+  name: string;
   loadData: (key: string) => Promise<any>;
   saveData: (key: string, value: any) => Promise<void>;
   i18n: Record<string, string>;
@@ -114,8 +116,7 @@ export async function syncWereadApiNormalBooks(
     message: "正在分析普通书籍缓存、目标文档和变更状态...",
     status: "running",
   });
-  const enrichedCache = await ensureWereadApiNotebookCacheDetails(plugin, apiKey, { limit: 100 });
-  const cache = enrichedCache.length > 0 ? enrichedCache : await plugin.loadData("temporary_weread_notebooksList");
+  const cache = await plugin.loadData("temporary_weread_notebooksList");
 
   await plugin.saveData("temporary_weread_notebooksList", cache);
 
@@ -139,6 +140,7 @@ export async function syncWereadApiNormalBooks(
   }
 
   const preflight = await preflightWereadApiBooksSync(plugin);
+  const ignoredBookIDs = getIgnoredBookIDSet(await loadIgnoredBooks(plugin));
 
   const readyItems = preflight.items.filter((i) => i.status === "ready");
   const mpItems = preflight.items.filter((i) => i.status === "skipped_mp");
@@ -146,7 +148,6 @@ export async function syncWereadApiNormalBooks(
   const notReadyItems = preflight.items.filter((i) => i.status === "failed");
 
   const forceBookIDSet = new Set((options.forceBookIDs || []).map((bookID) => String(bookID).trim()).filter(Boolean));
-  const ignoredBookIDs = getIgnoredBookIDSet(await loadIgnoredBooks(plugin));
   const ignoredDetailMessage = plugin.i18n.syncSkippedIgnoredDetail || "已设置为停止同步，未参与本次检测";
 
   const readyMap = new Map<string, typeof readyItems[0]>();
@@ -441,7 +442,7 @@ export async function syncWereadApiNormalBooks(
     }
   }
 
-  // 阶段 1：并发准备数据（并发数 3）
+  // 阶段 1：并发准备数据（并发数 2）
   if (options.onProgress) {
     options.onProgress({
       stage: "preparing",
@@ -452,7 +453,7 @@ export async function syncWereadApiNormalBooks(
     });
   }
 
-  const pool = new PromiseLimitPool<PreparedNormalSyncItem>(3);
+  const pool = new PromiseLimitPool<PreparedNormalSyncItem>(2);
   let preparedCompleted = 0;
 
   for (let i = 0; i < plannedItems.length; i++) {
@@ -603,6 +604,22 @@ export async function syncWereadApiNormalBooks(
         model: prepared.model,
       });
       const stats: WereadIncrementalSyncStats = incremental.stats;
+      let annotationArchiveWarning = "";
+      try {
+        await replaceReadingAnnotationSource(plugin, buildNormalBookAnnotationSource({
+          bookID: prepared.bookID,
+          title: prepared.title,
+          noteDocId: prepared.targetBlockID,
+          bookmarks: prepared.bookmarks,
+          reviews: prepared.reviews,
+          sourceIndex: incremental.sourceIndex,
+          syncedAt: Date.now(),
+        }));
+      } catch (error: any) {
+        const detail = error?.message || "未知错误";
+        annotationArchiveWarning = `；历史批注索引更新失败：${detail}`;
+        console.warn("[weread] normal annotation archive update failed:", error);
+      }
 
       let newBookmarkCount = 0;
       let newReviewCount = 0;
@@ -636,7 +653,7 @@ export async function syncWereadApiNormalBooks(
         rebuilt: stats.rebuilt,
         newBookmarkCount,
         newReviewCount,
-        message: `同步成功：新增 ${stats.added} 条，更新 ${stats.changed} 条，删除 ${stats.deleted} 条，未变化 ${stats.unchanged} 条`,
+        message: `同步成功：新增 ${stats.added} 条，更新 ${stats.changed} 条，删除 ${stats.deleted} 条，未变化 ${stats.unchanged} 条${annotationArchiveWarning}`,
       });
       if (options.onProgress) {
         options.onProgress({
@@ -646,7 +663,7 @@ export async function syncWereadApiNormalBooks(
           title: prepared.title,
           index: writeIndex,
           total: orderedResults.length,
-          message: `《${prepared.title || prepared.bookID}》同步完成：新增 ${stats.added} / 更新 ${stats.changed} / 删除 ${stats.deleted}`,
+          message: `《${prepared.title || prepared.bookID}》同步完成：新增 ${stats.added} / 更新 ${stats.changed} / 删除 ${stats.deleted}${annotationArchiveWarning}`,
           status: "success",
         });
       }

@@ -1,4 +1,4 @@
-import { callWereadApi } from "./wereadApiGateway";
+import { callWereadApi, isWereadRateLimitError } from "./wereadApiGateway";
 
 export interface WereadApiMpArticleInfo {
     reviewId: string;
@@ -38,7 +38,8 @@ export async function fetchWereadApiMpArticleInfo(
             publishTime: mpInfo.time || 0,
             raw: result,
         };
-    } catch {
+    } catch (error) {
+        if (isWereadRateLimitError(error)) throw error;
         return null;
     }
 }

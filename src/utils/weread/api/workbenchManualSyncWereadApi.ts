@@ -5,8 +5,10 @@ import { showWereadApiNewSourcesDialogAndSync } from "./handleWereadApiNewSource
 import { loadWereadAuthState } from "../../settings/wereadSettingsService";
 import { buildWereadSyncReport, saveWereadSyncReportAndApplyStatus } from "../../storage/syncReportBuilder";
 import type { WereadSyncProgressCallback, WereadSyncPlanConfirmCallback } from "./wereadSyncProgress";
+import { tryRunWereadSync } from "./wereadSyncRunGuard";
 
 interface WereadPluginLike {
+  name: string;
   loadData: (key: string) => Promise<any>;
   saveData: (key: string, value: any) => Promise<void>;
   i18n: Record<string, string>;
@@ -28,6 +30,29 @@ interface WereadApiWorkbenchManualSyncOptions {
 }
 
 export async function runWorkbenchManualWereadApiSync(
+  plugin: WereadPluginLike,
+  mode: "all" | "update",
+  options?: WereadApiWorkbenchManualSyncOptions,
+): Promise<WereadApiWorkbenchManualSyncResult> {
+  let runStarted = false;
+  try {
+    return await tryRunWereadSync("manual", async () => {
+      runStarted = true;
+      return runWorkbenchManualWereadApiSyncUnlocked(plugin, mode, options);
+    });
+  } catch (error: any) {
+    if (!runStarted) {
+      options?.onProgress?.({
+        stage: "finished",
+        message: error?.message || "同步异常",
+        status: "failed",
+      });
+    }
+    throw error;
+  }
+}
+
+async function runWorkbenchManualWereadApiSyncUnlocked(
   plugin: WereadPluginLike,
   mode: "all" | "update",
   options?: WereadApiWorkbenchManualSyncOptions,
