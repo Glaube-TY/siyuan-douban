@@ -6,6 +6,7 @@
         WorkbenchWereadAssetSummary,
     } from "../../types/workbench";
     import WorkbenchHero from "./WorkbenchHero.svelte";
+    import SiYuanIcon from "../common/SiYuanIcon.svelte";
     import WorkbenchSearch from "./WorkbenchSearch.svelte";
     import WorkbenchLocalAssets from "./WorkbenchLocalAssets.svelte";
     import WorkbenchWereadAssets from "./WorkbenchWereadAssets.svelte";
@@ -121,8 +122,21 @@
         <div class="mobile-workbench-content">
             {#if activeSection === "overview"}
                 <section class="mobile-workbench-intro">
-                    <span>{tx("workbenchReadingHub", "个人阅读中枢")}</span>
-                    <strong>{tx("workbenchTodayPrompt", "今天想读点什么？")}</strong>
+                    <div class="mobile-workbench-intro-main">
+                        <div class="mobile-workbench-intro-copy">
+                            <span>{tx("workbenchReadingHub", "个人阅读中枢")}</span>
+                            <strong>{tx("workbenchTodayPrompt", "今天想读点什么？")}</strong>
+                        </div>
+                        <button
+                            type="button"
+                            class="mobile-workbench-utility"
+                            on:click={() => triggerAction("open-mcp-settings")}
+                            aria-label={tx("workbenchMcpSettings", "MCP 设置")}
+                        >
+                            <SiYuanIcon name="plugin" size={15} />
+                            <span>MCP</span>
+                        </button>
+                    </div>
                     <small>{tx("workbenchMobileHint", "搜索书籍，或展开下方分组继续操作。")}</small>
                 </section>
 
@@ -210,9 +224,13 @@
         padding: 4px 2px 2px;
     }
 
-    .mobile-workbench-intro span { color: var(--b3-theme-primary); font-size: 11px; font-weight: 700; }
-    .mobile-workbench-intro strong { font-size: 22px; line-height: 1.3; }
+    .mobile-workbench-intro-main { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; min-width: 0; }
+    .mobile-workbench-intro-copy { display: grid; gap: 4px; min-width: 0; }
+    .mobile-workbench-intro-copy span { color: var(--b3-theme-primary); font-size: 11px; font-weight: 700; }
+    .mobile-workbench-intro-copy strong { font-size: 22px; line-height: 1.3; overflow-wrap: anywhere; }
     .mobile-workbench-intro small { color: var(--b3-theme-on-surface-light); font-size: 12px; }
+    .mobile-workbench-utility { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 5px; min-height: 32px; padding: 0 9px; border: 1px solid var(--b3-border-color); border-radius: 7px; background: transparent; color: var(--b3-theme-on-surface-light); cursor: pointer; font: inherit; font-size: 12px; font-weight: 600; }
+    .mobile-workbench-utility:hover { border-color: var(--b3-theme-primary); color: var(--b3-theme-primary); }
 
     .mobile-workbench-groups {
         display: grid;

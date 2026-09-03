@@ -16,8 +16,8 @@ import {
 } from "../../utils/readingCenter/readingReviewService";
 import { loadReadingTopicsForPicker } from "../../utils/readingCenter/readingTopicService";
 import {
-    loadReadingBookStatusesStrict,
-    loadReadingInboxItemsStrict,
+    loadReadingBookStatusesForMutationStrict,
+    loadReadingInboxItemsForMutationStrict,
     loadWereadAuthSettingsStrict,
     loadWereadSyncReportsStrict,
 } from "../../utils/readingManagement/managementStorage";
@@ -84,6 +84,10 @@ export async function readReadingOverview(plugin: ReadPlugin): Promise<Record<st
         loadStrictArrayState<unknown>(plugin, STORAGE_KEYS.syncReports),
         loadReadingAnnotationArchiveState(plugin),
     ]);
+    const [strictStatuses, strictInbox] = await Promise.all([
+        loadReadingBookStatusesForMutationStrict(plugin),
+        loadReadingInboxItemsForMutationStrict(plugin),
+    ]);
     const syncReports = reports.exists ? reports.value.map(validateSyncReport) : [];
     const latestReport = getLatestReport(syncReports);
     const now = Date.now();
@@ -97,9 +101,9 @@ export async function readReadingOverview(plugin: ReadPlugin): Promise<Record<st
         pluginVersion: plugin.version || "unknown",
         notebookCount: notebooks.value.length,
         noteCount: countNotebookNotes(notebooks.value),
-        bookStatusCount: statuses.value.length,
-        pendingInboxCount: inbox.value.filter((item) => item.status === "unprocessed").length,
-        laterInboxCount: inbox.value.filter((item) => item.status === "later").length,
+        bookStatusCount: strictStatuses.length,
+        pendingInboxCount: strictInbox.filter((item) => item.status === "unprocessed").length,
+        laterInboxCount: strictInbox.filter((item) => item.status === "later").length,
         activeReviewCount: reviewItems.filter((item) => item.status === "active").length,
         dueReviewCount: reviewItems.filter((item) => item.status === "active" && item.nextReviewAt <= now).length,
         topicCount: topics.value.length,
@@ -163,7 +167,7 @@ export async function readReadingStatuses(plugin: ReadPlugin, input: Record<stri
     const requestedStatus = normalizeEnum(input.status, READING_BOOK_STATUSES, "status");
     const requestedSourceType = normalizeEnum(input.sourceType, READING_SOURCE_TYPES, "sourceType");
     const query = normalizeQuery(input.query);
-    const statuses = await loadReadingBookStatusesStrict(plugin);
+    const statuses = await loadReadingBookStatusesForMutationStrict(plugin);
     const filtered = statuses.filter((item) => {
         if (requestedStatus && item.status !== requestedStatus) return false;
         if (requestedSourceType && item.sourceType !== requestedSourceType) return false;
@@ -185,11 +189,20 @@ export async function readReadingInbox(plugin: ReadPlugin, input: Record<string,
     const requestedStatus = normalizeEnum(input.status, INBOX_STATUSES, "status");
     const sourceKey = normalizeQuery(input.sourceKey);
     const query = normalizeQuery(input.query);
-    const inboxItems = await loadReadingInboxItemsStrict(plugin);
+    const inboxItems = await loadReadingInboxItemsForMutationStrict(plugin);
     const filtered = stableNewest(inboxItems.filter((item) => {
         if (requestedStatus && item.status !== requestedStatus) return false;
         if (sourceKey && item.sourceKey !== sourceKey) return false;
-        return !query || matchesQuery(query, item.title, item.bookID, item.sourceKey);
+        return !query || matchesQuery(
+            query,
+            item.title,
+            item.bookID,
+            item.sourceKey,
+            item.content,
+            item.reviewContent,
+            item.chapterTitle,
+            item.articleTitle,
+        );
     }), (item) => item.createdAt);
 
     return {

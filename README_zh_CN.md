@@ -183,8 +183,9 @@
 <h2 style="margin:0 0 .8em;color:#365314;">🧩 MCP 与 Kernel Plugin（第一阶段）</h2>
 <ul style="margin:0;padding-left:1.25em;color:#53633d;">
 <li style="margin:.4em 0;">需要思源笔记 3.8.0 或更高版本。本阶段通过思源内置 <code>/mcp</code> 暴露只读能力，不额外启动插件 MCP 端口；外部客户端应连接思源的 <code>/mcp</code>。</li>
+<li style="margin:.4em 0;">MCP 默认关闭。请在读书笔记工作台的 MCP 设置中主动开启；只有开启后，本插件才会向思源 <code>/mcp</code> 注册这 9 个只读能力。开关可在运行中生效，不需要重启思源；关闭后能力会从工具列表移除。</li>
 <li style="margin:.4em 0;">认证沿用思源 API Token 与权限控制，不创建插件专用 MCP Token；请继续保护思源 Token，并保留 CrossOriginProtection 等安全设置。</li>
-<li style="margin:.4em 0;">第一阶段提供：<code>reading_overview</code> 总览、<code>sync_status</code> 当前同步状态、<code>sync_history</code> 同步历史、<code>reading_statuses</code> 书籍状态、<code>reading_inbox</code> 待读收件箱、<code>review_queue</code> 复习队列、<code>reading_topics</code> 阅读主题、<code>reading_annotations</code> 划线与想法、<code>diagnostics</code> 诊断信息。</li>
+<li style="margin:.4em 0;">第一阶段提供：<code>reading_overview</code> 总览、<code>sync_status</code> 最近持久化同步状态（不是前端实时同步进度）、<code>sync_history</code> 同步历史、<code>reading_statuses</code> 书籍状态、<code>reading_inbox</code> 待读收件箱、<code>review_queue</code> 复习队列、<code>reading_topics</code> 阅读主题、<code>reading_annotations</code> 划线与想法、<code>diagnostics</code> 诊断信息。</li>
 <li style="margin:.4em 0;">这些能力只读取插件已有的本地状态，带有分页和数量上限；不会写入书籍、笔记、主题或同步数据，也不会触发微信读书同步或连接实时运行时。</li>
 <li style="margin:.4em 0;">思源最终展示的外部工具名可能包含插件标识或哈希，请以当前实例的工具列表为准，不要在客户端配置中硬编码生成后的名称。</li>
 <li style="margin:.4em 0;">不要把思源 MCP 端口未经保护暴露到公网；远程使用应遵循思源自身的认证、Host、反向代理与安全策略，插件不会绕过 CrossOriginProtection 或鉴权。</li>

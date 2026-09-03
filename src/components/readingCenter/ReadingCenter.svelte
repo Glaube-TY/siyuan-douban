@@ -28,6 +28,7 @@
     import TemplateSettingsDialog from "../settings/TemplateSettingsDialog.svelte";
     import WereadApiKeyDialog from "../settings/WereadApiKeyDialog.svelte";
     import SyncOptionsDialog from "../settings/SyncOptionsDialog.svelte";
+    import McpSettingsDialog from "../settings/McpSettingsDialog.svelte";
     import AboutPluginDialog from "../settings/AboutPluginDialog.svelte";
     import WereadBookManagementDialog from "../common/WereadBookManagementDialog.svelte";
     import { localizeKnownUiText, t } from "../../utils/i18n";
@@ -159,6 +160,14 @@
     function openSyncOptions() {
         openComponentDialog(SyncOptionsDialog, {
             title: tx("settingsSyncOptionsTitle", "同步选项"),
+            width: "min(600px, 92vw)",
+            props: { plugin, onSaved: refreshAll },
+        });
+    }
+
+    function openMcpSettings() {
+        openComponentDialog(McpSettingsDialog, {
+            title: tx("settingsMcpTitle", "MCP 服务"),
             width: "min(600px, 92vw)",
             props: { plugin, onSaved: refreshAll },
         });
@@ -340,6 +349,8 @@
             openWereadAuth();
         } else if (action === "open-sync-options") {
             openSyncOptions();
+        } else if (action === "open-mcp-settings") {
+            openMcpSettings();
         } else if (action === "open-about") {
             openAbout();
         } else if (action === "open-book-status") {

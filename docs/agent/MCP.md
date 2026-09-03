@@ -24,6 +24,15 @@
 - 注册应集中管理并具备失败回滚；卸载时逐一注销，单项失败不能阻止其余能力清理。
 - 第一阶段只读能力不得注册写操作、同步触发器或实时 Runtime 状态桥。
 
+### 用户启用与状态所有权
+
+- 本插件 MCP 默认关闭；首次安装或没有 `mcp_settings` 时不得注册任何读书笔记 Agent Capability。
+- 用户必须通过插件 UI 主动开启 MCP；Kernel Runtime 是启用状态的唯一运行时 Owner，前端只能通过 Kernel RPC 查询和请求修改状态，不得自行判断已开启。
+- 关闭 MCP 必须真实注销所有已注册 Capability，使其从思源 `/mcp` 的 `tools/list` 消失；不能只在 handler 中返回 disabled。
+- 启用和关闭必须在运行中生效，不以重启思源作为正常工作流；MCP 开关本身不是 Agent Capability。
+- `mcp_settings` 不存在时使用安全的 disabled 默认值；读取失败、损坏或状态未知时必须 fail closed，保持能力未注册并报告错误，不得把未知状态当成 enabled。
+- 前端不得直接读写 `mcp_settings`，设置持久化由 Kernel Controller 完成；开关不改变第一阶段全部只读的产品边界。
+
 ## 存储与写入
 
 - Kernel Adapter 必须复用严格存储边界和安全路径校验；不得把“按 storageName 读取任意文件”注册为 MCP 能力。

@@ -12,9 +12,39 @@ import {
 } from "./readServices";
 import type { KernelPluginStorageAdapter } from "../storage/kernelPluginStorageAdapter";
 
+export const READING_NOTES_CAPABILITY_NAMES = [
+    "reading_overview",
+    "sync_status",
+    "sync_history",
+    "reading_statuses",
+    "reading_inbox",
+    "review_queue",
+    "reading_topics",
+    "reading_annotations",
+    "diagnostics",
+] as const;
+
+export const EXPECTED_READING_NOTES_CAPABILITY_COUNT = READING_NOTES_CAPABILITY_NAMES.length;
+
 export interface RegisteredReadingNotesCapabilities {
     names: string[];
     records: kernel.IRegisteredCapability[];
+}
+
+export class ReadingNotesCapabilityRegistrationError extends Error {
+    constructor(
+        message: string,
+        readonly registered: RegisteredReadingNotesCapabilities,
+    ) {
+        super(message);
+        this.name = "ReadingNotesCapabilityRegistrationError";
+    }
+}
+
+export interface UnregisterReadingNotesCapabilitiesResult {
+    registered: RegisteredReadingNotesCapabilities;
+    errors: Array<{ name: string; error: unknown }>;
+    allUnregistered: boolean;
 }
 
 interface CapabilityDefinition {
@@ -37,27 +67,57 @@ export async function registerReadingNotesCapabilities(
             records.push(record);
         }
     } catch (error) {
-        const rollbackErrors: string[] = [];
-        for (const name of [...names].reverse()) {
-            try {
-                await agent.unregisterCapability(name);
-            } catch (rollbackError) {
-                rollbackErrors.push(`${name}: ${String(rollbackError)}`);
-            }
-        }
-        const rollbackMessage = rollbackErrors.length > 0
-            ? `；回滚失败：${rollbackErrors.join("；")}`
+        const rollback = await unregisterReadingNotesCapabilities(agent, { names, records });
+        const rollbackMessage = rollback.errors.length > 0
+            ? `；回滚失败：${rollback.errors.map(({ name, error: rollbackError }) => `${name}: ${safeErrorSummary(rollbackError)}`).join("；")}`
             : "";
-        throw new Error(`读书笔记 MCP 能力注册失败：${String(error)}${rollbackMessage}`);
+        throw new ReadingNotesCapabilityRegistrationError(
+            `读书笔记 MCP 能力注册失败：${safeErrorSummary(error)}${rollbackMessage}`,
+            rollback.registered,
+        );
     }
 
     return { names, records };
 }
 
+export async function unregisterReadingNotesCapabilities(
+    agent: kernel.IAgent,
+    registered: RegisteredReadingNotesCapabilities,
+): Promise<UnregisterReadingNotesCapabilitiesResult> {
+    const recordsByName = new Map<string, kernel.IRegisteredCapability>();
+    registered.names.forEach((name, index) => {
+        const record = registered.records[index];
+        if (record) recordsByName.set(name, record);
+    });
+
+    const remainingNames: string[] = [];
+    const errors: Array<{ name: string; error: unknown }> = [];
+    for (const name of [...registered.names].reverse()) {
+        try {
+            await agent.unregisterCapability(name);
+        } catch (error) {
+            remainingNames.push(name);
+            errors.push({ name, error });
+        }
+    }
+
+    remainingNames.reverse();
+    return {
+        registered: {
+            names: remainingNames,
+            records: remainingNames
+                .map((name) => recordsByName.get(name))
+                .filter((record): record is kernel.IRegisteredCapability => !!record),
+        },
+        errors,
+        allUnregistered: remainingNames.length === 0,
+    };
+}
+
 function createCapabilityDefinitions(plugin: KernelPluginStorageAdapter): CapabilityDefinition[] {
     return [
         {
-            name: "reading_overview",
+            name: READING_NOTES_CAPABILITY_NAMES[0],
             config: {
                 title: "Reading overview",
                 description: "Read a bounded overview of persisted local reading-notes data without starting synchronization or making external requests.",
@@ -67,7 +127,7 @@ function createCapabilityDefinitions(plugin: KernelPluginStorageAdapter): Capabi
             handler: () => readReadingOverview(plugin),
         },
         {
-            name: "sync_status",
+            name: READING_NOTES_CAPABILITY_NAMES[1],
             config: {
                 title: "Persisted sync status",
                 description: "Read the latest persisted WeRead synchronization report and bounded non-success problems; this is not live frontend runtime progress.",
@@ -79,7 +139,7 @@ function createCapabilityDefinitions(plugin: KernelPluginStorageAdapter): Capabi
             handler: (input) => readSyncStatus(plugin, input),
         },
         {
-            name: "sync_history",
+            name: READING_NOTES_CAPABILITY_NAMES[2],
             config: {
                 title: "Sync history",
                 description: "Read a bounded descending history of persisted WeRead synchronization report summaries without returning full report items.",
@@ -92,7 +152,7 @@ function createCapabilityDefinitions(plugin: KernelPluginStorageAdapter): Capabi
             handler: (input) => readSyncHistory(plugin, input),
         },
         {
-            name: "reading_statuses",
+            name: READING_NOTES_CAPABILITY_NAMES[3],
             config: {
                 title: "Reading statuses",
                 description: "Search and page through local reading-book status records by status, source type, title, book ID, or source key.",
@@ -108,7 +168,7 @@ function createCapabilityDefinitions(plugin: KernelPluginStorageAdapter): Capabi
             handler: (input) => readReadingStatuses(plugin, input),
         },
         {
-            name: "reading_inbox",
+            name: READING_NOTES_CAPABILITY_NAMES[4],
             config: {
                 title: "Reading inbox",
                 description: "Search and page through local reading inbox items, returning only bounded fields useful for understanding highlights and reviews.",
@@ -124,7 +184,7 @@ function createCapabilityDefinitions(plugin: KernelPluginStorageAdapter): Capabi
             handler: (input) => readReadingInbox(plugin, input),
         },
         {
-            name: "review_queue",
+            name: READING_NOTES_CAPABILITY_NAMES[5],
             config: {
                 title: "Review queue",
                 description: "Read the local spaced-review queue with due filtering, bounded pagination, and next-interval previews; never changes review state.",
@@ -139,7 +199,7 @@ function createCapabilityDefinitions(plugin: KernelPluginStorageAdapter): Capabi
             handler: (input) => readReviewQueue(plugin, input),
         },
         {
-            name: "reading_topics",
+            name: READING_NOTES_CAPABILITY_NAMES[6],
             config: {
                 title: "Reading topics",
                 description: "Read local reading topic metadata and bounded topic contents when explicitly requested; never creates or changes topics.",
@@ -154,7 +214,7 @@ function createCapabilityDefinitions(plugin: KernelPluginStorageAdapter): Capabi
             handler: (input) => readReadingTopics(plugin, input),
         },
         {
-            name: "reading_annotations",
+            name: READING_NOTES_CAPABILITY_NAMES[7],
             config: {
                 title: "Reading annotations",
                 description: "Search and page through the validated local reading-annotation archive by source, book, annotation type, or text.",
@@ -171,7 +231,7 @@ function createCapabilityDefinitions(plugin: KernelPluginStorageAdapter): Capabi
             handler: (input) => readReadingAnnotations(plugin, input),
         },
         {
-            name: "diagnostics",
+            name: READING_NOTES_CAPABILITY_NAMES[8],
             config: {
                 title: "Reading-notes diagnostics",
                 description: "Read bounded local cache and persisted-sync diagnostics with credential presence booleans only; secrets and templates are never returned.",
@@ -199,4 +259,15 @@ function integerSchema(minimum: number, maximum: number, defaultValue: number): 
 
 function enumSchema(values: readonly string[]): Record<string, unknown> {
     return { type: "string", enum: [...values] };
+}
+
+function safeErrorSummary(error: unknown): string {
+    const text = String(error instanceof Error ? error.message : error ?? "未知错误")
+        .replace(/[\r\n]+/g, " ")
+        .trim();
+    if (!text) return "未知错误";
+    if (/(api[_ -]?key|apikeyencrypted|authorization|bearer|access[_ -]?token|refresh[_ -]?token|password|secret)/i.test(text)) {
+        return "错误详情包含敏感信息，已隐藏";
+    }
+    return text.slice(0, 240);
 }

@@ -75,6 +75,7 @@ export type WorkbenchAction =
     | "open-template-settings"
     | "open-weread-auth"
     | "open-sync-options"
+    | "open-mcp-settings"
     | "open-about"
     | "open-book-status"
     | "open-review"

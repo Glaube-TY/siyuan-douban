@@ -19,6 +19,10 @@
             <h1>{t(plugin, "workbenchHeroTitle", "阅读总控制台")}</h1>
         </div>
         <div class="workbench-hero-actions">
+            <button class="workbench-button" on:click={() => action("open-mcp-settings")}>
+                <SiYuanIcon name="plugin" size={16} />
+                <span>{t(plugin, "workbenchMcpSettings", "MCP 设置")}</span>
+            </button>
             <button class="workbench-button" on:click={() => action("open-about")}>
                 <SiYuanIcon name="info" size={16} />
                 <span>{t(plugin, "workbenchNavAbout", "关于")}</span>
