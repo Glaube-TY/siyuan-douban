@@ -7,7 +7,7 @@ import { findBookByNormalizedTitle } from './bookDeduplication';
 import { findBookPrimaryKeyValue } from './bookDatabasePrimaryKey';
 import { renderBookNoteTemplate } from '../template/renderBookNoteTemplate';
 
-export async function loadAVData(avID: string, fullData: any, plugin: any) {
+export async function loadAVData(avID: string, fullData: any, _plugin: any) {
     try {
         // 判断数据库中是否含有该书籍（以 ISBN 为依据）
         let originalDatabase = await getAttributeView(avID);

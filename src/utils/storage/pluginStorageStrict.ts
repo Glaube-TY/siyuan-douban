@@ -1,5 +1,6 @@
 export interface PluginLike {
     name: string;
+    loadDataStrict?: (storageName: string) => Promise<PluginStorageJsonState>;
 }
 
 export interface PluginStorageJsonState {
@@ -9,12 +10,28 @@ export interface PluginStorageJsonState {
 
 const SAFE_PATH_SEGMENT = /^[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)*$/;
 
+export function assertSafePluginStoragePath(pluginName: string, storageName: string): void {
+    if (!SAFE_PATH_SEGMENT.test(pluginName || "") || !SAFE_PATH_SEGMENT.test(storageName)) {
+        throw new Error(`插件存储路径无效：${storageName}`);
+    }
+}
+
 export async function loadPluginStorageJsonStateStrict(
     plugin: PluginLike,
     storageName: string,
 ): Promise<PluginStorageJsonState> {
-    if (!SAFE_PATH_SEGMENT.test(plugin?.name || "") || !SAFE_PATH_SEGMENT.test(storageName)) {
-        throw new Error(`插件存储路径无效：${storageName}`);
+    assertSafePluginStoragePath(plugin?.name || "", storageName);
+
+    if (typeof plugin?.loadDataStrict === "function") {
+        const state = await plugin.loadDataStrict(storageName);
+        if (!state || typeof state !== "object" || typeof state.exists !== "boolean") {
+            throw new Error(`插件严格读取结果无效：${storageName}`);
+        }
+        if (!state.exists) return { exists: false };
+        if (!Object.prototype.hasOwnProperty.call(state, "value")) {
+            throw new Error(`插件严格读取结果缺少数据：${storageName}`);
+        }
+        return { exists: true, value: state.value };
     }
 
     let response: Response;

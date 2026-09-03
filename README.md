@@ -179,6 +179,18 @@
 </ul>
 </div>
 
+<div style="margin-top:1.4em;padding:1.45em;background:#f3f8ed;border-left:5px solid #4d7c0f;border-radius:14px;">
+<h2 style="margin:0 0 .8em;color:#365314;">🧩 MCP and Kernel Plugin (Phase 1)</h2>
+<ul style="margin:0;padding-left:1.25em;color:#53633d;">
+<li style="margin:.4em 0;">Requires SiYuan 3.8.0 or later. This phase exposes read-only capabilities through SiYuan's built-in <code>/mcp</code>; it does not start another plugin MCP port. External clients should connect to SiYuan's <code>/mcp</code>.</li>
+<li style="margin:.4em 0;">Authentication follows the SiYuan API Token and permission model. The plugin does not create a separate MCP token; keep the SiYuan token protected and retain CrossOriginProtection and related security settings.</li>
+<li style="margin:.4em 0;">Available in Phase 1: <code>reading_overview</code> overview, <code>sync_status</code> current sync status, <code>sync_history</code> sync history, <code>reading_statuses</code> book statuses, <code>reading_inbox</code> reading inbox, <code>review_queue</code> review queue, <code>reading_topics</code> reading topics, <code>reading_annotations</code> highlights and ideas, and <code>diagnostics</code> diagnostics.</li>
+<li style="margin:.4em 0;">These capabilities only read existing local plugin state and apply pagination and count limits. They do not write books, notes, topics, or sync data, trigger WeRead synchronization, or bridge live runtime state.</li>
+<li style="margin:.4em 0;">The final external tool names shown by SiYuan may include plugin identifiers or hashes. Use the tool list from the current instance instead of hard-coding generated names in client configuration.</li>
+<li style="margin:.4em 0;">Do not expose the SiYuan MCP port to the public Internet without protection. Remote use must follow SiYuan's own authentication, Host, reverse-proxy, and security policies; the plugin never bypasses CrossOriginProtection or authentication.</li>
+</ul>
+</div>
+
 <div style="margin-top:1.4em;padding:1.45em;background:#fffaf0;border:1px solid #d8c49a;border-radius:14px;">
 <h2 style="margin:0 0 .4em;color:#6b3f1d;">🔗 Usage and Help</h2>
 <p style="margin:0 0 1em;color:#705d45;">Use the links below for detailed setup instructions, version changes, and support.</p>

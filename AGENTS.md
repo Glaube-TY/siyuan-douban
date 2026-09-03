@@ -20,6 +20,7 @@
 开始修改前按任务范围读取对应文件：
 
 - 所有的前端UI、布局、主题、响应式或无障碍：[`docs/agent/DESIGN.md`](docs/agent/DESIGN.md)。
+- 涉及 MCP、Kernel Plugin、Agent Capability、外部工具接口或 `kernel.js`：[`docs/agent/MCP.md`](docs/agent/MCP.md)。
 
 ## 多语言
 

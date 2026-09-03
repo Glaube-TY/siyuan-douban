@@ -14,6 +14,9 @@ const devDir = path.resolve(rootDir, "dev");
 if (!fs.existsSync(path.join(distDir, "index.js"))) {
     throw new Error("dist/index.js is missing; run the production build first");
 }
+if (!fs.existsSync(path.join(distDir, "kernel.js"))) {
+    throw new Error("dist/kernel.js is missing; run the production app + kernel builds first");
+}
 
 const localStats = mirrorGeneratedDirectory(distDir, devDir);
 console.log(`[sync-dev] Synced production output to ${devDir} (copied ${localStats.copied}, unchanged ${localStats.unchanged}, deleted ${localStats.deleted})`);

@@ -1,4 +1,4 @@
-import { Plugin, IModel, showMessage, getFrontend, openTab } from "siyuan";
+import { Plugin, showMessage, getFrontend, openTab } from "siyuan";
 
 import firstPage from "./components/common/firstDialog.svelte";
 import ReadingCenter from "./components/readingCenter/ReadingCenter.svelte";
@@ -15,7 +15,7 @@ export default class PluginDouban extends Plugin {
 
     isMobile: boolean;
 
-    customTab: () => IModel;
+    customTab: ReturnType<Plugin["addTab"]>;
 
     // 读书笔记标签页相关字段
     private readingCenterTabContainer: HTMLElement | null = null;
