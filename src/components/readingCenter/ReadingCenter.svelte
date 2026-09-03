@@ -168,7 +168,7 @@
     function openMcpSettings() {
         openComponentDialog(McpSettingsDialog, {
             title: tx("settingsMcpTitle", "MCP 服务"),
-            width: "min(600px, 92vw)",
+            width: "min(520px, 92vw)",
             props: { plugin, onSaved: refreshAll },
         });
     }

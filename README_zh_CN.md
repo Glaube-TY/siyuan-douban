@@ -2,11 +2,12 @@
 <div style="margin-top:1.4em;padding:2em 1.6em;background:linear-gradient(135deg,#fffaf0 0%,#f5e7c4 58%,#ead3a2 100%);border:1px solid #cfb27a;border-radius:20px;box-shadow:0 12px 32px rgba(78,52,25,.12);text-align:center;">
 <div style="font-size:3em;line-height:1;">📚</div>
 <h1 style="margin:.35em 0 .15em;color:#603813;font-size:2.15em;letter-spacing:.04em;">思源读书笔记插件</h1>
-<p style="margin:.3em auto 1em;max-width:700px;color:#694f32;font-size:1.08em;">把书籍检索、资料入库、笔记文档创建与微信读书同步连接成一套清晰、可持续的阅读管理流程。</p>
+<p style="margin:.3em auto 1em;max-width:700px;color:#694f32;font-size:1.08em;">在思源中完成查书、入库、读书笔记与微信读书同步，并通过 MCP 让外部 AI 读取你的阅读数据。</p>
 <div style="display:flex;flex-wrap:wrap;justify-content:center;gap:8px;">
 <span style="padding:5px 12px;background:rgba(255,250,240,.82);border:1px solid #d8bd87;border-radius:999px;color:#6b3f1d;">豆瓣书籍检索</span>
 <span style="padding:5px 12px;background:rgba(255,250,240,.82);border:1px solid #d8bd87;border-radius:999px;color:#6b3f1d;">微信读书同步</span>
-<span style="padding:5px 12px;background:rgba(255,250,240,.82);border:1px solid #d8bd87;border-radius:999px;color:#6b3f1d;">数据库管理</span>
+<span style="padding:5px 12px;background:rgba(255,250,240,.82);border:1px solid #d8bd87;border-radius:999px;color:#6b3f1d;">阅读管理</span>
+<span style="padding:5px 12px;background:rgba(255,250,240,.82);border:1px solid #d8bd87;border-radius:999px;color:#6b3f1d;">MCP / AI 接入</span>
 <span style="padding:5px 12px;background:rgba(255,250,240,.82);border:1px solid #d8bd87;border-radius:999px;color:#6b3f1d;">多端支持</span>
 </div>
 </div>
@@ -31,11 +32,34 @@
 <h3 style="margin:0 0 .45em;color:#7a3f18;">📗 同步微信读书</h3>
 <p style="margin:0;color:#665640;">同步划线、想法、书评、热门划线、公众号内容与阅读统计。</p>
 </div>
+<div style="padding:1.15em;background:#fffaf0;border:1px solid #dfc998;border-radius:14px;box-shadow:0 5px 16px rgba(91,58,30,.06);">
+<h3 style="margin:0 0 .45em;color:#7a3f18;">🧭 阅读管理与复习</h3>
+<p style="margin:0;color:#665640;">统一管理阅读状态、主题、复习队列与阅读统计，让导入后的内容能够持续整理和回顾。</p>
+</div>
+<div style="padding:1.15em;background:#fffaf0;border:1px solid #dfc998;border-radius:14px;box-shadow:0 5px 16px rgba(91,58,30,.06);">
+<h3 style="margin:0 0 .45em;color:#7a3f18;">🤖 MCP / AI 接入</h3>
+<p style="margin:0;color:#665640;">通过思源内置 MCP，让外部 AI 读取阅读总览、书籍状态、划线与想法、主题、复习队列和同步信息。当前仅提供只读访问。</p>
+</div>
+</div>
+<div style="margin-top:1.5em;padding:1.45em;background:#eef6f8;border-left:5px solid #1f5f73;border-radius:14px;box-shadow:0 6px 18px rgba(31,95,115,.07);">
+<h2 style="margin:0 0 .7em;color:#164e63;">🤖 MCP / AI 接入</h2>
+<p style="margin:0 0 .8em;color:#3f6670;">通过思源 3.8.0+ 内置 MCP，可让支持 MCP 的外部 AI 客户端读取本插件中的阅读数据。</p>
+<div style="display:flex;flex-wrap:wrap;gap:8px;">
+<span style="padding:5px 11px;background:#fff;border:1px solid #c7dce2;border-radius:8px;">阅读总览</span>
+<span style="padding:5px 11px;background:#fff;border:1px solid #c7dce2;border-radius:8px;">书籍状态</span>
+<span style="padding:5px 11px;background:#fff;border:1px solid #c7dce2;border-radius:8px;">划线</span>
+<span style="padding:5px 11px;background:#fff;border:1px solid #c7dce2;border-radius:8px;">想法</span>
+<span style="padding:5px 11px;background:#fff;border:1px solid #c7dce2;border-radius:8px;">阅读主题</span>
+<span style="padding:5px 11px;background:#fff;border:1px solid #c7dce2;border-radius:8px;">复习队列</span>
+<span style="padding:5px 11px;background:#fff;border:1px solid #c7dce2;border-radius:8px;">同步记录</span>
+<span style="padding:5px 11px;background:#fff;border:1px solid #c7dce2;border-radius:8px;">诊断信息</span>
+</div>
+<p style="margin:.9em 0 0;padding:.7em .85em;background:#f7fbfc;border-radius:9px;color:#3f6670;">MCP 默认关闭，由你在工作台中手动开启；当前仅提供只读能力，不修改读书笔记，也不会触发微信读书同步。外部客户端连接思源自身的 <code>/mcp</code>。</p>
 </div>
 <div id="interface-preview" style="margin-top:1.6em;padding:1.5em;background:#f8f1df;border:1px solid #d6bd8a;border-radius:18px;box-shadow:0 8px 24px rgba(91,58,30,.08);">
 <div style="text-align:center;margin-bottom:1.2em;">
 <div style="display:inline-block;padding:4px 12px;background:#6b3f1d;color:#fff8e7;border-radius:999px;font-size:.86em;">界面导览</div>
-<h2 style="margin:.45em 0 .25em;color:#603813;">五个核心界面，两类主要使用场景</h2>
+<h2 style="margin:.45em 0 .25em;color:#603813;">核心界面与主要使用场景</h2>
 <p style="margin:0;color:#705d45;">以下截图分别展示工作台与书架、豆瓣书籍入库、微信读书数据和笔记同步。豆瓣书籍入库与微信读书同步是两套相互独立的流程。</p>
 </div>
 <div style="margin-top:1em;padding:1.2em;background:#fffdf7;border:1px solid #ddc99e;border-radius:15px;">
@@ -43,7 +67,7 @@
 <span style="flex:0 0 auto;padding:3px 10px;background:#7a3f18;color:#fff8e7;border-radius:999px;font-weight:700;">01</span>
 <div>
 <h3 style="margin:0;color:#6b3f1d;">读书笔记工作台</h3>
-<p style="margin:.25em 0 0;color:#665640;">所有功能的统一入口。你可以在这里搜索书籍、查看本地阅读资产、进入微信读书书架，并打开数据库、模板和同步设置。</p>
+<p style="margin:.25em 0 0;color:#665640;">所有功能的统一入口。你可以在这里搜索书籍、查看本地阅读资产、进入微信读书书架，并打开数据库、模板、同步与 MCP 等设置。</p>
 </div>
 </div>
 <img src="https://glaube-ty.top/uploads/attachments/halo/ee798b0b-e2c5-4981-9507-f213db695bd9.webp" alt="读书笔记工作台总览" style="display:block;width:100%;height:auto;border-radius:12px;border:1px solid #e3d4b4;box-shadow:0 8px 22px rgba(78,52,25,.1);filter:saturate(.94) sepia(.04);">
@@ -111,6 +135,7 @@
 <span style="padding:5px 11px;background:#fff;border:1px solid #c9d9b6;border-radius:8px;">Android</span>
 <span style="padding:5px 11px;background:#fff;border:1px solid #c9d9b6;border-radius:8px;">iOS</span>
 <span style="padding:5px 11px;background:#fff;border:1px solid #c9d9b6;border-radius:8px;">HarmonyOS</span>
+<span style="padding:5px 11px;background:#fff;border:1px solid #c9d9b6;border-radius:8px;">SiYuan &gt;= 3.8.0</span>
 </div>
 </div>
 
@@ -134,6 +159,7 @@
 <h3 style="margin:0 0 .35em;color:#6b3f1d;">4. 连接微信读书</h3>
 <p style="margin:0;color:#665640;">如需同步微信读书，请在设置中填写自己的 API Key，并根据需要调整同步选项。</p>
 </div>
+<p style="margin:1em 0 0;padding:.7em .85em;background:#f8f1df;border-radius:9px;color:#705d45;">可选：如果使用支持 MCP 的 AI 客户端，可在工作台中按需开启 MCP 服务。</p>
 </div>
 </div>
 
@@ -176,19 +202,6 @@
 <li style="margin:.4em 0;">微信读书同步需要你自行提供 API Key，请不要在截图、反馈或公开仓库中泄露凭证。</li>
 <li style="margin:.4em 0;">书籍资料与同步结果最终写入你指定的思源知识库，请在大量同步前确认数据库和模板设置。</li>
 <li style="margin:.4em 0;">首次使用或调整模板后，建议先选择少量书籍测试，确认效果后再执行全部同步。</li>
-</ul>
-</div>
-
-<div style="margin-top:1.4em;padding:1.45em;background:#f3f8ed;border-left:5px solid #4d7c0f;border-radius:14px;">
-<h2 style="margin:0 0 .8em;color:#365314;">🧩 MCP 与 Kernel Plugin（第一阶段）</h2>
-<ul style="margin:0;padding-left:1.25em;color:#53633d;">
-<li style="margin:.4em 0;">需要思源笔记 3.8.0 或更高版本。本阶段通过思源内置 <code>/mcp</code> 暴露只读能力，不额外启动插件 MCP 端口；外部客户端应连接思源的 <code>/mcp</code>。</li>
-<li style="margin:.4em 0;">MCP 默认关闭。请在读书笔记工作台的 MCP 设置中主动开启；只有开启后，本插件才会向思源 <code>/mcp</code> 注册这 9 个只读能力。开关可在运行中生效，不需要重启思源；关闭后能力会从工具列表移除。</li>
-<li style="margin:.4em 0;">认证沿用思源 API Token 与权限控制，不创建插件专用 MCP Token；请继续保护思源 Token，并保留 CrossOriginProtection 等安全设置。</li>
-<li style="margin:.4em 0;">第一阶段提供：<code>reading_overview</code> 总览、<code>sync_status</code> 最近持久化同步状态（不是前端实时同步进度）、<code>sync_history</code> 同步历史、<code>reading_statuses</code> 书籍状态、<code>reading_inbox</code> 待读收件箱、<code>review_queue</code> 复习队列、<code>reading_topics</code> 阅读主题、<code>reading_annotations</code> 划线与想法、<code>diagnostics</code> 诊断信息。</li>
-<li style="margin:.4em 0;">这些能力只读取插件已有的本地状态，带有分页和数量上限；不会写入书籍、笔记、主题或同步数据，也不会触发微信读书同步或连接实时运行时。</li>
-<li style="margin:.4em 0;">思源最终展示的外部工具名可能包含插件标识或哈希，请以当前实例的工具列表为准，不要在客户端配置中硬编码生成后的名称。</li>
-<li style="margin:.4em 0;">不要把思源 MCP 端口未经保护暴露到公网；远程使用应遵循思源自身的认证、Host、反向代理与安全策略，插件不会绕过 CrossOriginProtection 或鉴权。</li>
 </ul>
 </div>
 

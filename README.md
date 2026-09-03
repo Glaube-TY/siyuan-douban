@@ -2,11 +2,12 @@
 <div style="margin-top:1.4em;padding:2em 1.6em;background:linear-gradient(135deg,#fffaf0 0%,#f5e7c4 58%,#ead3a2 100%);border:1px solid #cfb27a;border-radius:20px;box-shadow:0 12px 32px rgba(78,52,25,.12);text-align:center;">
 <div style="font-size:3em;line-height:1;">📚</div>
 <h1 style="margin:.35em 0 .15em;color:#603813;font-size:2.15em;letter-spacing:.04em;">SiYuan Reading Notes Plugin</h1>
-<p style="margin:.3em auto 1em;max-width:700px;color:#694f32;font-size:1.08em;">Connect book discovery, metadata import, note creation, and WeRead sync into a clear and sustainable reading-management workflow.</p>
+<p style="margin:.3em auto 1em;max-width:700px;color:#694f32;font-size:1.08em;">Search and import books, manage reading notes, sync WeRead, and let external AI access your reading data through MCP — all inside SiYuan.</p>
 <div style="display:flex;flex-wrap:wrap;justify-content:center;gap:8px;">
 <span style="padding:5px 12px;background:rgba(255,250,240,.82);border:1px solid #d8bd87;border-radius:999px;color:#6b3f1d;">Douban Book Search</span>
 <span style="padding:5px 12px;background:rgba(255,250,240,.82);border:1px solid #d8bd87;border-radius:999px;color:#6b3f1d;">WeRead Sync</span>
-<span style="padding:5px 12px;background:rgba(255,250,240,.82);border:1px solid #d8bd87;border-radius:999px;color:#6b3f1d;">Database Management</span>
+<span style="padding:5px 12px;background:rgba(255,250,240,.82);border:1px solid #d8bd87;border-radius:999px;color:#6b3f1d;">Reading Management</span>
+<span style="padding:5px 12px;background:rgba(255,250,240,.82);border:1px solid #d8bd87;border-radius:999px;color:#6b3f1d;">MCP / AI Integration</span>
 <span style="padding:5px 12px;background:rgba(255,250,240,.82);border:1px solid #d8bd87;border-radius:999px;color:#6b3f1d;">Multi-device Support</span>
 </div>
 </div>
@@ -31,11 +32,34 @@
 <h3 style="margin:0 0 .45em;color:#7a3f18;">📗 Sync WeRead</h3>
 <p style="margin:0;color:#665640;">Sync highlights, thoughts, book reviews, popular highlights, public-account content, and reading statistics.</p>
 </div>
+<div style="padding:1.15em;background:#fffaf0;border:1px solid #dfc998;border-radius:14px;box-shadow:0 5px 16px rgba(91,58,30,.06);">
+<h3 style="margin:0 0 .45em;color:#7a3f18;">🧭 Reading Management and Review</h3>
+<p style="margin:0;color:#665640;">Keep reading status, topics, review queues, and reading statistics together so imported content can be organized and revisited over time.</p>
+</div>
+<div style="padding:1.15em;background:#fffaf0;border:1px solid #dfc998;border-radius:14px;box-shadow:0 5px 16px rgba(91,58,30,.06);">
+<h3 style="margin:0 0 .45em;color:#7a3f18;">🤖 MCP / AI Integration</h3>
+<p style="margin:0;color:#665640;">Use SiYuan's built-in MCP to let external AI read your reading overview, book status, highlights and thoughts, topics, review queue, and sync information. Read-only for now.</p>
+</div>
+</div>
+<div style="margin-top:1.5em;padding:1.45em;background:#eef6f8;border-left:5px solid #1f5f73;border-radius:14px;box-shadow:0 6px 18px rgba(31,95,115,.07);">
+<h2 style="margin:0 0 .7em;color:#164e63;">🤖 MCP / AI Integration</h2>
+<p style="margin:0 0 .8em;color:#3f6670;">Through SiYuan 3.8.0+'s built-in MCP, compatible external AI clients can read the reading data provided by this plugin.</p>
+<div style="display:flex;flex-wrap:wrap;gap:8px;">
+<span style="padding:5px 11px;background:#fff;border:1px solid #c7dce2;border-radius:8px;">Reading Overview</span>
+<span style="padding:5px 11px;background:#fff;border:1px solid #c7dce2;border-radius:8px;">Book Status</span>
+<span style="padding:5px 11px;background:#fff;border:1px solid #c7dce2;border-radius:8px;">Highlights</span>
+<span style="padding:5px 11px;background:#fff;border:1px solid #c7dce2;border-radius:8px;">Thoughts</span>
+<span style="padding:5px 11px;background:#fff;border:1px solid #c7dce2;border-radius:8px;">Reading Topics</span>
+<span style="padding:5px 11px;background:#fff;border:1px solid #c7dce2;border-radius:8px;">Review Queue</span>
+<span style="padding:5px 11px;background:#fff;border:1px solid #c7dce2;border-radius:8px;">Sync Records</span>
+<span style="padding:5px 11px;background:#fff;border:1px solid #c7dce2;border-radius:8px;">Diagnostics</span>
+</div>
+<p style="margin:.9em 0 0;padding:.7em .85em;background:#f7fbfc;border-radius:9px;color:#3f6670;">MCP is off by default and must be enabled manually from the workbench. It is read-only for now: it does not modify reading notes or trigger WeRead synchronization. External clients connect to SiYuan's own <code>/mcp</code>.</p>
 </div>
 <div id="interface-preview" style="margin-top:1.6em;padding:1.5em;background:#f8f1df;border:1px solid #d6bd8a;border-radius:18px;box-shadow:0 8px 24px rgba(91,58,30,.08);">
 <div style="text-align:center;margin-bottom:1.2em;">
 <div style="display:inline-block;padding:4px 12px;background:#6b3f1d;color:#fff8e7;border-radius:999px;font-size:.86em;">Interface Tour</div>
-<h2 style="margin:.45em 0 .25em;color:#603813;">Five Core Interfaces, Two Main Workflows</h2>
+<h2 style="margin:.45em 0 .25em;color:#603813;">Core Interfaces and Main Workflows</h2>
 <p style="margin:0;color:#705d45;">The screenshots below show the workbench and bookshelf, Douban book import, WeRead data, and note synchronization. Importing books from Douban and syncing WeRead are two independent workflows.</p>
 </div>
 <div style="margin-top:1em;padding:1.2em;background:#fffdf7;border:1px solid #ddc99e;border-radius:15px;">
@@ -43,7 +67,7 @@
 <span style="flex:0 0 auto;padding:3px 10px;background:#7a3f18;color:#fff8e7;border-radius:999px;font-weight:700;">01</span>
 <div>
 <h3 style="margin:0;color:#6b3f1d;">Reading Notes Workbench</h3>
-<p style="margin:.25em 0 0;color:#665640;">The unified entry point for every feature. Search for books, browse local reading assets, open the WeRead bookshelf, and access database, template, and sync settings here.</p>
+<p style="margin:.25em 0 0;color:#665640;">The unified entry point for every feature. Search for books, browse local reading assets, open the WeRead bookshelf, and access database, template, sync, and MCP settings here.</p>
 </div>
 </div>
 <img src="https://glaube-ty.top/uploads/attachments/halo/ee798b0b-e2c5-4981-9507-f213db695bd9.webp" alt="Reading Notes Workbench Overview" style="display:block;width:100%;height:auto;border-radius:12px;border:1px solid #e3d4b4;box-shadow:0 8px 22px rgba(78,52,25,.1);filter:saturate(.94) sepia(.04);">
@@ -111,6 +135,7 @@
 <span style="padding:5px 11px;background:#fff;border:1px solid #c9d9b6;border-radius:8px;">Android</span>
 <span style="padding:5px 11px;background:#fff;border:1px solid #c9d9b6;border-radius:8px;">iOS</span>
 <span style="padding:5px 11px;background:#fff;border:1px solid #c9d9b6;border-radius:8px;">HarmonyOS</span>
+<span style="padding:5px 11px;background:#fff;border:1px solid #c9d9b6;border-radius:8px;">SiYuan &gt;= 3.8.0</span>
 </div>
 </div>
 
@@ -135,6 +160,7 @@
 <p style="margin:0;color:#665640;">To sync WeRead, enter your API Key in the settings and adjust the synchronization options as needed.</p>
 </div>
 </div>
+<p style="margin:1em 0 0;padding:.7em .85em;background:#f8f1df;border-radius:9px;color:#705d45;">Optional: if you use an MCP-compatible AI client, enable MCP from the workbench when needed.</p>
 </div>
 
 <div style="margin-top:1.4em;display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px;">
@@ -176,19 +202,6 @@
 <li style="margin:.4em 0;">WeRead synchronization requires your own API Key. Do not expose credentials in screenshots, feedback, or public repositories.</li>
 <li style="margin:.4em 0;">Book metadata and sync results are written to the SiYuan knowledge base you select. Verify the database and template settings before a large synchronization.</li>
 <li style="margin:.4em 0;">After your first setup or a template change, test with a small number of books before running a full synchronization.</li>
-</ul>
-</div>
-
-<div style="margin-top:1.4em;padding:1.45em;background:#f3f8ed;border-left:5px solid #4d7c0f;border-radius:14px;">
-<h2 style="margin:0 0 .8em;color:#365314;">🧩 MCP and Kernel Plugin (Phase 1)</h2>
-<ul style="margin:0;padding-left:1.25em;color:#53633d;">
-<li style="margin:.4em 0;">Requires SiYuan 3.8.0 or later. This phase exposes read-only capabilities through SiYuan's built-in <code>/mcp</code>; it does not start another plugin MCP port. External clients should connect to SiYuan's <code>/mcp</code>.</li>
-<li style="margin:.4em 0;">MCP is off by default. Enable it explicitly in the MCP settings from the Reading Notes workbench; only then will the plugin register these 9 read-only capabilities with SiYuan <code>/mcp</code>. The switch takes effect at runtime without restarting SiYuan, and disabling it removes the capabilities from the tool list.</li>
-<li style="margin:.4em 0;">Authentication follows the SiYuan API Token and permission model. The plugin does not create a separate MCP token; keep the SiYuan token protected and retain CrossOriginProtection and related security settings.</li>
-<li style="margin:.4em 0;">Available in Phase 1: <code>reading_overview</code> overview, <code>sync_status</code> latest persisted sync status (not live frontend progress), <code>sync_history</code> sync history, <code>reading_statuses</code> book statuses, <code>reading_inbox</code> reading inbox, <code>review_queue</code> review queue, <code>reading_topics</code> reading topics, <code>reading_annotations</code> highlights and ideas, and <code>diagnostics</code> diagnostics.</li>
-<li style="margin:.4em 0;">These capabilities only read existing local plugin state and apply pagination and count limits. They do not write books, notes, topics, or sync data, trigger WeRead synchronization, or bridge live runtime state.</li>
-<li style="margin:.4em 0;">The final external tool names shown by SiYuan may include plugin identifiers or hashes. Use the tool list from the current instance instead of hard-coding generated names in client configuration.</li>
-<li style="margin:.4em 0;">Do not expose the SiYuan MCP port to the public Internet without protection. Remote use must follow SiYuan's own authentication, Host, reverse-proxy, and security policies; the plugin never bypasses CrossOriginProtection or authentication.</li>
 </ul>
 </div>
 
