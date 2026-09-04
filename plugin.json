@@ -5,13 +5,6 @@
   "version": "4.3.0",
   "minAppVersion": "3.8.0",
   "kernels": [
-    "windows",
-    "linux",
-    "darwin",
-    "ios",
-    "android",
-    "harmony",
-    "docker",
     "all"
   ],
   "backends": [

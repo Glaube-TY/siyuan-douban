@@ -10,7 +10,9 @@
   "license": "MIT",
   "scripts": {
     "check:i18n": "node --no-warnings ./scripts/check_i18n.js",
-    "predev": "npm run check:i18n",
+    "check:manifest": "node --no-warnings ./scripts/check_plugin_manifest.js",
+    "check": "run-s check:i18n check:manifest",
+    "predev": "npm run check",
     "dev": "run-p dev:app dev:kernel",
     "dev:app": "cross-env NODE_ENV=development VITE_BUILD_TARGET=app vite build --watch",
     "dev:kernel": "cross-env NODE_ENV=development VITE_BUILD_TARGET=kernel vite build --watch",
@@ -18,9 +20,9 @@
     "dev:debug:app": "cross-env NODE_ENV=development VITE_SOURCEMAP=inline VITE_BUILD_TARGET=app vite build --watch",
     "dev:debug:kernel": "cross-env NODE_ENV=development VITE_SOURCEMAP=inline VITE_BUILD_TARGET=kernel vite build --watch",
     "dev:setup": "cross-env SIYUAN_SKIP_DEV_DEPLOY=1 pnpm build:dev && node --no-warnings ./scripts/make_dev_link.js",
-    "prebuild": "npm run check:i18n",
+    "prebuild": "npm run check",
     "build": "run-s build:app build:kernel sync-dev",
-    "prebuild:dev": "npm run check:i18n",
+    "prebuild:dev": "npm run check",
     "build:dev": "run-s build:dev:app build:dev:kernel",
     "build:dev:app": "cross-env NODE_ENV=development VITE_BUILD_TARGET=app vite build",
     "build:dev:kernel": "cross-env NODE_ENV=development VITE_BUILD_TARGET=kernel vite build",
@@ -31,7 +33,7 @@
     "make-link-win": "pnpm dev:setup",
     "update-version": "node --no-warnings ./scripts/update_version.js",
     "release": "node --no-warnings ./scripts/release.js",
-    "premake-install": "npm run check:i18n",
+    "premake-install": "npm run check",
     "make-install": "pnpm build && node --no-warnings ./scripts/make_install.js"
   },
   "devDependencies": {
