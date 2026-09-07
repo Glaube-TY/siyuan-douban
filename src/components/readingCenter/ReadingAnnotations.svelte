@@ -6,6 +6,7 @@
     import { getIgnoredBookIDSet } from "../../utils/weread/wereadSyncStorage";
     import { loadPluginStorageJsonStateStrict } from "../../utils/storage/pluginStorageStrict";
     import { loadReadingAnnotationArchiveState } from "../../utils/storage/readingAnnotationStorage";
+    import { getReadingAnnotationArchiveCoverage } from "../../utils/readingCenter/readingAnnotationArchiveCoverage";
     import { openSiyuanBlock, openSiyuanDoc } from "../../utils/readingManagement/blockLocator";
     import { t } from "../../utils/i18n";
     import ReadingTopicPickerDialog from "./ReadingTopicPickerDialog.svelte";
@@ -79,13 +80,18 @@
 
             const notebooks = toRecordArray(syncedState, "weread_notebooks");
             const ignoredBooks = toRecordArray(ignoredState, "weread_ignoredBooks");
-            const nextExpectedKeys = buildExpectedSourceKeys(notebooks, getIgnoredBookIDSet(ignoredBooks));
+            const coverage = getReadingAnnotationArchiveCoverage(
+                archiveState.archive,
+                archiveState.exists,
+                notebooks,
+                getIgnoredBookIDSet(ignoredBooks),
+            );
             archive = archiveState.archive;
             archiveExists = archiveState.exists;
             hasSyncedRecords = notebooks.length > 0;
-            expectedSourceKeys = nextExpectedKeys;
-            archivedSourceCount = Array.from(nextExpectedKeys).filter((sourceKey) => !!archive?.sources[sourceKey]).length;
-            if (!nextExpectedKeys.size) bookFilter = "";
+            expectedSourceKeys = coverage.expectedSourceKeys;
+            archivedSourceCount = coverage.archivedSourceCount;
+            if (!coverage.expectedSourceKeys.size) bookFilter = "";
             loadState = "loaded";
         } catch (error: any) {
             if (token !== loadToken) return;
@@ -126,18 +132,6 @@
         }
         return Array.from(options, ([sourceKey, title]) => ({ sourceKey, title }))
             .sort((left, right) => left.title.localeCompare(right.title) || left.sourceKey.localeCompare(right.sourceKey));
-    }
-
-    function buildExpectedSourceKeys(records: any[], ignoredBookIDs: Set<string>): Set<string> {
-        const sourceKeys = new Set<string>();
-        for (const record of records) {
-            const bookID = String(record?.bookID || record?.bookId || record?.syncID || "").trim();
-            if (!bookID || ignoredBookIDs.has(bookID)) continue;
-            const sourceType = String(record?.sourceType || "");
-            const isMp = sourceType === "weread_mp_account" || sourceType === "weread-mp" || /^MP(?:_|$)/.test(bookID);
-            sourceKeys.add(`${isMp ? "weread-mp" : "weread-book"}:${bookID}`);
-        }
-        return sourceKeys;
     }
 
     function toRecordArray(state: { exists: boolean; value?: unknown }, key: string): any[] {

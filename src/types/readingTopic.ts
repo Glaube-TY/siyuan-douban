@@ -1,3 +1,4 @@
+import type { ReadingAnnotationType } from "./readingAnnotation";
 import type { ReadingSourceType } from "./readingStatus";
 
 export interface ReadingTopic {
@@ -17,6 +18,10 @@ export interface ReadingTopicItem {
     bookID?: string;
     noteDocId?: string;
     blockId?: string;
+    annotationId?: string;
+    sourceKey?: string;
+    originalId?: string;
+    annotationType?: ReadingAnnotationType;
     content: string;
     comment?: string;
     createdAt: number;

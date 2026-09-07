@@ -458,7 +458,12 @@
     {:else if currentView === "book-status"}
         <ReadingBookStatusManager {plugin} on:back={switchToDashboard} />
     {:else if currentView === "topics"}
-        <ReadingTopics {plugin} pendingInboxItem={pendingTopicItem} on:back={switchToDashboard} />
+        <ReadingTopics
+            {plugin}
+            pendingInboxItem={pendingTopicItem}
+            on:back={switchToDashboard}
+            on:pendingItemConsumed={() => (pendingTopicItem = null)}
+        />
     {:else if currentView === "review"}
         <ReadingReview {plugin} on:back={switchToDashboard} />
     {:else if currentView === "digest"}

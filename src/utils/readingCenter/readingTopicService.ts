@@ -1,9 +1,13 @@
-import type { ReadingAnnotation } from "../../types/readingAnnotation";
+import type { ReadingAnnotation, ReadingAnnotationType } from "../../types/readingAnnotation";
 import type { ReadingInboxItem } from "../../types/readingInbox";
 import type { ReadingTopic, ReadingTopicItem } from "../../types/readingTopic";
 import { createReadingId, STORAGE_KEYS } from "../storage/readingStorage";
 import { loadPluginStorageJsonStateStrict } from "../storage/pluginStorageStrict";
 import type { PluginLike as PluginStoragePluginLike } from "../storage/pluginStorageStrict";
+import {
+    createReadingAnnotationFromInboxItem,
+    getReadingTopicItemProjection,
+} from "./readingTopicNoteSearchService";
 
 type ReadingTopicPlugin = PluginStoragePluginLike & {
     saveData: (key: string, value: any) => Promise<void>;
@@ -31,6 +35,16 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 
 function isNonEmptyString(value: unknown): value is string {
     return typeof value === "string" && value.trim().length > 0;
+}
+
+function hasValidOptionalNonEmptyString(record: Record<string, unknown>, key: string): boolean {
+    if (!Object.prototype.hasOwnProperty.call(record, key)) return true;
+    return isNonEmptyString(record[key]);
+}
+
+function hasValidOptionalAnnotationType(record: Record<string, unknown>): boolean {
+    if (!Object.prototype.hasOwnProperty.call(record, "annotationType")) return true;
+    return record.annotationType === "highlight" || record.annotationType === "review";
 }
 
 function hasValidOptionalFiniteNumber(record: Record<string, unknown>, key: string): boolean {
@@ -71,6 +85,10 @@ function validateReadingTopicItems(items: unknown): ReadingTopicItem[] {
             || !isNonEmptyString(item.id)
             || !isNonEmptyString(item.topicId)
             || typeof item.content !== "string"
+            || !hasValidOptionalNonEmptyString(item, "annotationId")
+            || !hasValidOptionalNonEmptyString(item, "sourceKey")
+            || !hasValidOptionalNonEmptyString(item, "originalId")
+            || !hasValidOptionalAnnotationType(item)
         ) {
             throw new Error(INVALID_TOPIC_ITEMS_RECORD_ERROR);
         }
@@ -229,90 +247,206 @@ export async function deleteReadingTopic(plugin: ReadingTopicPlugin, topicId: st
     }
 }
 
-export async function addReadingInboxItemToTopic(
-    plugin: ReadingTopicPlugin,
-    topicId: string,
-    inbox: ReadingInboxItem,
-): Promise<{
+export type ReadingTopicAssignmentMode = "keep_other_topics" | "move_to_topic";
+
+export interface ReadingTopicAssignmentResult {
     added: boolean;
     alreadyExists: boolean;
+    mode: ReadingTopicAssignmentMode;
     topic: ReadingTopic;
     item: ReadingTopicItem;
-}> {
+    topicItems: ReadingTopicItem[];
+    removedFromTopicIds: string[];
+}
+
+export interface ReadingTopicAssignmentOptions {
+    mode?: ReadingTopicAssignmentMode;
+    knownMembershipItemIds?: string[];
+}
+
+export function createReadingTopicItemFromAnnotation(
+    topicId: string,
+    annotation: ReadingAnnotation,
+): ReadingTopicItem {
+    const projection = getReadingTopicItemProjection(annotation);
+    return {
+        id: createReadingId("topic_item", [topicId, annotation.id]),
+        topicId,
+        annotationId: annotation.id,
+        sourceKey: annotation.sourceKey,
+        originalId: annotation.originalId,
+        annotationType: annotation.annotationType,
+        sourceType: annotation.sourceType,
+        title: annotation.title,
+        bookID: annotation.bookID,
+        noteDocId: annotation.noteDocId,
+        blockId: annotation.blockId,
+        content: projection.content,
+        comment: projection.comment,
+        createdAt: annotation.createdAt ?? annotation.syncedAt,
+    };
+}
+
+export async function assignReadingAnnotationToTopic(
+    plugin: ReadingTopicPlugin,
+    targetTopicId: string,
+    annotation: ReadingAnnotation,
+    options: ReadingTopicAssignmentOptions = {},
+): Promise<ReadingTopicAssignmentResult> {
+    assertValidReadingAnnotation(annotation);
+    const mode = options.mode || "keep_other_topics";
+    if (mode !== "keep_other_topics" && mode !== "move_to_topic") {
+        throw new Error("主题分配模式无效");
+    }
+
     const [topics, topicItems] = await Promise.all([
         loadReadingTopicsForMutationStrict(plugin),
         loadReadingTopicItemsForMutationStrict(plugin),
     ]);
-    const topic = topics.find((entry) => entry.id === topicId);
+    const topic = topics.find((entry) => entry.id === targetTopicId);
     if (!topic) throw new Error("所选主题已不存在，请重新选择。");
 
-    const item: ReadingTopicItem = {
-        id: createReadingId("topic_item", [topic.id, inbox.id]),
-        topicId: topic.id,
-        sourceType: inbox.sourceType,
-        title: inbox.title,
-        bookID: inbox.bookID,
-        noteDocId: inbox.noteDocId,
-        content: inbox.content || inbox.reviewContent || "",
-        comment: inbox.reviewContent,
-        createdAt: Date.now(),
-    };
+    const membershipItemIds = resolveMembershipItemIds(topicItems, annotation, options.knownMembershipItemIds);
+    const membershipItems = topicItems.filter((item) => membershipItemIds.has(item.id));
+    const currentItems = membershipItems.filter((item) => item.topicId === targetTopicId);
 
-    if (topicItems.some((entry) => entry.id === item.id)) {
-        return { added: false, alreadyExists: true, topic, item };
+    if (mode === "keep_other_topics" && currentItems.length > 0) {
+        return {
+            added: false,
+            alreadyExists: true,
+            mode,
+            topic,
+            item: currentItems[0],
+            topicItems,
+            removedFromTopicIds: [],
+        };
     }
 
-    const nextItems = [item, ...topicItems];
-    const verifiedItems = await saveReadingTopicItemsStrictAndVerify(plugin, nextItems);
+    if (mode === "move_to_topic") {
+        const keepItem = currentItems[0];
+        const removedItems = membershipItems.filter((item) => item.id !== keepItem?.id);
+        const removedFromTopicIds = Array.from(new Set(
+            removedItems
+                .map((item) => item.topicId)
+                .filter((topicId) => topicId !== targetTopicId),
+        ));
+        if (removedItems.length === 0 && keepItem) {
+            return {
+                added: false,
+                alreadyExists: true,
+                mode,
+                topic,
+                item: keepItem,
+                topicItems,
+                removedFromTopicIds,
+            };
+        }
+
+        const removedIds = new Set(removedItems.map((item) => item.id));
+        const nextItems = topicItems.filter((item) => !removedIds.has(item.id));
+        const item = keepItem || createReadingTopicItemFromAnnotation(targetTopicId, annotation);
+        if (!keepItem) nextItems.unshift(item);
+        const verifiedItems = await saveReadingTopicItemsStrictAndVerify(plugin, nextItems);
+        return {
+            added: !keepItem,
+            alreadyExists: !!keepItem,
+            mode,
+            topic,
+            item: verifiedItems.find((entry) => entry.id === item.id) || item,
+            topicItems: verifiedItems,
+            removedFromTopicIds,
+        };
+    }
+
+    const item = createReadingTopicItemFromAnnotation(targetTopicId, annotation);
+    if (topicItems.some((entry) => entry.id === item.id)) {
+        return {
+            added: false,
+            alreadyExists: true,
+            mode,
+            topic,
+            item: topicItems.find((entry) => entry.id === item.id) || item,
+            topicItems,
+            removedFromTopicIds: [],
+        };
+    }
+
+    const verifiedItems = await saveReadingTopicItemsStrictAndVerify(plugin, [item, ...topicItems]);
     return {
         added: true,
         alreadyExists: false,
+        mode,
         topic,
         item: verifiedItems.find((entry) => entry.id === item.id) || item,
+        topicItems: verifiedItems,
+        removedFromTopicIds: [],
     };
+}
+
+export async function addReadingInboxItemToTopic(
+    plugin: ReadingTopicPlugin,
+    topicId: string,
+    inbox: ReadingInboxItem,
+): Promise<ReadingTopicAssignmentResult> {
+    const annotation = createReadingAnnotationFromInboxItem(inbox);
+    if (!annotation) throw new Error("该待办不是可加入主题的阅读批注。");
+    return assignReadingAnnotationToTopic(plugin, topicId, annotation, { mode: "keep_other_topics" });
 }
 
 export async function addReadingAnnotationToTopic(
     plugin: ReadingTopicPlugin,
     topicId: string,
     annotation: ReadingAnnotation,
-): Promise<{
-    added: boolean;
-    alreadyExists: boolean;
-    topic: ReadingTopic;
-    item: ReadingTopicItem;
-}> {
-    const [topics, topicItems] = await Promise.all([
-        loadReadingTopicsForMutationStrict(plugin),
-        loadReadingTopicItemsForMutationStrict(plugin),
-    ]);
-    const topic = topics.find((entry) => entry.id === topicId);
-    if (!topic) throw new Error("所选主题已不存在，请重新选择。");
+): Promise<ReadingTopicAssignmentResult> {
+    return assignReadingAnnotationToTopic(plugin, topicId, annotation, { mode: "keep_other_topics" });
+}
 
-    const hasQuote = annotation.annotationType === "review" && !!annotation.quote?.trim();
-    const item: ReadingTopicItem = {
-        id: createReadingId("topic_item", [topic.id, annotation.id]),
-        topicId: topic.id,
-        sourceType: annotation.sourceType,
-        title: annotation.title,
-        bookID: annotation.bookID,
-        noteDocId: annotation.noteDocId,
-        blockId: annotation.blockId,
-        content: hasQuote ? annotation.quote! : annotation.content,
-        comment: hasQuote ? annotation.content : undefined,
-        createdAt: Date.now(),
-    };
-
-    if (topicItems.some((entry) => entry.id === item.id)) {
-        return { added: false, alreadyExists: true, topic, item };
+function resolveMembershipItemIds(
+    topicItems: ReadingTopicItem[],
+    annotation: ReadingAnnotation,
+    knownMembershipItemIds?: string[],
+): Set<string> {
+    const membershipItemIds = new Set<string>();
+    if (knownMembershipItemIds !== undefined) {
+        if (!Array.isArray(knownMembershipItemIds) || knownMembershipItemIds.some((id) => !isNonEmptyString(id))) {
+            throw new Error("主题归属项标识无效");
+        }
+        const existingIds = new Set(topicItems.map((item) => item.id));
+        for (const itemId of knownMembershipItemIds) {
+            if (!existingIds.has(itemId)) throw new Error("主题归属项已不存在，请重新搜索。");
+            membershipItemIds.add(itemId);
+        }
     }
 
-    const nextItems = [item, ...topicItems];
-    const verifiedItems = await saveReadingTopicItemsStrictAndVerify(plugin, nextItems);
-    return {
-        added: true,
-        alreadyExists: false,
-        topic,
-        item: verifiedItems.find((entry) => entry.id === item.id) || item,
-    };
+    for (const item of topicItems) {
+        if (
+            item.annotationId === annotation.id
+            || item.id === createReadingId("topic_item", [item.topicId, annotation.id])
+        ) {
+            membershipItemIds.add(item.id);
+        }
+    }
+    return membershipItemIds;
+}
+
+function assertValidReadingAnnotation(annotation: ReadingAnnotation): void {
+    if (
+        !annotation
+        || !isNonEmptyString(annotation.id)
+        || !isNonEmptyString(annotation.sourceKey)
+        || (annotation.sourceType !== "weread-book" && annotation.sourceType !== "weread-mp")
+        || typeof annotation.bookID !== "string"
+        || typeof annotation.title !== "string"
+        || !isReadingAnnotationType(annotation.annotationType)
+        || typeof annotation.content !== "string"
+        || !isNonEmptyString(annotation.originalId)
+        || !Number.isFinite(annotation.syncedAt)
+        || (annotation.createdAt !== undefined && !Number.isFinite(annotation.createdAt))
+    ) {
+        throw new Error("阅读批注数据无效");
+    }
+}
+
+function isReadingAnnotationType(value: unknown): value is ReadingAnnotationType {
+    return value === "highlight" || value === "review";
 }

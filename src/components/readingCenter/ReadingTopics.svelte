@@ -4,28 +4,30 @@
     import { confirmDialog, svelteDialog } from "../../libs/dialog";
     import type { ReadingTopic, ReadingTopicItem } from "../../types/readingTopic";
     import type { ReadingInboxItem } from "../../types/readingInbox";
-    import { getReadingInboxItems, getReadingTopicItems, getReadingTopics } from "../../utils/storage/readingStorage";
+    import type { ReadingTopicNoteSearchResult } from "../../utils/readingCenter/readingTopicNoteSearchService";
+    import { getReadingTopicItems, getReadingTopics } from "../../utils/storage/readingStorage";
     import { openSiyuanBlock, openSiyuanDoc } from "../../utils/readingManagement/blockLocator";
     import {
-        addReadingInboxItemToTopic,
+        assignReadingAnnotationToTopic,
         deleteReadingTopic,
         reorderReadingTopic,
     } from "../../utils/readingCenter/readingTopicService";
     import { t } from "../../utils/i18n";
     import ReadingTopicCreateDialog from "./ReadingTopicCreateDialog.svelte";
+    import ReadingTopicMembershipConflictDialog from "./ReadingTopicMembershipConflictDialog.svelte";
+    import ReadingTopicNoteSearch from "./ReadingTopicNoteSearch.svelte";
 
     export let plugin: any;
     export let pendingInboxItem: ReadingInboxItem | null = null;
     export let embedded = false;
 
-    const dispatch = createEventDispatcher();
+    const dispatch = createEventDispatcher<{ back: void; pendingItemConsumed: void }>();
     const tx = (key: string, fallback: string, params: Record<string, string | number> = {}) => t(plugin, key, fallback, params);
 
     let topics: ReadingTopic[] = [];
     let topicItems: ReadingTopicItem[] = [];
-    let inboxItems: ReadingInboxItem[] = [];
+    let searchResetKey = 0;
     let selectedTopicId = "";
-    let selectedInboxItemId = "";
     let topicMutation: "add" | "reorder" | "delete" | null = null;
     let draggedTopicId = "";
     let dragSourceIndex = -1;
@@ -39,9 +41,7 @@
     async function loadAll() {
         topics = await getReadingTopics(plugin);
         topicItems = await getReadingTopicItems(plugin);
-        inboxItems = await getReadingInboxItems(plugin);
         if (!selectedTopicId && topics[0]) selectedTopicId = topics[0].id;
-        if (pendingInboxItem) selectedInboxItemId = pendingInboxItem.id;
     }
 
     function handleTopicCreated(topic: ReadingTopic): void {
@@ -73,24 +73,83 @@
         }
     }
 
-    async function addInboxItemToTopic() {
-        if (topicMutation) return;
-        const topic = topics.find((item) => item.id === selectedTopicId);
-        const inbox = inboxItems.find((item) => item.id === selectedInboxItemId) || pendingInboxItem;
-        if (!topic || !inbox) {
-            showMessage(tx("topicsSelectRequired", "请选择主题和新增笔记"));
+    function handleTopicNoteAssign(event: CustomEvent<ReadingTopicNoteSearchResult>): void {
+        if (topicMutation || dragging || !selectedTopic) return;
+        const result = event.detail;
+        if (result.topicIds.includes(selectedTopic.id)) return;
+
+        const otherTopicNames = result.topicIds
+            .filter((topicId) => topicId !== selectedTopic.id)
+            .map((topicId) => topics.find((topic) => topic.id === topicId)?.name)
+            .filter((name): name is string => !!name);
+        if (otherTopicNames.length > 0) {
+            openMembershipConflictDialog(selectedTopic, result, otherTopicNames);
             return;
         }
+        void assignTopicNote(selectedTopic.id, result, "keep_other_topics");
+    }
 
+    function openMembershipConflictDialog(
+        topic: ReadingTopic,
+        result: ReadingTopicNoteSearchResult,
+        otherTopicNames: string[],
+    ): void {
+        let dialogRef: any;
+        const isMobileViewport = typeof window !== "undefined"
+            && (window.matchMedia?.("(max-width: 600px)").matches || window.innerWidth <= 600);
+        try {
+            dialogRef = svelteDialog({
+                title: tx("topicsMembershipConflictTitle", "笔记已属于其他主题"),
+                width: isMobileViewport ? "100vw" : "min(560px, 92vw)",
+                height: isMobileViewport ? "100dvh" : undefined,
+                disableClose: true,
+                hideCloseIcon: true,
+                constructor: (container: HTMLElement) => new ReadingTopicMembershipConflictDialog({
+                    target: container,
+                    props: {
+                        plugin,
+                        topicNames: otherTopicNames,
+                        currentTopicName: topic.name,
+                        close: () => dialogRef?.close?.(),
+                        onKeep: () => void assignTopicNote(topic.id, result, "keep_other_topics"),
+                        onMove: () => void assignTopicNote(topic.id, result, "move_to_topic"),
+                    },
+                }),
+            });
+            if (isMobileViewport) {
+                dialogRef.dialog.element.classList.add("siyuan-douban-mobile-subdialog");
+            }
+        } catch (error: any) {
+            showMessage(tx("topicsAddFailed", "加入主题失败：{error}", {
+                error: error?.message || String(error) || tx("uiUnknownError", "未知错误"),
+            }));
+        }
+    }
+
+    async function assignTopicNote(
+        topicId: string,
+        result: ReadingTopicNoteSearchResult,
+        mode: "keep_other_topics" | "move_to_topic",
+    ): Promise<void> {
+        if (topicMutation) return;
         topicMutation = "add";
         try {
-            const result = await addReadingInboxItemToTopic(plugin, topic.id, inbox);
-            if (result.added) {
-                topicItems = [result.item, ...topicItems.filter((item) => item.id !== result.item.id)];
+            const assignment = await assignReadingAnnotationToTopic(plugin, topicId, result.annotation, {
+                mode,
+                knownMembershipItemIds: result.topicItemIds,
+            });
+            topicItems = assignment.topicItems;
+            searchResetKey += 1;
+            if (assignment.removedFromTopicIds.length > 0) {
+                showMessage(tx("topicsMovedToCurrent", "已移动到主题「{topic}」", { topic: assignment.topic.name }));
+            } else if (assignment.added) {
+                showMessage(tx("topicsAddedToCurrent", "已加入主题「{topic}」", { topic: assignment.topic.name }));
+            } else if (assignment.alreadyExists) {
+                showMessage(tx("topicsAlreadyInCurrent", "已在当前主题"));
+            }
+            if (result.isPending) {
                 pendingInboxItem = null;
-                showMessage(tx("topicsAdded", "已加入主题"));
-            } else if (result.alreadyExists) {
-                showMessage(tx("topicsAlreadyAdded", "该内容已经在当前主题中"));
+                dispatch("pendingItemConsumed");
             }
         } catch (error: any) {
             showMessage(tx("topicsAddFailed", "加入主题失败：{error}", {
@@ -370,17 +429,16 @@
                     </div>
                 </div>
 
-                <div class="add-row">
-                    <select bind:value={selectedInboxItemId} disabled={topicInteractionLocked}>
-                        <option value="">{tx("topicsSelectNote", "选择新增笔记")}</option>
-                        {#each inboxItems as item (item.id)}
-                            <option value={item.id}>{item.title} - {item.content || item.reviewContent}</option>
-                        {/each}
-                    </select>
-                    <button type="button" on:click={addInboxItemToTopic} disabled={topicInteractionLocked}>
-                        {topicMutation === "add" ? tx("topicsAdding", "加入中...") : tx("topicsAdd", "加入主题")}
-                    </button>
-                </div>
+                <ReadingTopicNoteSearch
+                    plugin={plugin}
+                    currentTopicId={selectedTopic.id}
+                    topics={topics}
+                    topicItems={topicItems}
+                    pendingInboxItem={pendingInboxItem}
+                    resetKey={searchResetKey}
+                    disabled={topicInteractionLocked}
+                    on:assign={handleTopicNoteAssign}
+                />
 
                 {#if selectedTopicItems.length === 0}
                     <div class="empty">{tx("topicsEmpty", "这个主题还没有摘录")}</div>
@@ -412,10 +470,10 @@
     h2, h3, p { margin: 0; }
     h2 { font-size: 20px; margin-bottom: 4px; }
     p { color: var(--b3-theme-on-surface-light, #666); font-size: 13px; line-height: 1.5; }
-    button, select { border: 1px solid var(--b3-border-color, #e0e0e0); background: var(--b3-theme-surface, #fff); border-radius: 6px; padding: 6px 10px; font-size: 12px; }
+    button { border: 1px solid var(--b3-border-color, #e0e0e0); background: var(--b3-theme-surface, #fff); border-radius: 6px; padding: 6px 10px; font-size: 12px; }
     button { cursor: pointer; }
-    button:disabled, select:disabled { cursor: default; opacity: .58; }
-    button:focus-visible, select:focus-visible { outline: 2px solid var(--b3-theme-primary, #4CAF50); outline-offset: 1px; }
+    button:disabled { cursor: default; opacity: .58; }
+    button:focus-visible { outline: 2px solid var(--b3-theme-primary, #4CAF50); outline-offset: 1px; }
     .topic-layout { display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: 14px; }
     .topic-sidebar, .topic-main, .topic-card, .empty, article { background: var(--b3-theme-surface, #fff); border: 1px solid var(--b3-border-color, #e0e0e0); border-radius: 8px; }
     .topic-sidebar { display: flex; flex-direction: column; gap: 12px; min-width: 0; box-sizing: border-box; padding: 12px; }
@@ -442,7 +500,7 @@
     .topic-sidebar-footer button:active { background: color-mix(in srgb, var(--b3-theme-primary, #4CAF50) 10%, var(--b3-theme-surface, #fff)); }
     .topic-sidebar-footer button:focus-visible { outline: 2px solid var(--b3-theme-primary, #4CAF50); outline-offset: 1px; }
     .topic-main { padding: 12px; }
-    .topic-card, .add-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 12px; }
+    .topic-card { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 12px; }
     .topic-card { padding: 12px; box-sizing: border-box; }
     .topic-card-content { flex: 1 1 220px; min-width: 0; }
     .topic-card h3, .topic-card p { overflow-wrap: anywhere; }
@@ -450,7 +508,6 @@
     .topic-actions button:hover:not(:disabled) { background: var(--b3-theme-background, #f5f5f5); }
     .topic-action-danger { color: var(--b3-theme-error, #c0392b); border-color: color-mix(in srgb, var(--b3-theme-error, #c0392b) 45%, var(--b3-border-color, #e0e0e0)); }
     .topic-action-danger:hover:not(:disabled) { border-color: var(--b3-theme-error, #c0392b); background: color-mix(in srgb, var(--b3-theme-error, #c0392b) 8%, var(--b3-theme-surface, #fff)); }
-    .add-row select { flex: 1; min-width: 0; }
     .empty { padding: 36px; text-align: center; color: var(--b3-theme-on-surface-light, #666); }
     .topic-items { display: flex; flex-direction: column; gap: 10px; }
     article { padding: 12px; }
@@ -459,9 +516,8 @@
     .meta { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 10px; font-size: 12px; color: var(--b3-theme-on-surface-light, #777); }
     @media (max-width: 800px) {
         .topic-layout { grid-template-columns: 1fr; }
-        .topic-card, .add-row { align-items: stretch; flex-wrap: wrap; }
+        .topic-card { align-items: stretch; flex-wrap: wrap; }
         .topic-actions { flex: 1 1 100%; justify-content: flex-start; }
-        .add-row > select { flex-basis: 100%; }
     }
 </style>
 
