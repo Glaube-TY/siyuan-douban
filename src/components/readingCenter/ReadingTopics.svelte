@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { onMount, createEventDispatcher } from "svelte";
+    import { onDestroy, onMount, createEventDispatcher } from "svelte";
     import { showMessage } from "siyuan";
     import { confirmDialog, svelteDialog } from "../../libs/dialog";
     import type { ReadingTopic, ReadingTopicItem } from "../../types/readingTopic";
@@ -9,7 +9,7 @@
     import {
         addReadingInboxItemToTopic,
         deleteReadingTopic,
-        moveReadingTopic,
+        reorderReadingTopic,
     } from "../../utils/readingCenter/readingTopicService";
     import { t } from "../../utils/i18n";
     import ReadingTopicCreateDialog from "./ReadingTopicCreateDialog.svelte";
@@ -26,9 +26,15 @@
     let inboxItems: ReadingInboxItem[] = [];
     let selectedTopicId = "";
     let selectedInboxItemId = "";
-    let topicMutation: "add" | "move" | "delete" | null = null;
+    let topicMutation: "add" | "reorder" | "delete" | null = null;
+    let draggedTopicId = "";
+    let dragSourceIndex = -1;
+    let dragInsertionIndex: number | null = null;
+    let dragPointerId: number | null = null;
+    let dragging = false;
 
     onMount(loadAll);
+    onDestroy(cleanupTopicDrag);
 
     async function loadAll() {
         topics = await getReadingTopics(plugin);
@@ -95,24 +101,129 @@
         }
     }
 
-    async function moveSelectedTopic(direction: "up" | "down") {
-        if (topicMutation || !selectedTopic) return;
+    function cleanupTopicDrag(): void {
+        draggedTopicId = "";
+        dragSourceIndex = -1;
+        dragInsertionIndex = null;
+        dragPointerId = null;
+        dragging = false;
+    }
 
-        topicMutation = "move";
+    function getDragTargetIndex(): number | null {
+        if (dragSourceIndex < 0 || dragInsertionIndex === null || topics.length === 0) return null;
+        const boundedInsertionIndex = Math.max(0, Math.min(dragInsertionIndex, topics.length));
+        const targetIndex = boundedInsertionIndex > dragSourceIndex
+            ? boundedInsertionIndex - 1
+            : boundedInsertionIndex;
+        return Math.max(0, Math.min(targetIndex, topics.length - 1));
+    }
+
+    async function reorderTopicToIndex(topicId: string, targetIndex: number): Promise<void> {
+        if (topicMutation) return;
+
+        topicMutation = "reorder";
         try {
-            const result = await moveReadingTopic(plugin, selectedTopic.id, direction);
+            const result = await reorderReadingTopic(plugin, topicId, targetIndex);
             topics = result.topics;
         } catch (error: any) {
-            showMessage(tx("topicsMoveFailed", "移动主题失败：{error}", {
+            showMessage(tx("topicsReorderFailed", "主题排序失败：{error}", {
                 error: error?.message || String(error) || tx("uiUnknownError", "未知错误"),
             }));
         } finally {
             topicMutation = null;
+            cleanupTopicDrag();
         }
     }
 
+    function handleTopicHandleKeydown(event: KeyboardEvent, topic: ReadingTopic): void {
+        if (
+            !event.altKey
+            || (event.key !== "ArrowUp" && event.key !== "ArrowDown")
+            || topicMutation
+            || dragging
+        ) return;
+
+        event.preventDefault();
+        const sourceIndex = topics.findIndex((item) => item.id === topic.id);
+        if (sourceIndex < 0) return;
+        void reorderTopicToIndex(topic.id, sourceIndex + (event.key === "ArrowUp" ? -1 : 1));
+    }
+
+    function handleTopicPointerDown(event: PointerEvent, topic: ReadingTopic): void {
+        if (event.button !== 0 || topicMutation || dragging) return;
+
+        const sourceIndex = topics.findIndex((item) => item.id === topic.id);
+        if (sourceIndex < 0) return;
+
+        event.preventDefault();
+        draggedTopicId = topic.id;
+        dragSourceIndex = sourceIndex;
+        dragInsertionIndex = sourceIndex;
+        dragPointerId = event.pointerId;
+        dragging = true;
+        try {
+            (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+        } catch {
+            cleanupTopicDrag();
+        }
+    }
+
+    function handleTopicPointerMove(event: PointerEvent): void {
+        if (!dragging || event.pointerId !== dragPointerId) return;
+
+        event.preventDefault();
+        const handle = event.currentTarget as HTMLElement;
+        const list = handle.closest(".topic-list");
+        if (!list) return;
+        const listRect = list.getBoundingClientRect();
+        if (
+            event.clientX < listRect.left
+            || event.clientX > listRect.right
+            || event.clientY < listRect.top
+            || event.clientY > listRect.bottom
+        ) return;
+
+        const rows = Array.from(list.querySelectorAll<HTMLElement>(".topic-list-row"));
+        if (rows.length === 0) return;
+        const targetIndex = rows.findIndex((row) => {
+            const rect = row.getBoundingClientRect();
+            return event.clientY < rect.top + rect.height / 2;
+        });
+        dragInsertionIndex = targetIndex < 0 ? topics.length : targetIndex;
+    }
+
+    async function handleTopicPointerUp(event: PointerEvent): Promise<void> {
+        if (!dragging || event.pointerId !== dragPointerId) return;
+
+        const handle = event.currentTarget as HTMLElement;
+        try {
+            if (handle.hasPointerCapture(event.pointerId)) handle.releasePointerCapture(event.pointerId);
+        } catch {
+            // Pointer capture may already be released by the browser.
+        }
+
+        const topicId = draggedTopicId;
+        const sourceIndex = dragSourceIndex;
+        const targetIndex = getDragTargetIndex();
+        cleanupTopicDrag();
+        if (!topicId || sourceIndex < 0 || targetIndex === null || targetIndex === sourceIndex) return;
+        await reorderTopicToIndex(topicId, targetIndex);
+    }
+
+    function handleTopicPointerCancel(event: PointerEvent): void {
+        if (!dragging || event.pointerId !== dragPointerId) return;
+
+        const handle = event.currentTarget as HTMLElement;
+        try {
+            if (handle.hasPointerCapture(event.pointerId)) handle.releasePointerCapture(event.pointerId);
+        } catch {
+            // Pointer capture may already be released by the browser.
+        }
+        cleanupTopicDrag();
+    }
+
     function requestDeleteTopic(topic: ReadingTopic) {
-        if (topicMutation) return;
+        if (topicMutation || dragging) return;
 
         const itemCount = topicItems.filter((item) => item.topicId === topic.id).length;
         const confirmation = document.createElement("p");
@@ -181,7 +292,7 @@
 
     $: selectedTopic = topics.find((item) => item.id === selectedTopicId) || null;
     $: selectedTopicItems = selectedTopic ? topicItems.filter((item) => item.topicId === selectedTopic.id) : [];
-    $: selectedTopicIndex = selectedTopic ? topics.findIndex((item) => item.id === selectedTopic.id) : -1;
+    $: topicInteractionLocked = topicMutation !== null || dragging;
 </script>
 
 <div class="reading-page" class:reading-page-embedded={embedded}>
@@ -201,17 +312,48 @@
                 {#if topics.length === 0}
                     <div class="topic-list-empty" role="status">{tx("topicsNoTopics", "暂无主题")}</div>
                 {:else}
-                    {#each topics as topic (topic.id)}
-                        <button type="button" class:active={selectedTopicId === topic.id} on:click={() => (selectedTopicId = topic.id)} disabled={topicMutation !== null}>
-                            <span>{topic.name}</span>
-                            <small>{tx("topicsItemCount", "{count} 条", { count: topicItems.filter((item) => item.topicId === topic.id).length })}</small>
-                        </button>
+                    {#each topics as topic, index (topic.id)}
+                        <div
+                            class="topic-list-row"
+                            class:active={selectedTopicId === topic.id}
+                            class:dragging-row={dragging && draggedTopicId === topic.id}
+                            class:drop-before={dragging && dragInsertionIndex === index}
+                            class:drop-after={dragging && dragInsertionIndex === topics.length && index === topics.length - 1}
+                        >
+                            <button
+                                type="button"
+                                class="topic-drag-handle"
+                                aria-label={tx("topicsDragHandle", "拖动主题「{topic}」排序", { topic: topic.name })}
+                                aria-keyshortcuts="Alt+ArrowUp Alt+ArrowDown"
+                                title={tx("topicsDragTitle", "拖动排序")}
+                                disabled={topicMutation !== null || (dragging && draggedTopicId !== topic.id)}
+                                on:pointerdown={(event) => handleTopicPointerDown(event, topic)}
+                                on:pointermove={handleTopicPointerMove}
+                                on:pointerup={handleTopicPointerUp}
+                                on:pointercancel={handleTopicPointerCancel}
+                                on:keydown={(event) => handleTopicHandleKeydown(event, topic)}
+                            >
+                                <span class="topic-drag-grip" aria-hidden="true">
+                                    <span></span><span></span><span></span>
+                                    <span></span><span></span><span></span>
+                                </span>
+                            </button>
+                            <button
+                                type="button"
+                                class="topic-select-button"
+                                on:click={() => (selectedTopicId = topic.id)}
+                                disabled={topicInteractionLocked}
+                            >
+                                <span>{topic.name}</span>
+                                <small>{tx("topicsItemCount", "{count} 条", { count: topicItems.filter((item) => item.topicId === topic.id).length })}</small>
+                            </button>
+                        </div>
                     {/each}
                 {/if}
             </div>
 
             <div class="topic-sidebar-footer">
-                <button type="button" on:click={openCreateTopicDialog} disabled={topicMutation !== null}>{tx("topicsAddTopic", "添加主题")}</button>
+                <button type="button" on:click={openCreateTopicDialog} disabled={topicInteractionLocked}>{tx("topicsAddTopic", "添加主题")}</button>
             </div>
         </aside>
 
@@ -223,31 +365,19 @@
                         <p>{selectedTopic.description || tx("topicsNoDescription", "暂无说明")}</p>
                     </div>
                     <div class="topic-actions">
-                        <button
-                            type="button"
-                            class="topic-action-secondary"
-                            on:click={() => moveSelectedTopic("up")}
-                            disabled={topicMutation !== null || selectedTopicIndex <= 0}
-                        >{tx("topicsMoveUp", "上移")}</button>
-                        <button
-                            type="button"
-                            class="topic-action-secondary"
-                            on:click={() => moveSelectedTopic("down")}
-                            disabled={topicMutation !== null || selectedTopicIndex < 0 || selectedTopicIndex >= topics.length - 1}
-                        >{tx("topicsMoveDown", "下移")}</button>
-                        <button type="button" on:click={() => copyTopic(selectedTopic)} disabled={topicMutation !== null}>{tx("topicsCopy", "复制主题")}</button>
-                        <button type="button" class="topic-action-danger" on:click={() => requestDeleteTopic(selectedTopic)} disabled={topicMutation !== null}>{tx("topicsDelete", "删除")}</button>
+                        <button type="button" on:click={() => copyTopic(selectedTopic)} disabled={topicInteractionLocked}>{tx("topicsCopy", "复制主题")}</button>
+                        <button type="button" class="topic-action-danger" on:click={() => requestDeleteTopic(selectedTopic)} disabled={topicInteractionLocked}>{tx("topicsDelete", "删除")}</button>
                     </div>
                 </div>
 
                 <div class="add-row">
-                    <select bind:value={selectedInboxItemId} disabled={topicMutation !== null}>
+                    <select bind:value={selectedInboxItemId} disabled={topicInteractionLocked}>
                         <option value="">{tx("topicsSelectNote", "选择新增笔记")}</option>
                         {#each inboxItems as item (item.id)}
                             <option value={item.id}>{item.title} - {item.content || item.reviewContent}</option>
                         {/each}
                     </select>
-                    <button type="button" on:click={addInboxItemToTopic} disabled={topicMutation !== null}>
+                    <button type="button" on:click={addInboxItemToTopic} disabled={topicInteractionLocked}>
                         {topicMutation === "add" ? tx("topicsAdding", "加入中...") : tx("topicsAdd", "加入主题")}
                     </button>
                 </div>
@@ -290,8 +420,21 @@
     .topic-sidebar, .topic-main, .topic-card, .empty, article { background: var(--b3-theme-surface, #fff); border: 1px solid var(--b3-border-color, #e0e0e0); border-radius: 8px; }
     .topic-sidebar { display: flex; flex-direction: column; gap: 12px; min-width: 0; box-sizing: border-box; padding: 12px; }
     .topic-list { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
-    .topic-list button { display: flex; width: 100%; justify-content: space-between; gap: 8px; text-align: left; }
-    .topic-list button.active { color: var(--b3-theme-primary, #4CAF50); border-color: var(--b3-theme-primary, #4CAF50); }
+    .topic-list-row { position: relative; display: flex; align-items: stretch; gap: 2px; width: 100%; min-width: 0; box-sizing: border-box; border: 1px solid var(--b3-border-color, #e0e0e0); border-radius: 6px; background: var(--b3-theme-surface, #fff); }
+    .topic-list-row.active { color: var(--b3-theme-primary, #4CAF50); border-color: var(--b3-theme-primary, #4CAF50); background: color-mix(in srgb, var(--b3-theme-primary, #4CAF50) 6%, var(--b3-theme-surface, #fff)); }
+    .topic-list-row.dragging-row { opacity: .62; }
+    .topic-drag-handle { display: flex; flex: 0 0 32px; align-items: center; justify-content: center; min-height: 32px; padding: 0; border: 0; border-radius: 5px; color: var(--b3-theme-on-surface-light, #666); background: transparent; cursor: grab; touch-action: none; user-select: none; }
+    .topic-drag-handle:hover:not(:disabled), .topic-drag-handle:focus-visible { color: var(--b3-theme-on-surface, #1a1a1a); background: var(--b3-theme-background, #f5f5f5); }
+    .topic-drag-handle:active, .topic-list-row.dragging-row .topic-drag-handle { cursor: grabbing; }
+    .topic-drag-grip { display: grid; grid-template-columns: repeat(2, 3px); grid-template-rows: repeat(3, 3px); gap: 3px; }
+    .topic-drag-grip span { width: 3px; height: 3px; border-radius: 50%; background: currentColor; }
+    .topic-select-button { display: flex; flex: 1 1 auto; justify-content: space-between; align-items: center; gap: 8px; min-width: 0; min-height: 32px; padding: 6px 8px 6px 4px; border: 0; border-radius: 5px; color: inherit; background: transparent; text-align: left; }
+    .topic-select-button:hover:not(:disabled) { background: var(--b3-theme-background, #f5f5f5); }
+    .topic-select-button > span { min-width: 0; overflow-wrap: anywhere; }
+    .topic-select-button small { flex: 0 0 auto; }
+    .topic-list-row.drop-before::before, .topic-list-row.drop-after::after { content: ""; position: absolute; left: 2px; right: 2px; z-index: 1; height: 2px; border-radius: 1px; background: var(--b3-theme-primary, #4CAF50); pointer-events: none; }
+    .topic-list-row.drop-before::before { top: -4px; }
+    .topic-list-row.drop-after::after { bottom: -4px; }
     .topic-list-empty { padding: 4px 2px; color: var(--b3-theme-on-surface-light, #666); font-size: 12px; }
     .topic-sidebar-footer { margin-top: auto; }
     .topic-sidebar-footer button { width: 100%; min-height: 32px; }
@@ -305,7 +448,6 @@
     .topic-card h3, .topic-card p { overflow-wrap: anywhere; }
     .topic-actions { display: flex; flex: 0 1 auto; justify-content: flex-end; flex-wrap: wrap; gap: 6px; min-width: 0; }
     .topic-actions button:hover:not(:disabled) { background: var(--b3-theme-background, #f5f5f5); }
-    .topic-action-secondary { color: var(--b3-theme-on-surface-light, #666); }
     .topic-action-danger { color: var(--b3-theme-error, #c0392b); border-color: color-mix(in srgb, var(--b3-theme-error, #c0392b) 45%, var(--b3-border-color, #e0e0e0)); }
     .topic-action-danger:hover:not(:disabled) { border-color: var(--b3-theme-error, #c0392b); background: color-mix(in srgb, var(--b3-theme-error, #c0392b) 8%, var(--b3-theme-surface, #fff)); }
     .add-row select { flex: 1; min-width: 0; }

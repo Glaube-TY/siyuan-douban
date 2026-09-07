@@ -165,25 +165,28 @@ export async function createReadingTopic(
     return verifiedTopics.find((entry) => entry.id === topic.id) || topic;
 }
 
-export async function moveReadingTopic(
+export async function reorderReadingTopic(
     plugin: ReadingTopicPlugin,
     topicId: string,
-    direction: "up" | "down",
-): Promise<{ moved: boolean; topics: ReadingTopic[] }> {
+    targetIndex: number,
+): Promise<{ reordered: boolean; topics: ReadingTopic[] }> {
     const topics = await loadReadingTopicsForMutationStrict(plugin);
-    const index = topics.findIndex((topic) => topic.id === topicId);
-    if (index < 0) throw new Error("所选主题已不存在，请重新选择。");
-    if (direction !== "up" && direction !== "down") throw new Error("主题移动方向无效");
+    const sourceIndex = topics.findIndex((topic) => topic.id === topicId);
+    if (sourceIndex < 0) throw new Error("所选主题已不存在，请重新选择。");
+    if (!Number.isFinite(targetIndex) || !Number.isInteger(targetIndex)) {
+        throw new Error("主题目标位置无效");
+    }
 
-    const targetIndex = direction === "up" ? index - 1 : index + 1;
-    if (targetIndex < 0 || targetIndex >= topics.length) {
-        return { moved: false, topics };
+    const boundedTargetIndex = Math.max(0, Math.min(targetIndex, topics.length - 1));
+    if (sourceIndex === boundedTargetIndex) {
+        return { reordered: false, topics };
     }
 
     const nextTopics = [...topics];
-    [nextTopics[index], nextTopics[targetIndex]] = [nextTopics[targetIndex], nextTopics[index]];
+    const [topic] = nextTopics.splice(sourceIndex, 1);
+    nextTopics.splice(boundedTargetIndex, 0, topic);
     const verifiedTopics = await saveReadingTopicsStrictAndVerifyOrder(plugin, nextTopics);
-    return { moved: true, topics: verifiedTopics };
+    return { reordered: true, topics: verifiedTopics };
 }
 
 export async function deleteReadingTopic(plugin: ReadingTopicPlugin, topicId: string): Promise<{
