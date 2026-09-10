@@ -50,22 +50,21 @@ const LOCAL_BOOK_TEMPLATE_VARIABLES: ReadonlyArray<readonly [keyof LocalBookTemp
     ["authorBio", "作者介绍"],
 ];
 
+const LOCAL_BOOK_TEMPLATE_VARIABLE_PATTERN = new RegExp(
+    `\\{\\{(${LOCAL_BOOK_TEMPLATE_VARIABLES.map(([, name]) => name).join("|")})\\}\\}`,
+    "g",
+);
+
 export function renderLocalBookTemplateVariables(
     template: string,
     variables: LocalBookTemplateVariables,
 ): string {
-    let result = template;
+    const valuesByName = new Map(
+        LOCAL_BOOK_TEMPLATE_VARIABLES.map(([key, name]) => [name, String(variables[key] ?? "")] as const),
+    );
 
-    for (const [key, name] of LOCAL_BOOK_TEMPLATE_VARIABLES) {
-        result = result.split(`{{${name}}}`).join(variables[key] ?? "");
-    }
-
-    const unresolvedName = LOCAL_BOOK_TEMPLATE_VARIABLES.find(([, name]) => result.includes(`{{${name}}}`))?.[1];
-    if (unresolvedName) {
-        throw new Error(
-            `通用书籍模板变量 {{${unresolvedName}}} 未被正确解析，已停止模板渲染以避免被思源识别为查询嵌入块。`,
-        );
-    }
-
-    return result;
+    return template.replace(
+        LOCAL_BOOK_TEMPLATE_VARIABLE_PATTERN,
+        (_match, name: string) => valuesByName.get(name) ?? "",
+    );
 }
