@@ -6,6 +6,7 @@ import { bindBookToNote } from '../bookHandling/bindBookToNote';
 import { findBookByNormalizedTitle } from '../bookHandling/bookDeduplication';
 import { findBookPrimaryKeyValue } from '../bookHandling/bookDatabasePrimaryKey';
 import { renderBookNoteTemplate } from '../template/renderBookNoteTemplate';
+import { renderLocalBookTemplateVariables } from '../template/renderLocalBookTemplateVariables';
 
 // 添加 useBookID 书籍到数据库
 export async function addUseBookIDsToDatabase(plugin: any, avID: string, bookDetail: any) {
@@ -69,7 +70,7 @@ export async function addUseBookIDsToDatabase(plugin: any, avID: string, bookDet
     }
 
     // 定义书籍属性列
-    const requiredBookAttributes = ["封面", "作者", "译者", "出版社", "出版年", "ISBN", "定价", "书籍分类", "微信读书评分", "微信读书评分人数", "bookID"].reverse();
+    const requiredBookAttributes = ["封面", "作者", "译者", "出版社", "出版年", "ISBN", "定价", "书籍分类", "书籍简介", "微信读书评分", "微信读书评分人数", "bookID"].reverse();
 
     // 确保数据库包含所有必需的属性列
     const databaseKeys = await ensureAttributeViewKeys(avID, requiredBookAttributes, getAttributeType);
@@ -98,28 +99,34 @@ export async function addUseBookIDsToDatabase(plugin: any, avID: string, bookDet
     }
 
     // 先创建空文档，再统一交给思源内部模板渲染。
-    const template = setting.noteTemplate
-        .replace(/{{书名}}/g, bookDetail.title || '无书名')
-        .replace(/{{副标题}}/g, bookDetail.subtitle || '')
-        .replace(/{{原作名}}/g, bookDetail.originalTitle || '')
-        .replace(/{{作者}}/g, bookDetail.authors || "无作者")
-        .replace(/{{译者}}/g, bookDetail.translators || "无译者")
-        .replace(/{{出版社}}/g, bookDetail.copyrightInfo.name || bookDetail.publisher || "无出版社")
-        .replace(/{{出版年}}/g, bookDetail.publishTime ? parseDateToTimestamp(bookDetail.publishTime) : null)
-        .replace(/{{出品方}}/g, bookDetail.producer || "无出品方")
-        .replace(/{{ISBN}}/g, bookDetail.isbn ? String(bookDetail.isbn) : "无ISBN")
-        .replace(/{{装帧}}/g, bookDetail.format || "无装帧")
-        .replace(/{{丛书}}/g, bookDetail.series || '无丛书')
-        .replace(/{{豆瓣评分}}/g, bookDetail.rating ? `${bookDetail.rating}` : '无评分')
-        .replace(/{{评分人数}}/g, bookDetail.ratingCount ? `${bookDetail.ratingCount}` : '0')
-        .replace(/{{页数}}/g, bookDetail.pages ? `${bookDetail.pages}` : '无页数')
-        .replace(/{{定价}}/g, bookDetail.centPrice ? String(bookDetail.centPrice / 100) : "无定价")
-        .replace(/{{我的评分}}/g, bookDetail.myRating || '未评分')
-        .replace(/{{书籍分类}}/g, bookDetail.category || "无分类")
-        .replace(/{{阅读状态}}/g, bookDetail.readingStatus || '未读')
-        .replace(/{{开始日期}}/g, bookDetail.startDate || '未开始')
-        .replace(/{{读完日期}}/g, bookDetail.finishDate || '未完成')
-        .replace(/{{封面}}/g, bookDetail.cover || '无封面')
+    let template = renderLocalBookTemplateVariables(setting.noteTemplate, {
+        title: bookDetail.title || '无书名',
+        subtitle: bookDetail.subtitle || '',
+        originalTitle: bookDetail.originalTitle || '',
+        author: bookDetail.authors || "无作者",
+        translator: bookDetail.translators || "无译者",
+        publisher: bookDetail.copyrightInfo?.name || bookDetail.publisher || "无出版社",
+        publishDate: bookDetail.publishTime ? String(parseDateToTimestamp(bookDetail.publishTime)) : "",
+        producer: bookDetail.producer || "无出品方",
+        isbn: bookDetail.isbn ? String(bookDetail.isbn) : "无ISBN",
+        binding: bookDetail.format || "无装帧",
+        series: bookDetail.series || '无丛书',
+        rating: bookDetail.rating ? `${bookDetail.rating}` : '无评分',
+        ratingCount: bookDetail.ratingCount ? `${bookDetail.ratingCount}` : '0',
+        pages: bookDetail.pages ? `${bookDetail.pages}` : '无页数',
+        price: bookDetail.centPrice ? String(bookDetail.centPrice / 100) : "无定价",
+        myRating: bookDetail.myRating || '未评分',
+        category: bookDetail.category || "无分类",
+        readingStatus: bookDetail.readingStatus || '未读',
+        startDate: bookDetail.startDate || '未开始',
+        finishDate: bookDetail.finishDate || '未完成',
+        cover: bookDetail.cover || '无封面',
+        description: bookDetail.intro || "",
+        authorBio: "",
+    });
+
+    // 微信读书直连专用评分变量不属于通用书籍模板 helper，保留原有替换语义。
+    template = template
         .replace(/{{微信读书评分}}/g, bookDetail.rating ? `${bookDetail.rating}` : '无评分')
         .replace(/{{微信读书评分人数}}/g, bookDetail.ratingCount ? `${bookDetail.ratingCount}` : '暂无评价');
 
@@ -147,6 +154,7 @@ function getAttributeType(attributeName: string): string {
         case "译者":
         case "出版社":
         case "装帧":
+        case "书籍简介":
         case "bookID":
         case "微信读书评分":
             return "text";
@@ -225,6 +233,12 @@ function buildBlocksValues(databaseKeys: any[], bookDetail: any, _rowID: string)
             case "装帧":
                 keyValue.text = {
                     content: bookDetail.format || ""
+                };
+                break;
+
+            case "书籍简介":
+                keyValue.text = {
+                    content: bookDetail.intro || ""
                 };
                 break;
 

@@ -6,6 +6,7 @@ import { bindBookToNote } from './bindBookToNote';
 import { findBookByNormalizedTitle } from './bookDeduplication';
 import { findBookPrimaryKeyValue } from './bookDatabasePrimaryKey';
 import { renderBookNoteTemplate } from '../template/renderBookNoteTemplate';
+import { renderLocalBookTemplateVariables } from '../template/renderLocalBookTemplateVariables';
 
 export async function loadAVData(avID: string, fullData: any, _plugin: any) {
     try {
@@ -100,30 +101,31 @@ export async function loadAVData(avID: string, fullData: any, _plugin: any) {
             const sqlresult = await sql(`SELECT * FROM blocks WHERE id = "${fullData.databaseBlockId}"`);
 
             // 先创建空文档，再统一交给思源内部模板渲染。
-            const template = fullData.noteTemplate
-                .replace(/{{书名}}/g, fullData.title || '无书名')
-                .replace(/{{副标题}}/g, fullData.subtitle || '')
-                .replace(/{{原作名}}/g, fullData.originalTitle || '')
-                .replace(/{{作者}}/g, Array.isArray(fullData.authors) ? fullData.authors.join('、') : '')
-                .replace(/{{译者}}/g, Array.isArray(fullData.translators) ? fullData.translators.join('、') : '')
-                .replace(/{{出版社}}/g, fullData.publisher || '未知出版社')
-                .replace(/{{出版年}}/g, fullData.publishDate || '未知日期')
-                .replace(/{{出品方}}/g, fullData.producer || '')
-                .replace(/{{ISBN}}/g, fullData.ISBN || '')
-                .replace(/{{装帧}}/g, fullData.binding || '')
-                .replace(/{{丛书}}/g, fullData.series || '')
-                .replace(/{{豆瓣评分}}/g, fullData.rating ? `${fullData.rating}` : '无评分')
-                .replace(/{{评分人数}}/g, fullData.ratingCount ? `${fullData.ratingCount}` : '0')
-                .replace(/{{页数}}/g, fullData.pages ? `${fullData.pages}` : '')
-                .replace(/{{定价}}/g, fullData.price ? `${fullData.price}` : '')
-                .replace(/{{我的评分}}/g, fullData.myRating || '未评分')
-                .replace(/{{书籍分类}}/g, fullData.bookCategory || '默认分类')
-                .replace(/{{阅读状态}}/g, fullData.readingStatus || '未读')
-                .replace(/{{开始日期}}/g, fullData.startDate || '未开始')
-                .replace(/{{读完日期}}/g, fullData.finishDate || '未完成')
-                .replace(/{{封面}}/g, fullData.cover || '')
-                .replace(/{{书籍简介}}/g, fullData.description || '')
-                .replace(/{{作者介绍}}/g, fullData.authorBio || '');
+            const template = renderLocalBookTemplateVariables(fullData.noteTemplate, {
+                title: fullData.title || '无书名',
+                subtitle: fullData.subtitle || '',
+                originalTitle: fullData.originalTitle || '',
+                author: Array.isArray(fullData.authors) ? fullData.authors.join('、') : '',
+                translator: Array.isArray(fullData.translators) ? fullData.translators.join('、') : '',
+                publisher: fullData.publisher || '未知出版社',
+                publishDate: fullData.publishDate || '未知日期',
+                producer: fullData.producer || '',
+                isbn: fullData.ISBN || '',
+                binding: fullData.binding || '',
+                series: fullData.series || '',
+                rating: fullData.rating ? `${fullData.rating}` : '无评分',
+                ratingCount: fullData.ratingCount ? `${fullData.ratingCount}` : '0',
+                pages: fullData.pages ? `${fullData.pages}` : '',
+                price: fullData.price ? `${fullData.price}` : '',
+                myRating: fullData.myRating || '未评分',
+                category: fullData.bookCategory || '默认分类',
+                readingStatus: fullData.readingStatus || '未读',
+                startDate: fullData.startDate || '未开始',
+                finishDate: fullData.finishDate || '未完成',
+                cover: fullData.cover || '',
+                description: fullData.description || '',
+                authorBio: fullData.authorBio || '',
+            });
 
             await createDocWithMd(
                 sqlresult[0].box,
