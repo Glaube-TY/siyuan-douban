@@ -82,6 +82,8 @@ export type FlatChapterItem = {
 
 export type TemplateVariables = {
     notebookTitle: string;
+    bookID: string;
+    wereadDeepLink: string;
     isbn: string;
     updateTime: string;
     updateTime1: string;
@@ -861,6 +863,15 @@ export function buildFlatChapters(
     return result;
 }
 
+export function renderWereadBookGlobalVariables(
+    markdown: string,
+    variables: Pick<TemplateVariables, 'bookID' | 'wereadDeepLink'>
+): string {
+    return markdown
+        .replace(/\{\{bookID\}\}/g, () => variables.bookID)
+        .replace(/\{\{wereadDeepLink\}\}/g, () => variables.wereadDeepLink);
+}
+
 export function renderWereadTemplate(template: string, variables: TemplateVariables): string {
     return template
         .replace(/\{\{#chapters\}\}([\s\S]*?)\{\{\/chapters\}\}/g, (_, chapterTpl) => {
@@ -948,6 +959,14 @@ export function buildTemplateVariables(
 ): TemplateVariables {
     return {
         notebookTitle: notebook.title,
+        bookID: typeof notebook?.bookID === 'string' && notebook.bookID
+            ? notebook.bookID
+            : typeof notebook?.bookDetails?.bookId === 'string'
+                ? notebook.bookDetails.bookId
+                : '',
+        wereadDeepLink: typeof notebook?.bookDetails?.deepLink === 'string'
+            ? notebook.bookDetails.deepLink
+            : '',
         isbn: notebook.isbn,
         updateTime: new Date(notebook.updatedTime * 1000).toLocaleString(),
         updateTime1: formatTimestamp(notebook.updatedTime, 'createTime1'),

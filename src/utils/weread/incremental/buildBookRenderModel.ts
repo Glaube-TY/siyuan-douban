@@ -6,6 +6,7 @@ import {
     generateDedupedDisplayChapters,
     groupHighlightsByChapter,
     renderNoteTemplateWithOptionalComment,
+    renderWereadBookGlobalVariables,
     renderWereadTemplate,
     type FlatChapterItem,
     type NoteContent,
@@ -22,7 +23,7 @@ export interface EnhancedWereadNotebookLike {
     title: string;
     isbn?: string;
     updatedTime: number;
-    bookDetails?: { intro?: string };
+    bookDetails?: { bookId?: string; intro?: string; deepLink?: string };
     bestHighlights?: { bestBookMarks?: { items?: Array<{ markText: string }> } };
     highlights: any;
     comments?: { reviews?: any[] };
@@ -98,7 +99,13 @@ function renderGlobalComment(section: string, comment: TemplateVariables["global
         .replace(/\{\{createTime10\}\}/g, comment.createTime10 || "");
 }
 
-function createItemFactory(sourceKey: string, bookID: string, title: string, sourceType: "book") {
+function createItemFactory(
+    sourceKey: string,
+    bookID: string,
+    title: string,
+    sourceType: "book",
+    variables: Pick<TemplateVariables, "bookID" | "wereadDeepLink">
+) {
     let order = 0;
     return function createItem(
         itemKind: WereadRenderItemKind,
@@ -108,16 +115,17 @@ function createItemFactory(sourceKey: string, bookID: string, title: string, sou
         meta: Record<string, any>
     ): WereadRenderItem {
         order++;
+        const renderedMarkdown = renderWereadBookGlobalVariables(markdown, variables);
         return {
             itemId,
             sourceKey,
             sourceType,
             itemKind,
-            markdown,
+            markdown: renderedMarkdown,
             sortKey: padOrder(order),
             order,
             sourceHash: hashObject(sourceData),
-            renderHash: hashText(normalizeMarkdownForHash(markdown)),
+            renderHash: hashText(normalizeMarkdownForHash(renderedMarkdown)),
             meta: {
                 bookID,
                 title,
@@ -288,7 +296,7 @@ export function buildWereadBookRenderModel(params: {
     const displayChapters = generateDedupedDisplayChapters(chapters);
     const variables = buildTemplateVariables(notebook, comments, displayChapters);
     const sourceKey = `book:${params.bookID}`;
-    const createItem = createItemFactory(sourceKey, params.bookID, params.title, "book");
+    const createItem = createItemFactory(sourceKey, params.bookID, params.title, "book", variables);
     const items: WereadRenderItem[] = [];
     const notesSegmentCount = sections.chapterSection.chapterSegments.filter(s => s.type === "notes").length;
 

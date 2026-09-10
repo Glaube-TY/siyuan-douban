@@ -36,6 +36,7 @@ export interface WereadBookSummary {
 /** 微信读书书籍详情 */
 export interface WereadBookDetail {
     bookId: string;
+    deepLink?: string;
     title: string;
     author: string;
     authors: string;

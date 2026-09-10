@@ -4,6 +4,7 @@ import type { NormalizedWereadBookInfo } from "../types/normalized";
 export function normalizeBookInfo(raw: RawBookInfoResponse): NormalizedWereadBookInfo {
   return {
     bookId: raw.bookId || "",
+    deepLink: typeof raw.deepLink === "string" ? raw.deepLink : undefined,
     title: raw.title || "",
     author: raw.author || "",
     cover: raw.cover || "",

@@ -10,6 +10,7 @@ import type {
 export function convertWereadApiBookToTemplateData(data: WereadApiBookSyncData): WereadTemplateBookSyncData {
   const book: WereadTemplateBook = {
     bookId: data.bookInfo.bookId,
+    deepLink: data.bookInfo.deepLink,
     title: data.bookInfo.title,
     author: data.bookInfo.author,
     cover: data.bookInfo.cover,
