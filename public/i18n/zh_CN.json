@@ -1006,6 +1006,7 @@
     "wereadApiKeyDecryptFailed": "API Key 解密失败，请重新验证",
     "newSourcesChecking": "正在比对本地数据库并检查新书籍和公众号...",
     "newSourcesNoPending": "没有待处理的新来源，正在生成同步计划...",
+    "newSourcesEnriching": "正在补全新书资料（{completed}/{total}）...",
     "newSourcesFound": "发现 {count} 个新来源，等待确认处理方式...",
     "newSourcesConfirmed": "已确认新来源，正在导入所选来源并准备同步...",
     "newSourcesProcessFailed": "处理新来源失败：{error}",

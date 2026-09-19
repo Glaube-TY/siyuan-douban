@@ -1,5 +1,6 @@
 <script lang="ts">
     import { I18N } from "siyuan";
+    import { isValidISBN } from "@/utils/bookHandling/isbn";
 
     interface BookItem {
         sourceType?: string;
@@ -54,11 +55,6 @@
     } else if (normalBooks.length > 0) {
         activeTab = "books";
     }
-
-    const isValidISBN = (isbn: string) => {
-        const cleaned = isbn.replace(/[-\s]/g, "");
-        return cleaned.length === 13 || cleaned.length === 10;
-    };
 
     // 普通书可选择基础集合：仅判断 ISBN 有效，不排除忽略/使用BookID
     $: selectableNormalBookBase = normalBooks.filter(
@@ -361,8 +357,8 @@
                             type="text"
                             bind:value={book.isbn}
                             class="isbn-input"
-                            disabled={originalISBNs.get(book.bookID) !== ""}
-                            placeholder={originalISBNs.get(book.bookID)
+                            disabled={isValidISBN(originalISBNs.get(book.bookID) || "")}
+                            placeholder={isValidISBN(originalISBNs.get(book.bookID) || "")
                                 ? i18n.bookIsbnExist
                                 : book.isbn
                                   ? isValidISBN(book.isbn)

@@ -264,6 +264,11 @@ books[] 外层：
 - 公众号账号和普通书混在同一个 `books` 数组中，通过 `book.type === 3` 或 `bookId` 以 `MP_WXS_` 开头区分。
 - 公众号书的 `isbn` / `publishTime` / `translator` 通常为空。
 
+**新来源确认说明：**
+- `/user/notebooks` 返回的是轻量书籍对象，普通书的 `isbn` 可能为空，不能据此判断该书没有 ISBN。
+- 新来源预过滤完成后，仅对真正的新普通书中 ISBN 缺失或无效的条目调用 `/book/info` 补全详情。
+- `/book/info` 补全失败时保留原条目，用户仍可手动输入 ISBN、使用 BookID 或忽略。
+
 ---
 
 ### 4.3 `/shelf/sync` — 获取书架全量数据

@@ -1006,6 +1006,7 @@
     "wereadApiKeyDecryptFailed": "Failed to decrypt the API Key. Verify it again.",
     "newSourcesChecking": "Comparing the local database and checking for new books and official accounts...",
     "newSourcesNoPending": "No new sources require action. Building the sync plan...",
+    "newSourcesEnriching": "Enriching new book metadata ({completed}/{total})...",
     "newSourcesFound": "Found {count} new sources. Waiting for your selection...",
     "newSourcesConfirmed": "New sources confirmed. Importing selected sources and preparing sync...",
     "newSourcesProcessFailed": "Failed to process new sources: {error}",

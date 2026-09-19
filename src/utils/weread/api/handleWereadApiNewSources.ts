@@ -3,6 +3,7 @@ import { svelteDialog } from "@/libs/dialog";
 import { sql, reloadAttributeView } from "@/api";
 import { fetchBookHtml } from "@/utils/douban/book/getWebPage";
 import { fetchDoubanBook } from "@/utils/douban/book/fetchBook";
+import { isValidISBN, normalizeISBN } from "@/utils/bookHandling/isbn";
 import { loadAVData } from "@/utils/bookHandling/index";
 import { addUseBookIDsToDatabase } from "@/utils/weread/addUseBookIDs";
 import { ensureMpAccountInDatabase, type MpAccountRecord } from "@/utils/weread/addWereadMpAccounts";
@@ -44,7 +45,7 @@ export async function showWereadApiNewSourcesDialogAndSync(
         message: t(plugin, "newSourcesChecking", "正在比对本地数据库并检查新书籍和公众号..."),
         status: "running",
       });
-      const result = await detectWereadApiNewSources(plugin);
+      const result = await detectWereadApiNewSources(plugin, { apiKey, onProgress });
       newSources = result.newSources;
     } catch (e) {
       showMessage(plugin.i18n?.wereadApiCheckNewSourcesFailed || "检查新来源失败");
@@ -271,12 +272,7 @@ async function mergeNewSourceDetailsIntoNotebookCache(
     if (!source) return item;
 
     const rawIsbn = source.isbn || item.isbn;
-    const normalizedIsbn = rawIsbn
-      ? String(rawIsbn)
-          .replace(/[\s\-\u2014\u2013_]/g, "")
-          .replace(/[０-９]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) - 0xfee0))
-          .trim()
-      : item.isbn;
+    const normalizedIsbn = rawIsbn ? normalizeISBN(rawIsbn) : item.isbn;
 
     return {
       ...item,
@@ -341,8 +337,8 @@ async function handleNewSourcesConfirm(
   const noteTemplate = settingConfig?.noteTemplate || "";
 
   for (const book of selectedNormalBooks) {
-    const isbn = book.isbn?.replace(/[-\s]/g, "");
-    if (!isbn || (isbn.length !== 13 && isbn.length !== 10)) continue;
+    const isbn = normalizeISBN(book.isbn);
+    if (!isValidISBN(isbn)) continue;
 
     try {
       const html = await fetchBookHtml(isbn);
