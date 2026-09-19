@@ -2,15 +2,10 @@ import { sql, getAttributeView } from "@/api";
 import { getAttributeViewValueText, normalizeBookTitle } from "../../bookHandling/bookDeduplication";
 import { findBookPrimaryKeyValue } from "../../bookHandling/bookDatabasePrimaryKey";
 import { isValidISBN, normalizeISBN } from "../../bookHandling/isbn";
-import PromiseLimitPool from "@/libs/promise-pool";
 import { getIgnoredBookIDSet, getWereadStorageKey, loadIgnoredBooks } from "../wereadSyncStorage";
-import { buildWereadApiDatabaseBookDetail } from "./buildWereadApiDatabaseBookDetail";
-import type { WereadSyncProgressCallback } from "./wereadSyncProgress";
-import { t } from "@/utils/i18n";
 
 interface WereadPluginLike {
   loadData: (key: string) => Promise<any>;
-  saveData: (key: string, value: any) => Promise<void>;
 }
 
 export interface WereadApiNewSourceItem {
@@ -28,11 +23,6 @@ export interface WereadApiNewSourceItem {
   category?: string;
 }
 
-export interface DetectWereadApiNewSourcesOptions {
-  apiKey: string;
-  onProgress?: WereadSyncProgressCallback;
-}
-
 function getValueText(v: any): string {
   return String(
     v?.text?.content ??
@@ -43,66 +33,7 @@ function getValueText(v: any): string {
   ).trim();
 }
 
-async function enrichMissingISBNs(
-  plugin: WereadPluginLike,
-  apiKey: string,
-  items: WereadApiNewSourceItem[],
-  onProgress?: WereadSyncProgressCallback,
-): Promise<WereadApiNewSourceItem[]> {
-  const detailCandidates = items.filter((item) => !isValidISBN(item.isbn));
-  if (detailCandidates.length === 0) return items;
-
-  const pool = new PromiseLimitPool<WereadApiNewSourceItem>(2);
-  let completed = 0;
-
-  for (const item of detailCandidates) {
-    pool.add(async () => {
-      let enriched = item;
-      try {
-        const detail = await buildWereadApiDatabaseBookDetail(apiKey, item.bookID);
-        enriched = {
-          ...item,
-          isbn: detail.isbn || item.isbn,
-          title: detail.title || item.title,
-          author: detail.author || item.author,
-          cover: detail.cover || item.cover,
-          introduction: detail.intro || item.introduction,
-          publisher: detail.publisher || item.publisher,
-          publishTime: detail.publishTime || item.publishTime,
-        };
-      } catch {
-        console.warn(`[detectWereadApiNewSources] 书籍详情补全失败，保留缓存数据: ${item.bookID}`);
-      } finally {
-        completed += 1;
-        try {
-          onProgress?.({
-            stage: "planning",
-            sourceType: "book",
-            index: completed,
-            total: detailCandidates.length,
-            message: t(plugin, "newSourcesEnriching", "正在补全新书资料（{completed}/{total}）...", {
-              completed,
-              total: detailCandidates.length,
-            }),
-            status: "running",
-          });
-        } catch {
-          // 进度回调不应影响其他书籍的资料补全。
-        }
-      }
-      return enriched;
-    });
-  }
-
-  const enrichedItems = await pool.awaitAll();
-  const enrichedByBookID = new Map(enrichedItems.map((item) => [item.bookID, item]));
-  return items.map((item) => enrichedByBookID.get(item.bookID) || item);
-}
-
-export async function detectWereadApiNewSources(
-  plugin: WereadPluginLike,
-  options: DetectWereadApiNewSourcesOptions,
-): Promise<{
+export async function detectWereadApiNewSources(plugin: WereadPluginLike): Promise<{
   newSources: WereadApiNewSourceItem[];
   normalBooks: WereadApiNewSourceItem[];
   mpAccounts: WereadApiNewSourceItem[];
@@ -177,8 +108,8 @@ export async function detectWereadApiNewSources(
   const customISBNByBookID = new Map<string, string>();
   for (const item of customISBNBooks) {
     const bookID = getWereadStorageKey(item);
-    const isbn = normalizeISBN(item?.customISBN ?? item?.isbn ?? "").toUpperCase();
-    if (bookID && isbn) {
+    const isbn = normalizeISBN(item?.customISBN ?? item?.isbn ?? "");
+    if (bookID && isValidISBN(isbn)) {
       customISBNByBookID.set(bookID, isbn);
     }
   }
@@ -216,7 +147,8 @@ export async function detectWereadApiNewSources(
     const bookID = item.bookID;
     const normalizedTitle = normalizeBookTitle(item.title);
     const storedCustomISBN = customISBNByBookID.get(bookID) || "";
-    const isbn = item.isbn || storedCustomISBN;
+    const freshISBN = normalizeISBN(item.isbn);
+    const isbn = isValidISBN(freshISBN) ? freshISBN : storedCustomISBN;
     const isMpAccount = item.sourceType === "weread_mp_account" || bookID.startsWith("MP_WXS_");
 
     if (ignoredBookIDs.has(bookID)) continue;
@@ -236,7 +168,7 @@ export async function detectWereadApiNewSources(
         sourceType: "weread_mp_account",
       });
     } else {
-      const normalizedIsbn = normalizeISBN(isbn).toUpperCase();
+      const normalizedIsbn = normalizeISBN(isbn);
       if (normalizedIsbn && ignoredISBNs.has(normalizedIsbn)) continue;
       if (customISBNByBookID.has(bookID)) continue;
       if (useBookIDBookIDs.has(bookID)) continue;
@@ -260,20 +192,7 @@ export async function detectWereadApiNewSources(
     }
   }
 
-  const enrichedNormalBooks = await enrichMissingISBNs(
-    plugin,
-    options.apiKey,
-    normalBookCandidates,
-    options.onProgress,
-  );
-  const normalBooks = enrichedNormalBooks.filter((item) => {
-    const normalizedIsbn = normalizeISBN(item.isbn);
-    if (normalizedIsbn && ignoredISBNs.has(normalizedIsbn)) return false;
-    if (isValidISBN(normalizedIsbn) && validISBNsInDB.has(normalizedIsbn)) return false;
-
-    const normalizedTitle = normalizeBookTitle(item.title);
-    return !normalizedTitle || !validBookTitlesInDB.has(normalizedTitle);
-  });
+  const normalBooks = normalBookCandidates;
 
   return {
     newSources: [...normalBooks, ...mpAccounts],

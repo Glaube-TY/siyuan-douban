@@ -266,8 +266,9 @@ books[] 外层：
 
 **新来源确认说明：**
 - `/user/notebooks` 返回的是轻量书籍对象，普通书的 `isbn` 可能为空，不能据此判断该书没有 ISBN。
-- 新来源预过滤完成后，仅对真正的新普通书中 ISBN 缺失或无效的条目调用 `/book/info` 补全详情。
-- `/book/info` 补全失败时保留原条目，用户仍可手动输入 ISBN、使用 BookID 或忽略。
+- 新来源处理采用 Local First：按 bookID 合并临时 notebook 缓存、书架缓存、已同步记录和用户自定义 ISBN；动态计数与排序字段始终以本次 fresh `/user/notebooks` 为准。
+- 不在确认弹窗打开前批量调用 `/book/info`。本地仍缺 ISBN 的普通书仅在用户点击该行“获取”时单本请求 `/book/info`。
+- 单本获取成功后立即回写临时 notebook 缓存；获取失败或接口没有 ISBN 时，用户仍可手动输入 ISBN、使用 BookID 或忽略。
 
 ---
 

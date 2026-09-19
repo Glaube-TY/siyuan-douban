@@ -1,6 +1,7 @@
 import { syncWereadApiNormalBooks, WereadApiNormalBooksSyncResult } from "./syncWereadApiNormalBooks";
 import { syncWereadApiMpAccounts, WereadApiMpAccountsSyncResult } from "./syncWereadApiMpAccounts";
 import { buildWereadApiNotebookCache } from "./buildWereadApiNotebookCache";
+import { mergeWereadNotebookLocalMetadata } from "./mergeWereadNotebookLocalMetadata";
 import { showWereadApiNewSourcesDialogAndSync } from "./handleWereadApiNewSources";
 import { loadWereadAuthState } from "../../settings/wereadSettingsService";
 import { buildWereadSyncReport, saveWereadSyncReportAndApplyStatus } from "../../storage/syncReportBuilder";
@@ -140,7 +141,8 @@ async function runWorkbenchManualWereadApiSyncInternal(
     throw new Error("请先配置微信读书笔记模板");
   }
 
-  const notebooksList = await buildWereadApiNotebookCache(auth.apiKey);
+  const freshNotebooksList = await buildWereadApiNotebookCache(auth.apiKey);
+  const notebooksList = await mergeWereadNotebookLocalMetadata(plugin, freshNotebooksList);
 
   if (!Array.isArray(notebooksList) || notebooksList.length === 0) {
     options?.onProgress?.({

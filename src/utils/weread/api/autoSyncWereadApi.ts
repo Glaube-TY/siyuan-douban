@@ -1,6 +1,7 @@
 import { syncWereadApiNormalBooks, WereadApiNormalBooksSyncResult } from "./syncWereadApiNormalBooks";
 import { syncWereadApiMpAccounts, WereadApiMpAccountsSyncResult } from "./syncWereadApiMpAccounts";
 import { buildWereadApiNotebookCache } from "./buildWereadApiNotebookCache";
+import { mergeWereadNotebookLocalMetadata } from "./mergeWereadNotebookLocalMetadata";
 import { showWereadApiNewSourcesDialogAndSync } from "./handleWereadApiNewSources";
 import { loadWereadAuthState } from "../../settings/wereadSettingsService";
 import { buildWereadSyncReport, saveWereadSyncReportAndApplyStatus } from "../../storage/syncReportBuilder";
@@ -61,7 +62,8 @@ export async function autoSyncWereadApi(plugin: WereadPluginLike): Promise<Werea
     throw new Error("请先设置书籍模板");
   }
 
-  const notebooksList = await buildWereadApiNotebookCache(auth.apiKey);
+  const freshNotebooksList = await buildWereadApiNotebookCache(auth.apiKey);
+  const notebooksList = await mergeWereadNotebookLocalMetadata(plugin, freshNotebooksList);
 
   if (!Array.isArray(notebooksList) || notebooksList.length === 0) {
     const emptyResult: WereadApiAutoSyncResult = {

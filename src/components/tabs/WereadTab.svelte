@@ -31,6 +31,7 @@
     import { buildApiBookShelf } from "@/utils/weread/api/buildApiBookShelf";
     import { attachWereadApiLocalNoteDocs } from "@/utils/weread/api/findWereadApiBookTargetDoc";
     import { buildWereadApiNotebookCache } from "@/utils/weread/api/buildWereadApiNotebookCache";
+    import { mergeWereadNotebookLocalMetadata } from "@/utils/weread/api/mergeWereadNotebookLocalMetadata";
     import { buildWereadApiReadingStats } from "@/utils/weread/api/buildWereadApiReadingStats";
     import { formatReadingDuration } from "@/utils/weread/api/formatWereadReadingStats";
     import { buildWereadSyncReport, saveWereadSyncReportAndApplyStatus } from "@/utils/storage/syncReportBuilder";
@@ -526,7 +527,8 @@
         try {
             const trimmedKey = wereadApiKeyInput.trim();
             if (wereadApiKeyVerified && trimmedKey) {
-                notebooksList = await buildWereadApiNotebookCache(trimmedKey);
+                const freshNotebooksList = await buildWereadApiNotebookCache(trimmedKey);
+                notebooksList = await mergeWereadNotebookLocalMetadata(plugin, freshNotebooksList);
 
                 await plugin.saveData("temporary_weread_notebooksList", notebooksList);
                 await plugin.saveData("weread_notebooksList_readyAt", Date.now());

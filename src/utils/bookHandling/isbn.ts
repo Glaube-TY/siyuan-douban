@@ -8,5 +8,5 @@ export function normalizeISBN(value: unknown): string {
 
 export function isValidISBN(value: unknown): boolean {
   const normalized = normalizeISBN(value);
-  return normalized.length === 10 || normalized.length === 13;
+  return /^(?:\d{13}|\d{9}[\dX])$/.test(normalized);
 }

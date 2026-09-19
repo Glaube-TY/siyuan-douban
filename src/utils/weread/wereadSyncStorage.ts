@@ -1,3 +1,5 @@
+import { isValidISBN, normalizeISBN } from "../bookHandling/isbn";
+
 /**
  * 获取微信读书存储记录的唯一键
  * 统一只使用 bookID 作为主键，和数据库层/同步层口径一致
@@ -63,12 +65,14 @@ export async function saveCustomBooksISBN(plugin: any, selectedBooks: any[], clo
     const customBooks = selectedBooks
         .filter(book => {
             const originalBook = cloudNotebooksList.find(original => original.bookID === book.bookID);
-            const shouldSave = originalBook && originalBook.isbn === "" && book.isbn !== "";
+            const shouldSave = originalBook
+                && !isValidISBN(originalBook.isbn)
+                && isValidISBN(book.isbn);
             return shouldSave;
         })
         .map(({ title, isbn, bookID }) => ({
             title,
-            customISBN: isbn,
+            customISBN: normalizeISBN(isbn),
             bookID: bookID,
         }));
 

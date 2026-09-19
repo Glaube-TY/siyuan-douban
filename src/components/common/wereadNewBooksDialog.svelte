@@ -1,6 +1,7 @@
 <script lang="ts">
     import { I18N } from "siyuan";
     import { isValidISBN } from "@/utils/bookHandling/isbn";
+    import type { WereadNewSourceISBNResult } from "@/utils/weread/api/resolveWereadNewSourceISBN";
 
     interface BookItem {
         sourceType?: string;
@@ -17,6 +18,7 @@
     export let i18n: I18N;
 
     export let books: BookItem[];
+    export let onFetchISBN: (bookID: string) => Promise<WereadNewSourceISBNResult>;
     export let onConfirm: (
         selectedBooks: BookItem[],
         ignoredBooks: BookItem[],
@@ -37,6 +39,8 @@
     // 处理中状态，防止重复点击
     let isProcessing = false;
     let processingMessage = "";
+    let fetchingISBNBookIDs = new Set<string>();
+    let isbnFetchMessages = new Map<string, string>();
 
     // 归一化 ISBN 避免 UI 异常
     books.forEach((book) => {
@@ -88,6 +92,54 @@
 
     // 是否有有效确认选择（选中书籍或useBookID）
     $: hasConfirmSelection = selectedBooks.length > 0 || useBookIDs.length > 0;
+
+    function isFetchingISBN(bookID: string): boolean {
+        return fetchingISBNBookIDs.has(bookID);
+    }
+
+    async function fetchISBN(book: BookItem) {
+        if (isFetchingISBN(book.bookID)) return;
+
+        fetchingISBNBookIDs = new Set(fetchingISBNBookIDs).add(book.bookID);
+        const messages = new Map(isbnFetchMessages);
+        messages.delete(book.bookID);
+        isbnFetchMessages = messages;
+
+        try {
+            const detail = await onFetchISBN(book.bookID);
+            if (detail.title) book.title = detail.title;
+            if (detail.author) book.author = detail.author;
+            if (detail.cover) book.cover = detail.cover;
+            if (detail.introduction) book.introduction = detail.introduction;
+            if (detail.publisher) book.publisher = detail.publisher;
+            if (detail.publishTime) book.publishTime = detail.publishTime;
+
+            if (isValidISBN(detail.isbn)) {
+                book.isbn = detail.isbn;
+                originalISBNs = new Map(originalISBNs).set(book.bookID, detail.isbn);
+                books = [...books];
+            } else {
+                const nextMessages = new Map(isbnFetchMessages);
+                nextMessages.set(
+                    book.bookID,
+                    i18n.bookIsbnFetchEmpty || "未获取到 ISBN，可手动输入或使用 BookID",
+                );
+                isbnFetchMessages = nextMessages;
+                books = [...books];
+            }
+        } catch {
+            const nextMessages = new Map(isbnFetchMessages);
+            nextMessages.set(
+                book.bookID,
+                i18n.bookIsbnFetchFailed || "获取 ISBN 失败，可手动输入或使用 BookID",
+            );
+            isbnFetchMessages = nextMessages;
+        } finally {
+            const nextFetching = new Set(fetchingISBNBookIDs);
+            nextFetching.delete(book.bookID);
+            fetchingISBNBookIDs = nextFetching;
+        }
+    }
 
     function getBookIDSet(items: BookItem[]) {
         return new Set(items.map(b => b.bookID));
@@ -353,21 +405,39 @@
                     </td>
                     <td>{book.title || book.bookID || i18n.unnamedBook}</td>
                     <td>
-                        <input
-                            type="text"
-                            bind:value={book.isbn}
-                            class="isbn-input"
-                            disabled={isValidISBN(originalISBNs.get(book.bookID) || "")}
-                            placeholder={isValidISBN(originalISBNs.get(book.bookID) || "")
-                                ? i18n.bookIsbnExist
-                                : book.isbn
-                                  ? isValidISBN(book.isbn)
-                                      ? i18n.bookIsbnValid
-                                      : i18n.bookIsbnInvalid
-                                  : i18n.bookIsbnManual}
-                            class:invalid={!isValidISBN(book.isbn) &&
-                                book.isbn !== ""}
-                        />
+                        <div class="isbn-editor">
+                            <input
+                                type="text"
+                                bind:value={book.isbn}
+                                class="isbn-input"
+                                disabled={isValidISBN(originalISBNs.get(book.bookID) || "") || isFetchingISBN(book.bookID)}
+                                placeholder={isValidISBN(originalISBNs.get(book.bookID) || "")
+                                    ? i18n.bookIsbnExist
+                                    : book.isbn
+                                      ? isValidISBN(book.isbn)
+                                          ? i18n.bookIsbnValid
+                                          : i18n.bookIsbnInvalid
+                                      : i18n.bookIsbnManual}
+                                class:invalid={!isValidISBN(book.isbn) &&
+                                    book.isbn !== ""}
+                            />
+                            {#if !isValidISBN(book.isbn)}
+                                <button
+                                    type="button"
+                                    class="fetch-isbn-btn"
+                                    on:click={() => fetchISBN(book)}
+                                    disabled={isFetchingISBN(book.bookID)}
+                                    title={i18n.bookIsbnFetch || "获取 ISBN"}
+                                >{isFetchingISBN(book.bookID)
+                                    ? i18n.bookIsbnFetching || "获取中..."
+                                    : i18n.bookIsbnFetch || "获取"}</button>
+                            {/if}
+                        </div>
+                        {#if isbnFetchMessages.get(book.bookID)}
+                            <div class="isbn-fetch-message" aria-live="polite">
+                                {isbnFetchMessages.get(book.bookID)}
+                            </div>
+                        {/if}
                     </td>
                     <td class="ignore-checkbox" 
                         class:disabled={selectedBooks.some((b) => b.bookID === book.bookID) || 
@@ -582,7 +652,16 @@
                 background-color: #f8f8f8;
             }
 
+            .isbn-editor {
+                display: flex;
+                align-items: center;
+                gap: 4px;
+                min-width: 0;
+            }
+
             .isbn-input {
+                min-width: 0;
+                flex: 1 1 auto;
                 width: 100%;
                 padding: 2px 4px;
                 border: none;
@@ -594,6 +673,29 @@
                     outline: 1px solid var(--b3-theme-error);
                     background-color: #ffe6e6;
                 }
+            }
+
+            .fetch-isbn-btn {
+                flex: 0 0 auto;
+                padding: 2px 6px;
+                border: 1px solid var(--b3-border-color);
+                border-radius: 4px;
+                background: transparent;
+                color: var(--b3-theme-primary);
+                cursor: pointer;
+                white-space: nowrap;
+
+                &:disabled {
+                    opacity: 0.6;
+                    cursor: wait;
+                }
+            }
+
+            .isbn-fetch-message {
+                margin-top: 3px;
+                color: var(--b3-theme-warning);
+                font-size: 12px;
+                line-height: 1.35;
             }
 
             .ignore-column {

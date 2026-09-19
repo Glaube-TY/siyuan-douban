@@ -12,6 +12,7 @@ import { buildWereadApiDatabaseBookDetail } from "./buildWereadApiDatabaseBookDe
 import { buildWereadApiMpAccountSyncData } from "./buildWereadApiMpAccountSyncData";
 import { detectWereadApiNewSources, type WereadApiNewSourceItem } from "./detectWereadApiNewSources";
 import { findWereadApiBookTargetDoc } from "./findWereadApiBookTargetDoc";
+import { resolveWereadNewSourceISBN } from "./resolveWereadNewSourceISBN";
 import WereadNewBooks from "@/components/common/wereadNewBooksDialog.svelte";
 import type { WereadSyncProgressCallback } from "./wereadSyncProgress";
 import { t } from "@/utils/i18n";
@@ -45,7 +46,7 @@ export async function showWereadApiNewSourcesDialogAndSync(
         message: t(plugin, "newSourcesChecking", "正在比对本地数据库并检查新书籍和公众号..."),
         status: "running",
       });
-      const result = await detectWereadApiNewSources(plugin, { apiKey, onProgress });
+      const result = await detectWereadApiNewSources(plugin);
       newSources = result.newSources;
     } catch (e) {
       showMessage(plugin.i18n?.wereadApiCheckNewSourcesFailed || "检查新来源失败");
@@ -89,6 +90,21 @@ export async function showWereadApiNewSourcesDialogAndSync(
           props: {
             i18n: plugin.i18n,
             books: booksForDialog,
+            onFetchISBN: async (bookID: string) => {
+              const detail = await resolveWereadNewSourceISBN(apiKey, bookID);
+              const source = newSources.find((item) => item.bookID === bookID);
+              if (source) {
+                source.isbn = detail.isbn || source.isbn;
+                source.title = detail.title || source.title;
+                source.author = detail.author || source.author;
+                source.cover = detail.cover || source.cover;
+                source.introduction = detail.introduction || source.introduction;
+                source.publisher = detail.publisher || source.publisher;
+                source.publishTime = detail.publishTime || source.publishTime;
+                await mergeNewSourceDetailsIntoNotebookCache(plugin, [source]);
+              }
+              return detail;
+            },
             onConfirm: async (
               selectedBooks: WereadApiNewSourceItem[],
               ignoredBooks: WereadApiNewSourceItem[],
@@ -272,11 +288,15 @@ async function mergeNewSourceDetailsIntoNotebookCache(
     if (!source) return item;
 
     const rawIsbn = source.isbn || item.isbn;
-    const normalizedIsbn = rawIsbn ? normalizeISBN(rawIsbn) : item.isbn;
+    const normalizedIsbn = isValidISBN(rawIsbn)
+      ? normalizeISBN(rawIsbn)
+      : isValidISBN(item.isbn)
+        ? normalizeISBN(item.isbn)
+        : "";
 
     return {
       ...item,
-      isbn: normalizedIsbn || item.isbn,
+      isbn: normalizedIsbn,
       title: source.title || item.title,
       author: source.author || item.author,
       cover: source.cover || item.cover,
