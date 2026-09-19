@@ -113,18 +113,20 @@ export async function loadAVData(avID: string, fullData: any, _plugin: any) {
                 isbn: fullData.ISBN || '',
                 binding: fullData.binding || '',
                 series: fullData.series || '',
-                rating: fullData.rating ? `${fullData.rating}` : '无评分',
-                ratingCount: fullData.ratingCount ? `${fullData.ratingCount}` : '0',
+                doubanRating: fullData.rating ? `${fullData.rating}` : '无评分',
+                doubanRatingCount: fullData.ratingCount ? `${fullData.ratingCount}` : '0',
                 pages: fullData.pages ? `${fullData.pages}` : '',
                 price: fullData.price ? `${fullData.price}` : '',
                 myRating: fullData.myRating || '未评分',
-                category: fullData.bookCategory || '默认分类',
+                bookCategory: fullData.bookCategory || '默认分类',
                 readingStatus: fullData.readingStatus || '未读',
                 startDate: fullData.startDate || '未开始',
                 finishDate: fullData.finishDate || '未完成',
                 cover: fullData.cover || '',
                 description: fullData.description || '',
                 authorBio: fullData.authorBio || '',
+                wereadRating: '',
+                wereadRatingCount: '',
             });
 
             await createDocWithMd(

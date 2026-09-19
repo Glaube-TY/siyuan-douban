@@ -434,7 +434,7 @@ books[] 项：
 | `category` | string | 分类（公众号通常无此字段） |
 | `isbn` | string | ISBN（公众号通常为空） |
 | `publishTime` | string | 出版时间，格式 "YYYY-MM-DD 00:00:00" |
-| `newRating` | number | 评分（十分制，909 = 9.09 分） |
+| `newRating` | number | 评分原始值（例如 829），插件展示为百分比（829 = 82.9%，909 = 90.9%） |
 | `newRatingCount` | number | 评分人数 |
 | `newRatingDetail` | object | 评分详情 |
 

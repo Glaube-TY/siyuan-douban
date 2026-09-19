@@ -7,9 +7,11 @@ import { findBookByNormalizedTitle } from '../bookHandling/bookDeduplication';
 import { findBookPrimaryKeyValue } from '../bookHandling/bookDatabasePrimaryKey';
 import { renderBookNoteTemplate } from '../template/renderBookNoteTemplate';
 import { renderLocalBookTemplateVariables } from '../template/renderLocalBookTemplateVariables';
+import { formatWereadRatingPercent } from './api/formatWereadRating';
+import type { WereadApiDatabaseBookDetail } from './api/buildWereadApiDatabaseBookDetail';
 
 // 添加 useBookID 书籍到数据库
-export async function addUseBookIDsToDatabase(plugin: any, avID: string, bookDetail: any) {
+export async function addUseBookIDsToDatabase(plugin: any, avID: string, bookDetail: WereadApiDatabaseBookDetail) {
     let getdatabase = await getAttributeView(avID);
     let originalDatabasekeyValues = getdatabase.av.keyValues;
 
@@ -99,36 +101,33 @@ export async function addUseBookIDsToDatabase(plugin: any, avID: string, bookDet
     }
 
     // 先创建空文档，再统一交给思源内部模板渲染。
-    let template = renderLocalBookTemplateVariables(setting.noteTemplate, {
-        title: bookDetail.title || '无书名',
-        subtitle: bookDetail.subtitle || '',
-        originalTitle: bookDetail.originalTitle || '',
-        author: bookDetail.authors || "无作者",
-        translator: bookDetail.translators || "无译者",
-        publisher: bookDetail.copyrightInfo?.name || bookDetail.publisher || "无出版社",
+    const template = renderLocalBookTemplateVariables(setting.noteTemplate, {
+        title: bookDetail.title || "",
+        subtitle: "",
+        originalTitle: "",
+        author: bookDetail.author || "",
+        translator: "",
+        publisher: bookDetail.publisher || "",
         publishDate: bookDetail.publishTime ? String(parseDateToTimestamp(bookDetail.publishTime)) : "",
-        producer: bookDetail.producer || "无出品方",
-        isbn: bookDetail.isbn ? String(bookDetail.isbn) : "无ISBN",
-        binding: bookDetail.format || "无装帧",
-        series: bookDetail.series || '无丛书',
-        rating: bookDetail.rating ? `${bookDetail.rating}` : '无评分',
-        ratingCount: bookDetail.ratingCount ? `${bookDetail.ratingCount}` : '0',
-        pages: bookDetail.pages ? `${bookDetail.pages}` : '无页数',
-        price: bookDetail.centPrice ? String(bookDetail.centPrice / 100) : "无定价",
-        myRating: bookDetail.myRating || '未评分',
-        category: bookDetail.category || "无分类",
-        readingStatus: bookDetail.readingStatus || '未读',
-        startDate: bookDetail.startDate || '未开始',
-        finishDate: bookDetail.finishDate || '未完成',
-        cover: bookDetail.cover || '无封面',
+        producer: "",
+        isbn: bookDetail.isbn ? String(bookDetail.isbn) : "",
+        binding: "",
+        series: "",
+        doubanRating: "",
+        doubanRatingCount: "",
+        pages: "",
+        price: "",
+        myRating: "",
+        bookCategory: "",
+        readingStatus: "",
+        startDate: "",
+        finishDate: "",
+        cover: bookDetail.cover || "",
         description: bookDetail.intro || "",
         authorBio: "",
+        wereadRating: formatWereadRatingPercent(bookDetail.newRating),
+        wereadRatingCount: bookDetail.newRatingCount ? String(bookDetail.newRatingCount) : "",
     });
-
-    // 微信读书直连专用评分变量不属于通用书籍模板 helper，保留原有替换语义。
-    template = template
-        .replace(/{{微信读书评分}}/g, bookDetail.rating ? `${bookDetail.rating}` : '无评分')
-        .replace(/{{微信读书评分人数}}/g, bookDetail.ratingCount ? `${bookDetail.ratingCount}` : '暂无评价');
 
     await createDocWithMd(
         sqlresult[0].box,
@@ -194,13 +193,13 @@ function buildBlocksValues(databaseKeys: any[], bookDetail: any, _rowID: string)
         switch (key.name) {
             case "作者":
                 keyValue.text = {
-                    content: bookDetail.authors || ""
+                    content: bookDetail.author || ""
                 };
                 break;
 
             case "译者":
                 keyValue.text = {
-                    content: bookDetail.translators || ""
+                    content: ""
                 };
                 break;
 
@@ -212,27 +211,27 @@ function buildBlocksValues(databaseKeys: any[], bookDetail: any, _rowID: string)
 
             case "出版社":
                 keyValue.text = {
-                    content: bookDetail.copyrightInfo.name || bookDetail.publisher || ""
+                    content: bookDetail.publisher || ""
                 };
                 break;
 
             case "微信读书评分":
                 keyValue.text = {
-                    content: bookDetail.newRatingDetail.title || ""
+                    content: formatWereadRatingPercent(bookDetail.newRating)
                 };
                 break;
 
             case "微信读书评分人数":
                 keyValue.number = {
-                    content: bookDetail.ratingCount ? Number(bookDetail.ratingCount) : null,
-                    formattedContent: bookDetail.ratingCount ? String(bookDetail.ratingCount) : "",
-                    isNotEmpty: true
+                    content: bookDetail.newRatingCount ? Number(bookDetail.newRatingCount) : null,
+                    formattedContent: bookDetail.newRatingCount ? String(bookDetail.newRatingCount) : "",
+                    isNotEmpty: !!bookDetail.newRatingCount
                 };
                 break;
 
             case "装帧":
                 keyValue.text = {
-                    content: bookDetail.format || ""
+                    content: ""
                 };
                 break;
 
@@ -246,15 +245,23 @@ function buildBlocksValues(databaseKeys: any[], bookDetail: any, _rowID: string)
                 keyValue.number = {
                     content: bookDetail.isbn ? Number(bookDetail.isbn) : null,
                     formattedContent: bookDetail.isbn ? String(bookDetail.isbn) : "",
-                    isNotEmpty: true
+                    isNotEmpty: !!bookDetail.isbn
                 };
                 break;
 
             case "定价":
                 keyValue.number = {
-                    content: bookDetail.centPrice ? Number(bookDetail.centPrice / 100) : null,
-                    formattedContent: bookDetail.centPrice ? String(bookDetail.centPrice / 100) : "",
-                    isNotEmpty: true
+                    content: null,
+                    formattedContent: "",
+                    isNotEmpty: false
+                };
+                break;
+
+            case "页数":
+                keyValue.number = {
+                    content: null,
+                    formattedContent: "",
+                    isNotEmpty: false
                 };
                 break;
 
@@ -278,9 +285,16 @@ function buildBlocksValues(databaseKeys: any[], bookDetail: any, _rowID: string)
                 break;
 
             case "书籍分类":
-                keyValue.mSelect = [{
-                    content: bookDetail.category || ""
-                }];
+                keyValue.mSelect = [];
+                break;
+
+            case "豆瓣评分":
+            case "评分人数":
+                keyValue.number = {
+                    content: null,
+                    formattedContent: "",
+                    isNotEmpty: false
+                };
                 break;
 
             default:
