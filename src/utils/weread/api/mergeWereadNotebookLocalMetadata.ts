@@ -13,13 +13,15 @@ const STABLE_METADATA_FIELDS = [
   "cover",
 ] as const;
 
-function asRecords(value: unknown): any[] {
-  return Array.isArray(value) ? value : [];
+function readOptionalRecordArray(value: unknown, storageName: string): any[] {
+  if (value === null || value === undefined) return [];
+  if (Array.isArray(value)) return value;
+  throw new Error(`${storageName} 格式异常，拒绝把未知状态当作空数据`);
 }
 
-function buildRecordMap(records: unknown): Map<string, any> {
+function buildRecordMap(records: unknown, storageName: string): Map<string, any> {
   const result = new Map<string, any>();
-  for (const record of asRecords(records)) {
+  for (const record of readOptionalRecordArray(records, storageName)) {
     const bookID = getWereadStorageKey(record);
     if (bookID) result.set(bookID, record);
   }
@@ -48,10 +50,10 @@ export async function mergeWereadNotebookLocalMetadata(
     plugin.loadData("weread_customBooksISBN"),
   ]);
 
-  const temporaryByBookID = buildRecordMap(temporaryCache);
-  const shelfByBookID = buildRecordMap(shelfCache);
-  const syncedByBookID = buildRecordMap(syncedRecords);
-  const customISBNByBookID = buildRecordMap(customISBNRecords);
+  const temporaryByBookID = buildRecordMap(temporaryCache, "temporary_weread_notebooksList");
+  const shelfByBookID = buildRecordMap(shelfCache, "weread_api_bookshelf_cache");
+  const syncedByBookID = buildRecordMap(syncedRecords, "weread_notebooks");
+  const customISBNByBookID = buildRecordMap(customISBNRecords, "weread_customBooksISBN");
 
   return freshNotebooks.map((fresh) => {
     const bookID = getWereadStorageKey(fresh);

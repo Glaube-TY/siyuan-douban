@@ -11,6 +11,8 @@
         author?: string;
         cover?: string;
         introduction?: string;
+        publisher?: string;
+        publishTime?: string;
         noteCount?: number;
         reviewCount?: number;
     }

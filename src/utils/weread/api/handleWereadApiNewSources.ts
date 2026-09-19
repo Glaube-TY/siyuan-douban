@@ -273,8 +273,15 @@ async function mergeNewSourceDetailsIntoNotebookCache(
   plugin: WereadPluginLike,
   sources: WereadApiNewSourceItem[]
 ): Promise<void> {
+  if (!sources?.length) return;
+
   const cache = await plugin.loadData("temporary_weread_notebooksList");
-  if (!Array.isArray(cache) || !sources?.length) return;
+  if (cache === null || cache === undefined) {
+    throw new Error("temporary_weread_notebooksList 未创建，无法保存书籍详情");
+  }
+  if (!Array.isArray(cache)) {
+    throw new Error("temporary_weread_notebooksList 格式异常，拒绝把未知状态当作空数据");
+  }
 
   const sourceMap = new Map<string, WereadApiNewSourceItem>();
   for (const source of sources) {
