@@ -1,7 +1,8 @@
 import { isValidISBN, normalizeISBN } from "../../bookHandling/isbn";
 import { getWereadStorageKey, loadCustomISBNBooksWithMigration } from "../wereadSyncStorage";
+import { loadPluginStorageJsonStateStrict, type PluginLike } from "../../storage/pluginStorageStrict";
 
-interface WereadPluginLike {
+interface WereadPluginLike extends PluginLike {
   loadData: (key: string) => Promise<any>;
 }
 
@@ -13,15 +14,19 @@ const STABLE_METADATA_FIELDS = [
   "cover",
 ] as const;
 
-function readOptionalRecordArray(value: unknown, storageName: string): any[] {
-  if (value === null || value === undefined) return [];
+function readRecordArray(value: unknown, storageName: string): any[] {
   if (Array.isArray(value)) return value;
   throw new Error(`${storageName} 格式异常，拒绝把未知状态当作空数据`);
 }
 
+async function loadOptionalArrayStorageStrict(plugin: WereadPluginLike, storageName: string): Promise<any[]> {
+  const state = await loadPluginStorageJsonStateStrict(plugin, storageName);
+  return state.exists ? readRecordArray(state.value, storageName) : [];
+}
+
 function buildRecordMap(records: unknown, storageName: string): Map<string, any> {
   const result = new Map<string, any>();
-  for (const record of readOptionalRecordArray(records, storageName)) {
+  for (const record of readRecordArray(records, storageName)) {
     const bookID = getWereadStorageKey(record);
     if (bookID) result.set(bookID, record);
   }
@@ -39,14 +44,14 @@ function getValidISBN(value: unknown): string {
 
 export async function mergeWereadNotebookLocalMetadata(
   plugin: WereadPluginLike,
-  freshNotebooks: any[],
+  freshNotebooks: unknown,
 ): Promise<any[]> {
-  if (!Array.isArray(freshNotebooks)) return [];
+  if (!Array.isArray(freshNotebooks)) throw new Error("微信读书有笔记来源数据格式异常");
 
   const [temporaryCache, shelfCache, syncedRecords, customISBNRecords] = await Promise.all([
-    plugin.loadData("temporary_weread_notebooksList"),
-    plugin.loadData("weread_api_bookshelf_cache"),
-    plugin.loadData("weread_notebooks"),
+    loadOptionalArrayStorageStrict(plugin, "temporary_weread_notebooksList"),
+    loadOptionalArrayStorageStrict(plugin, "weread_api_bookshelf_cache"),
+    loadOptionalArrayStorageStrict(plugin, "weread_notebooks"),
     loadCustomISBNBooksWithMigration(plugin),
   ]);
 

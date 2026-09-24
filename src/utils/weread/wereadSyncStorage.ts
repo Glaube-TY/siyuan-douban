@@ -1,5 +1,6 @@
 import { isValidISBN, normalizeISBN } from "../bookHandling/isbn";
 import { t } from "../i18n";
+import { loadPluginStorageJsonStateStrict, type PluginStorageJsonState } from "../storage/pluginStorageStrict";
 
 const CUSTOM_ISBN_STORAGE = "weread_customBooksISBN";
 const CUSTOM_ISBN_BACKUP_STORAGE = "weread_customBooksISBN_legacy_backup_v1";
@@ -187,13 +188,13 @@ function normalizeCustomISBNArray(
 }
 
 async function saveLegacyCustomISBNBackup(plugin: any, raw: unknown): Promise<void> {
-    let existingBackup: unknown;
+    let existingBackup: PluginStorageJsonState;
     try {
-        existingBackup = await plugin.loadData(CUSTOM_ISBN_BACKUP_STORAGE);
+        existingBackup = await loadPluginStorageJsonStateStrict(plugin, CUSTOM_ISBN_BACKUP_STORAGE);
     } catch {
         throw customISBNStorageOperationError(plugin, "legacy backup could not be checked");
     }
-    if (existingBackup !== null && existingBackup !== undefined) return;
+    if (existingBackup.exists) return;
 
     try {
         await plugin.saveData(CUSTOM_ISBN_BACKUP_STORAGE, raw);
@@ -201,31 +202,35 @@ async function saveLegacyCustomISBNBackup(plugin: any, raw: unknown): Promise<vo
         throw customISBNStorageOperationError(plugin, "legacy backup could not be written; migration aborted");
     }
 
-    let savedBackup: unknown;
+    let savedBackup: PluginStorageJsonState;
     try {
-        savedBackup = await plugin.loadData(CUSTOM_ISBN_BACKUP_STORAGE);
+        savedBackup = await loadPluginStorageJsonStateStrict(plugin, CUSTOM_ISBN_BACKUP_STORAGE);
     } catch {
         throw customISBNStorageOperationError(plugin, "legacy backup could not be verified; migration aborted");
     }
-    if (JSON.stringify(savedBackup) !== JSON.stringify(raw)) {
+    if (!savedBackup.exists || JSON.stringify(savedBackup.value) !== JSON.stringify(raw)) {
         throw customISBNStorageOperationError(plugin, "legacy backup verification failed; migration aborted");
     }
 }
 
 export async function loadCustomISBNBooksWithMigration(plugin: any): Promise<WereadCustomISBNBook[]> {
-    let raw: unknown;
+    let state: PluginStorageJsonState;
     try {
-        raw = await plugin.loadData(CUSTOM_ISBN_STORAGE);
+        state = await loadPluginStorageJsonStateStrict(plugin, CUSTOM_ISBN_STORAGE);
     } catch {
         throw customISBNStorageOperationError(plugin, "storage could not be read");
     }
-    if (raw === null || raw === undefined) return [];
+    if (!state.exists) return [];
+    const raw = state.value;
 
     let records: WereadCustomISBNBook[];
     let needsMigration = false;
     let isNonEmptyLegacyValue = false;
 
-    if (Array.isArray(raw)) {
+    if (typeof raw === "string" && raw.trim() === "") {
+        records = [];
+        needsMigration = true;
+    } else if (Array.isArray(raw)) {
         const normalized = normalizeCustomISBNArray(plugin, raw);
         records = normalized.records;
         needsMigration = normalized.needsMigration;
@@ -263,13 +268,13 @@ export async function loadCustomISBNBooksWithMigration(plugin: any): Promise<Wer
         throw customISBNStorageOperationError(plugin, "canonical storage could not be written; legacy backup is preserved when present");
     }
 
-    let verified: unknown;
+    let verified: PluginStorageJsonState;
     try {
-        verified = await plugin.loadData(CUSTOM_ISBN_STORAGE);
+        verified = await loadPluginStorageJsonStateStrict(plugin, CUSTOM_ISBN_STORAGE);
     } catch {
         throw customISBNStorageOperationError(plugin, "canonical storage could not be read back; legacy backup is preserved when present");
     }
-    if (!Array.isArray(verified) || JSON.stringify(verified) !== JSON.stringify(records)) {
+    if (!verified.exists || !Array.isArray(verified.value) || JSON.stringify(verified.value) !== JSON.stringify(records)) {
         throw customISBNStorageOperationError(plugin, "canonical array readback verification failed; legacy backup is preserved when present");
     }
     return records;
@@ -294,13 +299,13 @@ export async function replaceCustomISBNBooks(plugin: any, books: unknown): Promi
         throw customISBNStorageOperationError(plugin, "canonical storage could not be written");
     }
 
-    let verified: unknown;
+    let verified: PluginStorageJsonState;
     try {
-        verified = await plugin.loadData(CUSTOM_ISBN_STORAGE);
+        verified = await loadPluginStorageJsonStateStrict(plugin, CUSTOM_ISBN_STORAGE);
     } catch {
         throw customISBNStorageOperationError(plugin, "canonical storage could not be read back");
     }
-    if (!Array.isArray(verified) || JSON.stringify(verified) !== JSON.stringify(canonicalBooks)) {
+    if (!verified.exists || !Array.isArray(verified.value) || JSON.stringify(verified.value) !== JSON.stringify(canonicalBooks)) {
         throw customISBNStorageOperationError(plugin, "canonical array readback verification failed");
     }
 }
