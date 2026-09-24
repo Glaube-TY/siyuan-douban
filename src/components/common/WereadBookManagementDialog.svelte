@@ -1,7 +1,7 @@
 <script lang="ts">
     import { onMount } from "svelte";
     import { getCurrentValidBookIdentifiers } from "@/utils/weread/getCurrentValidBookIdentifiers";
-    import { loadIgnoredBooks } from "@/utils/weread/wereadSyncStorage";
+    import { loadCustomISBNBooksWithMigration, loadIgnoredBooks } from "@/utils/weread/wereadSyncStorage";
     import wereadManageISBN from "./wereadManageISBN.svelte";
     import wereadIgnoredBooksDialog from "./wereadIgnoredBooksDialog.svelte";
     import wereadUseBookIDBooksDialog from "./wereadUseBookIDBooksDialog.svelte";
@@ -26,6 +26,7 @@
     let validBookIDs: string[] = [];
     let validBookNames: string[] = [];
     let isLoading = true;
+    let loadError = "";
 
     const tx = (key: string, fallback: string) => t(plugin, key, fallback);
     $: tabs = [
@@ -40,7 +41,7 @@
             const [synced, ignored, customISBN, useBookID, temporary, identifiers] = await Promise.all([
                 plugin.loadData("weread_notebooks"),
                 loadIgnoredBooks(plugin),
-                plugin.loadData("weread_customBooksISBN"),
+                loadCustomISBNBooksWithMigration(plugin),
                 plugin.loadData("weread_useBookIDBooks"),
                 plugin.loadData("temporary_weread_notebooksList"),
                 getCurrentValidBookIdentifiers(plugin),
@@ -54,7 +55,9 @@
             validBookIDs = Array.from(identifiers.validBookIDs);
             validBookNames = Array.from(identifiers.validBookNames);
         } catch (e) {
-            console.error("[WereadBookManagementDialog] 加载数据失败", e);
+            loadError = e instanceof Error && e.name === "WereadCustomISBNStorageError"
+                ? e.message
+                : tx("wereadManagementLoadFailed", "无法加载微信读书管理数据，请检查存储后重试。");
         } finally {
             isLoading = false;
         }
@@ -77,6 +80,8 @@
     <div class="management-body">
         {#if isLoading}
             <div class="management-empty">{tx("uiLoading", "加载中...")}</div>
+        {:else if loadError}
+            <div class="management-empty" role="alert">{loadError}</div>
         {:else if activeTab === "synced"}
             {#if syncedRecords.length === 0}
                 <div class="management-empty">{tx("managementNoSynced", "暂无已同步数据")}</div>

@@ -1,4 +1,7 @@
 <script lang="ts">
+    import { showMessage } from "siyuan";
+    import { replaceCustomISBNBooks } from "@/utils/weread/wereadSyncStorage";
+
     export let plugin;
 
     export let customISBNBooks: Array<{
@@ -38,6 +41,7 @@
 
     let localEffectiveBooks = [...effectiveBooks];
     let localStaleBooks = [...staleBooks];
+    let isSaving = false;
 
     const handleDeleteEffective = (bookID: string) => {
         localEffectiveBooks = localEffectiveBooks.filter((book) => book.bookID !== bookID);
@@ -51,10 +55,22 @@
         localStaleBooks = [];
     };
 
-    const handleSave = () => {
+    const handleSave = async () => {
+        if (isSaving) return;
+        isSaving = true;
         const merged = [...localEffectiveBooks, ...localStaleBooks];
-        plugin.saveData("weread_customBooksISBN", merged);
-        onConfirm();
+        try {
+            await replaceCustomISBNBooks(plugin, merged);
+            onConfirm();
+        } catch (error) {
+            showMessage(
+                error instanceof Error
+                    ? error.message
+                    : plugin.i18n.syncedDataSaveFailed || "保存自定义 ISBN 失败",
+            );
+        } finally {
+            isSaving = false;
+        }
     };
 </script>
 
@@ -142,8 +158,8 @@
     {/if}
 
     <div class="dialog-actions">
-        <button on:click={handleSave}>{plugin.i18n.confirm}</button>
-        <button on:click={onCancel}>{plugin.i18n.cancel}</button>
+        <button on:click={handleSave} disabled={isSaving}>{plugin.i18n.confirm}</button>
+        <button on:click={onCancel} disabled={isSaving}>{plugin.i18n.cancel}</button>
     </div>
 </div>
 

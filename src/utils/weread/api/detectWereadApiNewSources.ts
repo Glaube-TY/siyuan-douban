@@ -2,7 +2,7 @@ import { sql, getAttributeView } from "@/api";
 import { getAttributeViewValueText, normalizeBookTitle } from "../../bookHandling/bookDeduplication";
 import { findBookPrimaryKeyValue } from "../../bookHandling/bookDatabasePrimaryKey";
 import { isValidISBN, normalizeISBN } from "../../bookHandling/isbn";
-import { getIgnoredBookIDSet, getWereadStorageKey, loadIgnoredBooks } from "../wereadSyncStorage";
+import { getIgnoredBookIDSet, getWereadStorageKey, loadCustomISBNBooksWithMigration, loadIgnoredBooks } from "../wereadSyncStorage";
 
 interface WereadPluginLike {
   loadData: (key: string) => Promise<any>;
@@ -104,11 +104,11 @@ export async function detectWereadApiNewSources(plugin: WereadPluginLike): Promi
       .filter(isValidISBN)
   );
 
-  const customISBNBooks = await plugin.loadData("weread_customBooksISBN") || [];
+  const customISBNBooks = await loadCustomISBNBooksWithMigration(plugin);
   const customISBNByBookID = new Map<string, string>();
   for (const item of customISBNBooks) {
     const bookID = getWereadStorageKey(item);
-    const isbn = normalizeISBN(item?.customISBN ?? item?.isbn ?? "");
+    const isbn = normalizeISBN(item.customISBN);
     if (bookID && isValidISBN(isbn)) {
       customISBNByBookID.set(bookID, isbn);
     }

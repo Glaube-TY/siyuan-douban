@@ -47,7 +47,7 @@
     import wereadIgnoredBooksDialog from "@/components/common/wereadIgnoredBooksDialog.svelte";
     import wereadUseBookIDBooksDialog from "@/components/common/wereadUseBookIDBooksDialog.svelte";
     import WereadBookManagementDialog from "@/components/common/WereadBookManagementDialog.svelte";
-    import { loadIgnoredBooks } from "@/utils/weread/wereadSyncStorage";
+    import { loadCustomISBNBooksWithMigration, loadIgnoredBooks } from "@/utils/weread/wereadSyncStorage";
     import { tryRunWereadSync } from "@/utils/weread/api/wereadSyncRunGuard";
 
     async function getCurrentValidBookIdentifiers(plugin: any): Promise<{ validISBNs: Set<string>, validBookIDs: Set<string>, validBookNames: Set<string> }> {
@@ -668,7 +668,17 @@
     }
 
     async function createManageISBNDialog() {
-        const customISBNBooks = await plugin.loadData("weread_customBooksISBN") || [];
+        let customISBNBooks;
+        try {
+            customISBNBooks = await loadCustomISBNBooksWithMigration(plugin);
+        } catch (error) {
+            showMessage(
+                error instanceof Error && error.name === "WereadCustomISBNStorageError"
+                    ? error.message
+                    : i18nText("wereadCustomISBNLoadFailed", "无法加载自定义 ISBN 数据，请先备份后检查数据。"),
+            );
+            return;
+        }
 
         if (customISBNBooks.length === 0) {
             showMessage(i18n.showMessage12);

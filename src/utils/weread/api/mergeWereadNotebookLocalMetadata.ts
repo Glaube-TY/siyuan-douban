@@ -1,5 +1,5 @@
 import { isValidISBN, normalizeISBN } from "../../bookHandling/isbn";
-import { getWereadStorageKey } from "../wereadSyncStorage";
+import { getWereadStorageKey, loadCustomISBNBooksWithMigration } from "../wereadSyncStorage";
 
 interface WereadPluginLike {
   loadData: (key: string) => Promise<any>;
@@ -47,7 +47,7 @@ export async function mergeWereadNotebookLocalMetadata(
     plugin.loadData("temporary_weread_notebooksList"),
     plugin.loadData("weread_api_bookshelf_cache"),
     plugin.loadData("weread_notebooks"),
-    plugin.loadData("weread_customBooksISBN"),
+    loadCustomISBNBooksWithMigration(plugin),
   ]);
 
   const temporaryByBookID = buildRecordMap(temporaryCache, "temporary_weread_notebooksList");
@@ -65,7 +65,7 @@ export async function mergeWereadNotebookLocalMetadata(
       syncedByBookID.get(bookID),
     ].filter(Boolean);
     const customRecord = customISBNByBookID.get(bookID);
-    const customISBN = getValidISBN(customRecord?.customISBN ?? customRecord?.isbn);
+    const customISBN = getValidISBN(customRecord?.customISBN);
     const isbn = [
       customISBN,
       getValidISBN(fresh?.isbn),
