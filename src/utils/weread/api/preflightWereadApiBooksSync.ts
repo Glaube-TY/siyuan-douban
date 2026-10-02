@@ -1,5 +1,25 @@
 import { findWereadApiBookTargetDoc } from "./findWereadApiBookTargetDoc";
 import { getIgnoredBookIDSet, loadIgnoredBooks } from "../wereadSyncStorage";
+import { t } from "../../i18n";
+
+/** Reject different sources targeting one document, including force-sync retries. */
+export function rejectSharedWereadSyncTargets<T extends { bookID: string; blockID?: string; status: string; matchType?: string; message: string }>(
+  items: T[], plugin: any,
+): T[] {
+  const groups = new Map<string, T[]>();
+  for (const item of items) {
+    if (item.status !== "ready" || !item.blockID) continue;
+    if (!groups.has(item.blockID)) groups.set(item.blockID, []);
+    groups.get(item.blockID)!.push(item);
+  }
+  return items.map(item => {
+    const group = groups.get(item.blockID || "") || [];
+    if (new Set(group.map(entry => entry.bookID)).size < 2) return item;
+    const explicit = group.filter(entry => entry.matchType === "bookID");
+    if (explicit.length === 1 && explicit[0].bookID === item.bookID) return item;
+    return { ...item, status: "failed", blockID: undefined, message: t(plugin, "wereadIdentitySharedDoc", "不同 bookID 共用同一读书笔记文档，需使用 bookID 或 ISBN 重新确认独立目标。") };
+  });
+}
 
 interface WereadPluginLike {
   loadData: (key: string) => Promise<any>;
@@ -123,6 +143,9 @@ export async function preflightWereadApiBooksSync(plugin: WereadPluginLike): Pro
     }
   }
 
+  const checkedItems = rejectSharedWereadSyncTargets(items, plugin);
+  ready = checkedItems.filter(item => item.status === "ready").length;
+  failed = checkedItems.filter(item => item.status === "failed").length;
   return {
     total: cache.length,
     checked: items.length,
@@ -130,6 +153,6 @@ export async function preflightWereadApiBooksSync(plugin: WereadPluginLike): Pro
     skippedMp,
     skippedIgnored,
     failed,
-    items,
+    items: checkedItems,
   };
 }

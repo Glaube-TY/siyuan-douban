@@ -1,6 +1,7 @@
 <script lang="ts">
     import { showMessage } from "siyuan";
     import { replaceCustomISBNBooks } from "@/utils/weread/wereadSyncStorage";
+    import { isValidISBN, normalizeISBN } from "@/utils/bookHandling/isbn";
 
     export let plugin;
 
@@ -12,28 +13,10 @@
     export let onConfirm: () => void;
     export let onCancel: () => void;
     export let validISBNs: string[] = [];
-    export let validBookNames: string[] = [];
-
-    const validISBNSet = new Set(validISBNs);
-    const validBookNameSet = new Set(validBookNames.map(name => normalizeBookName(name)));
-
-    function normalizeBookName(name: string | null | undefined | unknown): string {
-        if (!name || typeof name !== 'string') return '';
-        return name.trim().replace(/\s+/g, ' ');
-    }
+    const validISBNSet = new Set(validISBNs.filter(isValidISBN).map(normalizeISBN));
 
     function isCustomISBNStale(book: { title: string; customISBN: string; bookID: string }): boolean {
-        const normTitle = normalizeBookName(book.title);
-        // 强匹配：ISBN 在数据库中存在 -> 有效
-        if (book.customISBN && validISBNSet.has(book.customISBN)) {
-            return false;
-        }
-        // 书名弱匹配：书名在数据库中存在 -> 保守视为有效
-        if (normTitle && validBookNameSet.has(normTitle)) {
-            return false;
-        }
-        // 无法确认时保守处理，判为失效（用户可从历史项中移除或重新同步）
-        return true;
+        return !isValidISBN(book.customISBN) || !validISBNSet.has(normalizeISBN(book.customISBN));
     }
 
     const effectiveBooks = customISBNBooks.filter(book => !isCustomISBNStale(book));
@@ -76,7 +59,7 @@
 
 <div class="custom-ISBN-dialog">
     {#if localStaleBooks.length > 0}
-    <div class="stale-notice">⚠️ {plugin.i18n.managementStaleNotice || "以下为已失效历史项（对应本地书籍已删除，不会再阻止该书重新出现在新书列表）"}</div>
+    <div class="stale-notice">⚠️ {plugin.i18n.managementStaleNotice || "以下历史项未找到匹配的本地书籍。书名相同不能证明身份一致，这些记录不会阻止来源重新进入待处理列表。"}</div>
     <div class="table-container stale-table">
         <table class="isbn-table">
             <thead>

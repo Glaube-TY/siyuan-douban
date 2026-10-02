@@ -5,6 +5,7 @@ import { ensureAttributeViewKeys, appendBookToAttributeView } from './ensureAttr
 import { bindBookToNote } from './bindBookToNote';
 import { findBookByNormalizedTitle } from './bookDeduplication';
 import { findBookPrimaryKeyValue } from './bookDatabasePrimaryKey';
+import { isValidISBN, normalizeISBN } from './isbn';
 import { renderBookNoteTemplate } from '../template/renderBookNoteTemplate';
 import { renderLocalBookTemplateVariables } from '../template/renderLocalBookTemplateVariables';
 
@@ -49,7 +50,7 @@ export async function loadAVData(avID: string, fullData: any, _plugin: any) {
             if (updatedIsbnKey && updatedIsbnKey.values && Array.isArray(updatedIsbnKey.values)) {
                 // 检查是否已存在相同 ISBN 的书籍
                 const existingBook = updatedIsbnKey.values.find((value: any) => {
-                    return value.number && value.number.formattedContent === fullData.ISBN;
+                    return isValidISBN(fullData.ISBN) && normalizeISBN(value.number?.formattedContent ?? value.number?.content ?? value.text?.content) === normalizeISBN(fullData.ISBN);
                 });
 
                 // 如果已存在相同 ISBN 的书籍，则退出不进行后续添加
@@ -61,8 +62,8 @@ export async function loadAVData(avID: string, fullData: any, _plugin: any) {
                 }
             }
 
-            // ISBN 可能因微信读书直连导入而缺失，入库前再按规范化书名去重。
-            if (findBookByNormalizedTitle(originalDatabasekeyValues, fullData.title)) {
+            // 仅在没有有效 ISBN 时使用唯一、无 bookID 冲突的书名兜底。
+            if (!isValidISBN(fullData.ISBN) && findBookByNormalizedTitle(originalDatabasekeyValues, fullData.title)) {
                 return {
                     code: 1,
                     msg: "书籍已存在（书名匹配），跳过添加操作"

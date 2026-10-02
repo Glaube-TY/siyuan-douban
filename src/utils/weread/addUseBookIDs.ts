@@ -3,7 +3,9 @@ import { sql, getAttributeView, removeAttributeViewBlocks, createDocWithMd } fro
 import { downloadWereadCoverSafely } from './downloadWereadCover';
 import { ensureAttributeViewKeys, appendBookToAttributeView } from '../bookHandling/ensureAttributeViewKeys';
 import { bindBookToNote } from '../bookHandling/bindBookToNote';
-import { findBookByNormalizedTitle } from '../bookHandling/bookDeduplication';
+import { buildBookIdentityRows } from '../bookHandling/bookDeduplication';
+import { matchWereadBookIdentity } from './api/wereadBookIdentity';
+import { loadWereadSyncedNotebooks } from './wereadSyncStorage';
 import { findBookPrimaryKeyValue } from '../bookHandling/bookDatabasePrimaryKey';
 import { renderBookNoteTemplate } from '../template/renderBookNoteTemplate';
 import { renderLocalBookTemplateVariables } from '../template/renderLocalBookTemplateVariables';
@@ -44,29 +46,16 @@ export async function addUseBookIDsToDatabase(plugin: any, avID: string, bookDet
             }
         }
 
-        // 查找 bookID 列
-        const updatedBookIDKey = originalDatabasekeyValues.find((kv: any) => kv.key?.name === "bookID");
-
-        if (updatedBookIDKey && updatedBookIDKey.values && Array.isArray(updatedBookIDKey.values)) {
-            // 检查是否已存在相同 bookID 的书籍
-            const existingBook = updatedBookIDKey.values.find((value: any) => {
-                return value.text.content === bookDetail.bookId;
-            });
-
-            // 如果已存在相同 bookID 的书籍，则退出不进行后续添加
-            if (existingBook) {
-                return {
-                    code: 1,
-                    msg: "书籍已存在，跳过添加操作"
-                };
-            }
-        }
-
-        // 同一本书可能已通过 ISBN 或其他来源导入，但没有当前 bookID。
-        if (findBookByNormalizedTitle(originalDatabasekeyValues, bookDetail.title)) {
+        const match = matchWereadBookIdentity(buildBookIdentityRows(originalDatabasekeyValues), {
+            bookID: bookDetail.bookId,
+            isbn: bookDetail.isbn,
+        }, await loadWereadSyncedNotebooks(plugin), false);
+        // 相同 bookID 禁止重复创建；唯一且无冲突的 ISBN 可复用原豆瓣行。
+        // 不按书名阻止不同 bookID 入库，也不自动给旧行补写 bookID。
+        if (match.matchType === "bookID" || (!match.issue && match.row?.docBlockID)) {
             return {
                 code: 1,
-                msg: "书籍已存在（书名匹配），跳过添加操作"
+                msg: "书籍已存在，跳过添加操作"
             };
         }
     }

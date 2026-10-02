@@ -27,6 +27,28 @@ export function getWereadStorageKey(record: any): string {
     return "";
 }
 
+export async function loadWereadSyncedNotebooks(plugin: any): Promise<any[]> {
+    const state = await loadPluginStorageJsonStateStrict(plugin, "weread_notebooks");
+    if (!state.exists) return [];
+    if (!Array.isArray(state.value)) {
+        throw new Error(t(plugin, "wereadSyncedHistoryInvalid", "微信读书同步历史格式异常，操作已停止；请先备份并检查 weread_notebooks。"));
+    }
+    return state.value;
+}
+
+/** Ordinary sources sharing a document must be resolved again, never deleted here. */
+export function findConflictingWereadDocBindings(records: any[]): Map<string, string[]> {
+    const bindings = new Map<string, Set<string>>();
+    for (const record of records) {
+        const bookID = getWereadStorageKey(record);
+        const blockID = String(record?.blockID || "").trim();
+        if (!bookID || !blockID || bookID.startsWith("MP_WXS_") || record?.sourceType === "weread_mp_account") continue;
+        if (!bindings.has(blockID)) bindings.set(blockID, new Set());
+        bindings.get(blockID)!.add(bookID);
+    }
+    return new Map(Array.from(bindings).filter(([, ids]) => ids.size > 1).map(([id, ids]) => [id, Array.from(ids)]));
+}
+
 /**
  * 规范化存储记录，确保只保留 bookID 作为主键
  * 用于保存前清理历史遗留的 syncID，避免口径差异

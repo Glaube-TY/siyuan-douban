@@ -685,7 +685,7 @@
             return;
         }
 
-        const { validISBNs, validBookNames } = await getCurrentValidBookIdentifiers(plugin);
+        const { validISBNs } = await getCurrentValidBookIdentifiers(plugin);
 
         const dialog = svelteDialog({
             title: i18n.manageISBNDialogTitle,
@@ -696,7 +696,6 @@
                         plugin,
                         customISBNBooks: customISBNBooks,
                         validISBNs: Array.from(validISBNs),
-                        validBookNames: Array.from(validBookNames),
                         onConfirm: () => {
                             dialog.close();
                         },
@@ -822,7 +821,7 @@
             return;
         }
 
-        const { validBookIDs, validBookNames } = await getCurrentValidBookIdentifiers(plugin);
+        const { validBookIDs } = await getCurrentValidBookIdentifiers(plugin);
 
         const dialog = svelteDialog({
             title: i18n.useBookIDBooksDialogTitle,
@@ -833,7 +832,6 @@
                         plugin,
                         useBookIDBooks: useBookIDBooks,
                         validBookIDs: Array.from(validBookIDs),
-                        validBookNames: Array.from(validBookNames),
                         onConfirm: () => {
                             dialog.close();
                         },

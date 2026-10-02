@@ -1,8 +1,9 @@
 import { sql, getAttributeView } from "@/api";
-import { getAttributeViewValueText, normalizeBookTitle } from "../../bookHandling/bookDeduplication";
-import { findBookPrimaryKeyValue } from "../../bookHandling/bookDatabasePrimaryKey";
+import { buildBookIdentityRows } from "../../bookHandling/bookDeduplication";
 import { isValidISBN, normalizeISBN } from "../../bookHandling/isbn";
-import { getIgnoredBookIDSet, getWereadStorageKey, loadCustomISBNBooksWithMigration, loadIgnoredBooks } from "../wereadSyncStorage";
+import { findConflictingWereadDocBindings, getIgnoredBookIDSet, getWereadStorageKey, loadCustomISBNBooksWithMigration, loadIgnoredBooks, loadWereadSyncedNotebooks } from "../wereadSyncStorage";
+import { getNoteDocumentBinding, validateNoteDocumentBindings } from "../../readingManagement/noteDocumentBinding";
+import { matchWereadBookIdentity } from "./wereadBookIdentity";
 
 interface WereadPluginLike {
   loadData: (key: string) => Promise<any>;
@@ -21,16 +22,6 @@ export interface WereadApiNewSourceItem {
   publisher?: string;
   publishTime?: string;
   category?: string;
-}
-
-function getValueText(v: any): string {
-  return String(
-    v?.text?.content ??
-    v?.block?.content ??
-    v?.number?.formattedContent ??
-    v?.number?.content ??
-    ""
-  ).trim();
 }
 
 export async function detectWereadApiNewSources(plugin: WereadPluginLike): Promise<{
@@ -56,53 +47,19 @@ export async function detectWereadApiNewSources(plugin: WereadPluginLike): Promi
   }
 
   const db = await getAttributeView(avID);
-  const keyValues = db?.av?.keyValues || [];
-
-  const bookNameKey = findBookPrimaryKeyValue(keyValues);
-  const isbnKey = keyValues.find((kv: any) => kv.key?.name === "ISBN");
-  const bookIDKey = keyValues.find((kv: any) => kv.key?.name === "bookID");
-
-  const bookNameBlockIDs = new Set<string>(
-    (bookNameKey?.values || []).map((item: any) => item.blockID)
-  );
-  const validBookTitlesInDB = new Set<string>(
-    (bookNameKey?.values || [])
-      .map((item: any) => normalizeBookTitle(getAttributeViewValueText(item)))
-      .filter(Boolean)
-  );
-
-  const validISBNsInDB = new Set<string>();
-  for (const item of isbnKey?.values || []) {
-    if (bookNameBlockIDs.has(item.blockID)) {
-      const isbn = normalizeISBN(getValueText(item));
-      if (isValidISBN(isbn)) validISBNsInDB.add(isbn);
-    }
-  }
-
-  const validBookIDsInDB = new Set<string>();
-  for (const item of bookIDKey?.values || []) {
-    if (bookNameBlockIDs.has(item.blockID)) {
-      const bookID = getValueText(item);
-      if (bookID) validBookIDsInDB.add(bookID);
-    }
-  }
+  if (!Array.isArray(db?.av?.keyValues)) throw new Error("书籍数据库列数据格式异常");
+  const rows = buildBookIdentityRows(db.av.keyValues);
+  const validBookIDsInDB = new Set(rows.map(row => row.bookID).filter(Boolean));
+  const bindings = await validateNoteDocumentBindings(rows.map(row => row.docBlockID));
 
   const ignoredBooks = await loadIgnoredBooks(plugin);
-  const syncedNotebooks = await plugin.loadData("weread_notebooks");
+  const syncedNotebooks = await loadWereadSyncedNotebooks(plugin);
   const syncedBookIDSet = new Set<string>(
-    (Array.isArray(syncedNotebooks) ? syncedNotebooks : [])
+    syncedNotebooks
       .map(getWereadStorageKey)
       .filter(Boolean)
   );
   const ignoredBookIDs = getIgnoredBookIDSet(ignoredBooks);
-  const ignoredISBNs = new Set<string>(
-    ignoredBooks
-      .filter((record: any) => !syncedBookIDSet.has(getWereadStorageKey(record)))
-      .map((b: any) => b.isbn?.toString())
-      .filter(Boolean)
-      .map((isbn: string) => normalizeISBN(isbn))
-      .filter(isValidISBN)
-  );
 
   const customISBNBooks = await loadCustomISBNBooksWithMigration(plugin);
   const customISBNByBookID = new Map<string, string>();
@@ -113,11 +70,6 @@ export async function detectWereadApiNewSources(plugin: WereadPluginLike): Promi
       customISBNByBookID.set(bookID, isbn);
     }
   }
-
-  const useBookIDBooks = await plugin.loadData("weread_useBookIDBooks") || [];
-  const useBookIDBookIDs = new Set<string>(
-    useBookIDBooks.map(getWereadStorageKey).filter(Boolean)
-  );
 
   const candidates = notebooksList
     .map((item: any) => {
@@ -142,19 +94,25 @@ export async function detectWereadApiNewSources(plugin: WereadPluginLike): Promi
 
   const normalBookCandidates: WereadApiNewSourceItem[] = [];
   const mpAccounts: WereadApiNewSourceItem[] = [];
+  const localMatches = new Map(candidates.map(item => {
+    const freshISBN = normalizeISBN(item.isbn);
+    const isbn = isValidISBN(freshISBN) ? freshISBN : customISBNByBookID.get(item.bookID) || "";
+    return [item.bookID, matchWereadBookIdentity(rows, { bookID: item.bookID, isbn }, syncedNotebooks, false)];
+  }));
+  const sharedTargets = findConflictingWereadDocBindings(candidates
+    .filter(item => !ignoredBookIDs.has(item.bookID))
+    .map(item => ({ bookID: item.bookID, sourceType: item.sourceType, blockID: localMatches.get(item.bookID)?.row?.docBlockID })));
 
   for (const item of candidates) {
     const bookID = item.bookID;
-    const normalizedTitle = normalizeBookTitle(item.title);
     const storedCustomISBN = customISBNByBookID.get(bookID) || "";
     const freshISBN = normalizeISBN(item.isbn);
     const isbn = isValidISBN(freshISBN) ? freshISBN : storedCustomISBN;
     const isMpAccount = item.sourceType === "weread_mp_account" || bookID.startsWith("MP_WXS_");
 
     if (ignoredBookIDs.has(bookID)) continue;
-    if (syncedBookIDSet.has(bookID)) continue;
-
     if (isMpAccount) {
+      if (syncedBookIDSet.has(bookID)) continue;
       if (validBookIDsInDB.has(bookID)) continue;
       mpAccounts.push({
         title: item.title,
@@ -168,13 +126,11 @@ export async function detectWereadApiNewSources(plugin: WereadPluginLike): Promi
         sourceType: "weread_mp_account",
       });
     } else {
-      const normalizedIsbn = normalizeISBN(isbn);
-      if (normalizedIsbn && ignoredISBNs.has(normalizedIsbn)) continue;
-      if (customISBNByBookID.has(bookID)) continue;
-      if (useBookIDBookIDs.has(bookID)) continue;
-      if (bookID && validBookIDsInDB.has(bookID)) continue;
-      if (normalizedIsbn && validISBNsInDB.has(normalizedIsbn)) continue;
-      if (normalizedTitle && validBookTitlesInDB.has(normalizedTitle)) continue;
+      // Preferences and synced history alone do not prove an independent local target.
+      // New-source detection intentionally never suppresses a source by title.
+      const match = localMatches.get(bookID)!;
+      if (!match.issue && match.row && !sharedTargets.has(match.row.docBlockID)
+        && getNoteDocumentBinding(match.row.docBlockID, bindings).state === "bound") continue;
       normalBookCandidates.push({
         title: item.title,
         isbn,

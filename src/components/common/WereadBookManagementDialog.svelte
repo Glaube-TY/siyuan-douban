@@ -24,7 +24,6 @@
     let temporaryNotebooks: any[] = [];
     let validISBNs: string[] = [];
     let validBookIDs: string[] = [];
-    let validBookNames: string[] = [];
     let isLoading = true;
     let loadError = "";
 
@@ -53,7 +52,6 @@
             temporaryNotebooks = Array.isArray(temporary) ? temporary : [];
             validISBNs = Array.from(identifiers.validISBNs);
             validBookIDs = Array.from(identifiers.validBookIDs);
-            validBookNames = Array.from(identifiers.validBookNames);
         } catch (e) {
             loadError = e instanceof Error && e.name === "WereadCustomISBNStorageError"
                 ? e.message
@@ -116,7 +114,6 @@
                     {plugin}
                     {customISBNBooks}
                     {validISBNs}
-                    {validBookNames}
                     onConfirm={onConfirm}
                     onCancel={onCancel}
                 />
@@ -130,7 +127,6 @@
                     {plugin}
                     {useBookIDBooks}
                     {validBookIDs}
-                    {validBookNames}
                     onConfirm={onConfirm}
                     onCancel={onCancel}
                 />

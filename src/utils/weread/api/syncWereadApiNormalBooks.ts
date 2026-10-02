@@ -1,7 +1,7 @@
 import { normalizeWereadPositionMark } from "../../core/configDefaults";
 import { buildWereadApiEnhancedNotebook } from "./buildWereadApiEnhancedNotebook";
 import { findWereadApiBookTargetDoc } from "./findWereadApiBookTargetDoc";
-import { preflightWereadApiBooksSync } from "./preflightWereadApiBooksSync";
+import { preflightWereadApiBooksSync, rejectSharedWereadSyncTargets } from "./preflightWereadApiBooksSync";
 import PromiseLimitPool from "@/libs/promise-pool";
 import { recordNormalBookInboxDiff } from "../../storage/readingInboxDiff";
 import { replaceReadingAnnotationSource } from "../../storage/readingAnnotationStorage";
@@ -12,7 +12,8 @@ import { syncWereadBookIncremental } from "../incremental/syncBookIncremental";
 import { loadWereadNoteUnitBlockIndex } from "../incremental/blockIndexStorage";
 import { hasUsableWereadSourceIndexForDoc } from "../incremental/indexValidation";
 import { hashText } from "../incremental/hash";
-import { getIgnoredBookIDSet, loadIgnoredBooks } from "../wereadSyncStorage";
+import { getIgnoredBookIDSet, loadIgnoredBooks, loadWereadSyncedNotebooks } from "../wereadSyncStorage";
+import { t } from "../../i18n";
 import type { WereadIncrementalSyncStats, WereadRenderModel } from "../incremental/types";
 import type { WereadSyncProgressCallback, WereadSyncPlanConfirmCallback, WereadSyncPlanItem } from "./wereadSyncProgress";
 
@@ -203,9 +204,16 @@ export async function syncWereadApiNormalBooks(
     }
   }
 
-  const finalReadyItems = Array.from(readyMap.values());
+  const checkedReadyItems = rejectSharedWereadSyncTargets(Array.from(readyMap.values()), plugin);
+  for (const item of checkedReadyItems) {
+    if (item.status === "failed") {
+      readyMap.delete(item.bookID);
+      if (!notReadyItems.some(old => old.bookID === item.bookID)) notReadyItems.push(item);
+    }
+  }
+  const finalReadyItems = checkedReadyItems.filter(item => item.status === "ready");
 
-  const oldNotebooks: OldRecord[] = await plugin.loadData("weread_notebooks") || [];
+  const oldNotebooks: OldRecord[] = await loadWereadSyncedNotebooks(plugin);
   const noteUnitIndex = await loadWereadNoteUnitBlockIndex(plugin);
   const oldMap = new Map<string, OldRecord>();
   for (const old of oldNotebooks) {
@@ -264,7 +272,7 @@ export async function syncWereadApiNormalBooks(
         plannedMap.set(bookID, { bookID, title, isbn, cacheUpdatedTime: currentUpdatedTime });
         continue;
       }
-      if (old.updatedTime !== currentUpdatedTime) {
+      if (old.blockID !== ready.blockID || old.updatedTime !== currentUpdatedTime) {
         plannedMap.set(bookID, { bookID, title, isbn, cacheUpdatedTime: currentUpdatedTime });
         continue;
       }
@@ -494,6 +502,10 @@ export async function syncWereadApiNormalBooks(
 
         if (!targetResult.success || !targetResult.blockID) {
           return { ok: false, bookID, title, message: targetResult.message || "同步前未找到目标文档" };
+        }
+
+        if (targetResult.blockID !== readyMap.get(bookID)?.blockID) {
+          return { ok: false, bookID, title, message: t(plugin, "wereadIdentityTargetChanged", "同步目标在预检后发生变化，已停止写入；请重新确认本地书籍绑定。") };
         }
 
         if (!markdown || typeof markdown !== "string" || markdown.length === 0) {
