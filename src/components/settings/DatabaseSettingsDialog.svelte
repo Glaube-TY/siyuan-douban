@@ -64,10 +64,13 @@
         <div class="settings-dialog-loading">{tx("uiLoading", "加载中...")}</div>
     {:else}
         <div class="settings-dialog-body">
-            <label class="settings-dialog-field">
-                <span>{tx("settingsDatabaseBlockId", "书籍数据库块 ID")}</span>
-                <input class="b3-text-field" bind:value={blockID} placeholder={tx("settingsDatabasePlaceholder", "请输入包含属性视图的块 ID")} />
-            </label>
+            <div class="settings-dialog-field">
+                <label for="database-block-id">{tx("settingsDatabaseBlockId", "书籍数据库块 ID")}</label>
+                <input id="database-block-id" class="b3-text-field" bind:value={blockID} aria-describedby="database-block-id-help" placeholder={tx("settingsDatabasePlaceholder", "请输入包含属性视图的块 ID")} />
+                <span id="database-block-id-help" class="settings-dialog-field-help">
+                    {tx("settingsDatabaseBlockIdHelp", "如果块菜单中没有“复制 ID”，请前往「设置 → 外观 → 控制 → 菜单和按钮的显隐与排序」，切换为“完整方案”后再复制。")}
+                </span>
+            </div>
 
             {#if status}
                 <div class:settings-dialog-status-ok={status.valid} class:settings-dialog-status-warn={!status.valid} class="settings-dialog-status">
@@ -147,6 +150,13 @@
         gap: 8px;
         font-size: 13px;
         font-weight: 600;
+    }
+
+    .settings-dialog-field-help {
+        font-size: 12px;
+        font-weight: 400;
+        line-height: 1.5;
+        color: var(--b3-theme-on-surface-light);
     }
 
     .settings-dialog-status {

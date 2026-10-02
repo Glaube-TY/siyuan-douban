@@ -544,6 +544,7 @@
     "settingsDatabaseTitle": "Local Database Settings",
     "settingsDatabaseDesc": "Connect the local book attribute view for searching, adding, and opening reading notes.",
     "settingsDatabaseBlockId": "Book Database Block ID",
+    "settingsDatabaseBlockIdHelp": "If \"Copy ID\" is not shown in the block menu, go to Settings → Appearance → Controls → Menu and button visibility and order, then switch to \"Full\" to copy the ID.",
     "settingsDatabasePlaceholder": "Enter the block ID containing the attribute view",
     "settingsDatabaseSaved": "Database settings saved",
     "settingsPreferencesTitle": "Book Preferences",
