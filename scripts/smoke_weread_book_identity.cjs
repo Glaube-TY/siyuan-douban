@@ -18,8 +18,10 @@ function load(file) {
         compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true },
     }).outputText;
     const localRequire = (name) => {
+        if (name === "siyuan") return { showMessage: message => messages.push(message) };
         if (!name.startsWith(".") && !name.startsWith("@/")) return require(name);
         const base = name.startsWith("@/") ? path.join(root, "src", name.slice(2)) : path.resolve(path.dirname(absolute), name);
+        if (mocks.has(base)) return mocks.get(base);
         return load(fs.existsSync(base + ".ts") ? base + ".ts" : path.join(base, "index.ts"));
     };
     new Function("require", "module", "exports", code)(localRequire, module, module.exports);
@@ -27,7 +29,7 @@ function load(file) {
 }
 
 const ISBN_A = "9787111128069", ISBN_B = "9787302423287";
-let keyValues, storage, docs, children, writes, requests, created, serial = 0;
+let keyValues, storage, docs, children, writes, requests, created, messages, claims, importResults, bookInfos, dialogProps, writeMode, beforeRead, serial = 0;
 const source = (bookID, isbn = "", title = "测试书") => ({ bookID, isbn, title, sourceType: "weread_book", updatedTime: 10, noteCount: 1, reviewCount: 0, bookmarkCount: 1, totalNoteCount: 1 });
 const plugin = {
     name: "siyuan-douban", i18n: {},
@@ -43,11 +45,12 @@ function reset() {
     ];
     storage = { "settings.json": { bookDatabaseID: "database", noteTemplate: "{{书名}}" }, temporary_weread_notebooksList: [], weread_notebooks: [], weread_customBooksISBN: [] };
     docs = new Set(); children = new Map(); writes = []; requests = []; created = [];
+    messages = []; claims = []; importResults = []; bookInfos = new Map(); dialogProps = undefined; writeMode = "ok"; beforeRead = undefined;
 }
 function row(bookID, isbn, doc, title = "测试书", rowID = doc || `row-${++serial}`) {
     keyValues[0].values.push({ blockID: rowID, keyID: "title", id: `value-${rowID}`, block: { id: doc, content: title } });
     keyValues[1].values.push({ blockID: rowID, number: { content: isbn ? Number(isbn) : null, formattedContent: isbn || "" } });
-    keyValues[2].values.push({ blockID: rowID, text: { content: bookID } });
+    keyValues[2].values.push({ blockID: rowID, id: `bookid-${rowID}`, text: { content: bookID } });
     if (doc) docs.add(doc);
 }
 mock("src/api.ts", {
@@ -55,7 +58,24 @@ mock("src/api.ts", {
         if (query.includes('id = "database"')) return [{ markdown: '<div data-av-id="av"></div>', box: "box", hpath: "/books", root_id: "parent" }];
         return [...docs].filter(id => query.includes(`"${id}"`) || query.includes(`'${id}'`)).map(id => ({ id, type: "d" }));
     },
-    getAttributeView: async () => ({ av: { keyValues: structuredClone(keyValues) } }),
+    getAttributeView: async () => {
+        if (beforeRead) { const run = beforeRead; beforeRead = undefined; run(); }
+        return { av: { keyValues: structuredClone(keyValues) } };
+    },
+    reloadAttributeView: async () => {},
+    setAttributeViewBlockAttrStrict: async payload => {
+        assert.equal(payload.avID, "av"); assert.equal(payload.keyID, keyValues.find(kv => kv.key.name === "bookID").key.id);
+        assert.deepEqual(Object.keys(payload.value), ["text"], "Claim changes only bookID");
+        claims.push(structuredClone(payload));
+        if (writeMode === "throw") throw new Error("strict write rejected");
+        if (writeMode === "noop") return;
+        const column = keyValues.find(kv => kv.key.id === payload.keyID);
+        let cell = column.values.find(v => v.blockID === payload.itemID);
+        if (cell?.id) assert.equal(payload.cellID, cell.id);
+        else assert.equal(payload.cellID, undefined);
+        if (!cell) { cell = { blockID: payload.itemID }; column.values.push(cell); }
+        Object.assign(cell, payload.value);
+    },
     getAttributeViewKeysByAvID: async () => structuredClone(keyValues.map(kv => kv.key)),
     addAttributeViewKey: async ({ keyID, keyName, keyType }) => keyValues.push({ key: { id: keyID, name: keyName, type: keyType }, values: [] }),
     appendAttributeViewDetachedBlocksWithValues: async (_avID, rows) => {
@@ -113,6 +133,29 @@ const { findWereadApiBookTargetDoc: find, attachWereadApiLocalNoteDocs: attach }
 const { detectWereadApiNewSources: detect } = load("src/utils/weread/api/detectWereadApiNewSources.ts");
 const { preflightWereadApiBooksSync: preflight } = load("src/utils/weread/api/preflightWereadApiBooksSync.ts");
 const { syncWereadApiNormalBooks: sync } = load("src/utils/weread/api/syncWereadApiNormalBooks.ts");
+mock("src/utils/weread/addUseBookIDs.ts", { addUseBookIDsToDatabase: async (...args) => {
+    const result = await add(...args); importResults.push(result); return result;
+} });
+mock("src/utils/weread/api/wereadApiGateway.ts", { callWereadApi: async (_key, apiName, { bookId }) => {
+    assert.equal(apiName, "/book/info"); assert.ok(bookInfos.has(bookId)); return structuredClone(bookInfos.get(bookId));
+} });
+mock("src/libs/dialog.ts", { svelteDialog: ({ constructor }) => {
+    constructor({}); return { close() {}, dialog: { element: { classList: { add() {} } } } };
+} });
+mock("src/components/common/wereadNewBooksDialog.svelte", { __esModule: true, default: class { constructor({ props }) { dialogProps = props; } } });
+mock("src/utils/douban/book/getWebPage.ts", { fetchBookHtml: async () => { throw new Error("Unexpected Douban request"); } });
+mock("src/utils/douban/book/fetchBook.ts", { fetchDoubanBook: async () => { throw new Error("Unexpected Douban import"); } });
+mock("src/utils/weread/addWereadMpAccounts.ts", {});
+mock("src/utils/weread/api/buildWereadApiMpAccountSyncData.ts", {});
+const { showWereadApiNewSourcesDialogAndSync: showNewSources } = load("src/utils/weread/api/handleWereadApiNewSources.ts");
+const { claimWereadBookIDOnExistingRow: claim } = load("src/utils/weread/api/wereadBookIdentity.ts");
+async function confirmBookIDs() {
+    const pending = showNewSources(plugin, "mock-key", "update", async () => {});
+    await new Promise(setImmediate);
+    assert.ok(dialogProps, "Actual new-source dialog must be shown");
+    await dialogProps.onConfirm([], [], dialogProps.books);
+    assert.equal(await pending, "synced");
+}
 const detail = (id, isbn = "") => ({ bookId: id, title: "测试书", isbn, cover: "", intro: "intro" });
 async function updatesAreStable() {
     const before = requests.length;
@@ -131,7 +174,7 @@ async function updatesAreStable() {
     assert.equal((await add(plugin, "av", detail("A", ISBN_A))).code, 0);
     assert.deepEqual((await detect(plugin)).normalBooks.map(b => b.bookID), ["B"]);
     assert.equal((await add(plugin, "av", detail("B", ISBN_B))).code, 0);
-    assert.equal((await add(plugin, "av", detail("A", ISBN_A))).code, 1);
+    assert.equal((await add(plugin, "av", detail("A", ISBN_A))).status, "already_linked");
     assert.equal(created.length, 2); assert.notEqual(created[0].id, created[1].id);
     assert.ok(created.every(doc => doc.titlePath === "/books/测试书" && doc.parentID === "parent"));
     const first = await sync(plugin, "mock-key", "template", { mode: "update" });
@@ -150,7 +193,7 @@ async function updatesAreStable() {
 
     reset(); row("", ISBN_A, "doc1"); storage.temporary_weread_notebooksList = [source("A", ISBN_A)];
     const legacy = await find(plugin, source("A", ISBN_A)); assert.equal(legacy.blockID, "doc1"); assert.equal(legacy.matchType, "ISBN");
-    assert.equal((await add(plugin, "av", detail("A", ISBN_A))).code, 1); assert.equal(created.length, 0); assert.equal((await detect(plugin)).newSources.length, 0);
+    assert.equal((await add(plugin, "av", detail("A", ISBN_A))).status, "linked_existing"); assert.equal(created.length, 0); assert.equal((await detect(plugin)).newSources.length, 0);
     console.log("D PASS: safe ISBN reuses an unowned Douban row without creating a duplicate");
 
     reset(); row("A", ISBN_A, "doc1"); storage.temporary_weread_notebooksList = [source("B", ISBN_A)];
@@ -158,7 +201,7 @@ async function updatesAreStable() {
     assert.equal((await preflight(plugin)).failed, 1); assert.equal((await detect(plugin)).normalBooks[0].bookID, "B");
     assert.equal((await attach(plugin, storage.temporary_weread_notebooksList))[0].localDocBlockID, undefined);
     const blocked = await sync(plugin, "mock-key", "template", { mode: "update" }); assert.equal(blocked.planned, 0); assert.equal(blocked.skippedNotReady, 1); assert.equal(writes.length, 0);
-    assert.equal((await add(plugin, "av", detail("B", ISBN_A))).code, 0); assert.notEqual((await find(plugin, source("B", ISBN_A))).blockID, "doc1");
+    assert.equal((await add(plugin, "av", detail("B", ISBN_A))).status, "created"); assert.equal(keyValues[2].values[0].text.content, "A"); assert.equal(claims.length, 0); assert.notEqual((await find(plugin, source("B", ISBN_A))).blockID, "doc1");
     console.log("E PASS: same ISBN with a conflicting bookID cannot write the existing document; BookID can create an independent row");
 
     reset(); row("A", ISBN_A, "doc1"); storage.temporary_weread_notebooksList = [source("A", ISBN_A), source("B", ISBN_B)];
@@ -191,6 +234,7 @@ async function updatesAreStable() {
     reset(); row("", ISBN_A, "doc1"); storage.weread_notebooks = [{ ...source("A", ISBN_A), blockID: "doc1" }, { ...source("B", ISBN_A), blockID: "doc1" }];
     assert.equal((await add(plugin, "av", detail("B", ISBN_A))).code, 0, "Conflicting history must not block independent BookID import into a legacy ISBN row");
     assert.notEqual((await find(plugin, source("B", ISBN_A))).blockID, "doc1");
+    assert.equal(keyValues[2].values[0].text.content, ""); assert.equal(claims.length, 0);
     reset(); row("", ISBN_A, ""); assert.equal((await add(plugin, "av", detail("A", ISBN_A))).code, 0, "An unbound ISBN row is not a usable note document");
     reset(); delete storage.weread_notebooks; assert.deepEqual(await historyTools.loadWereadSyncedNotebooks(plugin), []);
     for (const damaged of [null, "corrupted", { bad: true }]) { storage.weread_notebooks = damaged; await assert.rejects(historyTools.loadWereadSyncedNotebooks(plugin)); }
@@ -198,5 +242,92 @@ async function updatesAreStable() {
     assert.equal((await preflight(plugin)).skippedMp, 1); assert.equal((await detect(plugin)).mpAccounts.length, 0); assert.equal((await find(plugin, source("MP_WXS_1"))).blockID, "mpdoc");
     assert.equal(historyTools.findConflictingWereadDocBindings([{ bookID: "A", blockID: "doc" }, { bookID: "MP_WXS_1", blockID: "doc" }]).size, 0);
     console.log("Additional PASS: priority, duplicate ISBN, shared legacy row, force-sync collision, damaged history, MP exclusion");
+
+    // H: the exact upgrade flow: notebook ISBN missing, existing Douban row, explicit BookID confirmation.
+    reset(); row("", ISBN_A, "doc1", "历史书", "legacy-row");
+    keyValues.push({ key: { id: "user", name: "用户字段", type: "text" }, values: [{ blockID: "legacy-row", text: { content: "preserve me" } }] });
+    storage.temporary_weread_notebooksList = [source("WR_A", "", "历史书")];
+    const originalRows = structuredClone(keyValues);
+    assert.deepEqual((await detect(plugin)).normalBooks.map(b => b.bookID), ["WR_A"]);
+    assert.deepEqual(keyValues, originalRows, "Detection must never claim rows");
+    bookInfos.set("WR_A", { ...detail("WR_A", ISBN_A), title: "历史书", author: "author", publisher: "publisher", publishTime: "2020-01-01", cover: "https://example.com/remote.jpg" });
+    await confirmBookIDs();
+    assert.deepEqual(importResults.map(r => [r.code, r.status]), [[0, "linked_existing"]]);
+    assert.equal(created.length, 0); assert.equal(keyValues[0].values.length, 1);
+    assert.equal(keyValues[2].values[0].text.content, "WR_A"); assert.equal(keyValues[0].values[0].block.id, "doc1");
+    assert.deepEqual(keyValues.filter(kv => kv.key.name !== "bookID"), originalRows.filter(kv => kv.key.name !== "bookID"));
+    assert.equal(storage.weread_notebooks.length, 0, "Claim must not fabricate sync history");
+    const cached = storage.temporary_weread_notebooksList[0];
+    assert.equal(cached.isbn, ISBN_A); assert.equal(cached.cover, "https://example.com/remote.jpg");
+    assert.equal(cached.author, "author"); assert.equal(cached.publisher, "publisher"); assert.equal(cached.publishTime, "2020-01-01"); assert.equal(cached.introduction, "intro");
+    assert.ok(messages.every(message => !/导入失败|已存在|已经导入/.test(message)));
+    console.log("H historical Douban row claim PASS");
+    assert.equal((await detect(plugin)).newSources.length, 0); console.log("H second detect has zero pending PASS");
+    assert.equal((await sync(plugin, "mock-key", "template", { mode: "update", forceBookIDs: ["WR_A"] })).success, 1);
+    assert.deepEqual(writes, [{ bookID: "WR_A", docBlockID: "doc1" }]);
+    for (let round = 2; round <= 3; round++) {
+        const result = await sync(plugin, "mock-key", "template", { mode: "update" });
+        assert.equal(result.planned, 0); assert.equal(result.skippedUnchanged, 1);
+        assert.equal((await detect(plugin)).newSources.length, 0);
+    }
+    assert.equal(writes.length, 1); console.log("H second/third update unchanged PASS");
+    const again = await add(plugin, "av", bookInfos.get("WR_A"));
+    assert.equal(again.code, 0); assert.equal(again.status, "already_linked"); assert.equal(claims.length, 1);
+    console.log("Exact bookID idempotent success PASS");
+
+    reset();
+    for (let i = 0; i < 20; i++) {
+        const id = "HIST_" + i, isbn = String(9787111128000 + i), title = "历史书" + i;
+        row("", isbn, "doc-" + i, title, "legacy-" + i);
+        storage.temporary_weread_notebooksList.push(source(id, "", title));
+        bookInfos.set(id, { ...detail(id, isbn), title });
+    }
+    assert.equal((await detect(plugin)).normalBooks.length, 20);
+    await confirmBookIDs();
+    assert.equal(importResults.length, 20); assert.ok(importResults.every(r => r.code === 0 && r.status === "linked_existing"));
+    assert.equal(created.length, 0); assert.equal(keyValues[0].values.length, 20);
+    for (let i = 0; i < 20; i++) {
+        assert.equal(keyValues[2].values[i].text.content, "HIST_" + i);
+        assert.equal(keyValues[0].values[i].block.id, "doc-" + i);
+        assert.equal(storage.temporary_weread_notebooksList[i].isbn, String(9787111128000 + i));
+    }
+    assert.ok(messages.every(message => !/导入失败|已存在|已经导入/.test(message)));
+    assert.equal((await detect(plugin)).newSources.length, 0);
+    console.log("I batch existing books claim PASS (20 books, no duplicate rows or failure messages)");
+
+    // Fail closed on stale identity, invalid documents and writes that do not read back.
+    for (const mode of ["noop", "throw"]) {
+        reset(); row("", ISBN_A, "doc1"); writeMode = mode;
+        await assert.rejects(add(plugin, "av", detail("A", ISBN_A)));
+        assert.equal(keyValues[2].values[0].text.content, ""); assert.equal(created.length, 0);
+    }
+    for (const mutate of [
+        () => { keyValues[2].values[0].text.content = "OTHER"; },
+        () => { keyValues[1].values[0].number.formattedContent = ISBN_B; },
+        () => { keyValues[0].values[0].block.id = "doc2"; },
+        () => { row("A", ISBN_B, "doc2"); },
+        () => { storage.weread_notebooks = [ { ...source("A", ISBN_A), blockID: "doc1" }, { ...source("B", ISBN_A), blockID: "doc1" } ]; },
+    ]) {
+        reset(); row("", ISBN_A, "doc1");
+        const expected = identity.buildBookIdentityRows(keyValues)[0];
+        beforeRead = () => { beforeRead = mutate; };
+        await assert.rejects(claim(plugin, "av", expected, { bookID: "A", isbn: ISBN_A })); assert.equal(claims.length, 0);
+    }
+    reset(); row("A", ISBN_A, "doc1"); docs.delete("doc1");
+    assert.equal((await add(plugin, "av", detail("A", ISBN_A))).status, "conflict"); assert.equal(created.length, 0);
+    reset(); row("", ISBN_A, "doc1"); keyValues[2].values = [];
+    assert.equal((await add(plugin, "av", detail("A", ISBN_A))).status, "linked_existing"); assert.equal(claims[0].cellID, undefined);
+    reset(); row("", ISBN_A, "doc1"); keyValues.pop();
+    assert.equal((await add(plugin, "av", detail("A", ISBN_A))).status, "linked_existing"); assert.equal(created.length, 0);
+    reset(); const remoteDetail = { ...detail("A", ISBN_A), cover: "https://example.com/remote.jpg" };
+    const beforeDetail = structuredClone(remoteDetail); assert.equal((await add(plugin, "av", remoteDetail)).status, "created"); assert.deepEqual(remoteDetail, beforeDetail);
+    reset(); row("", ISBN_A, "doc1"); storage.temporary_weread_notebooksList = [source("A")]; bookInfos.set("A", detail("A", ISBN_A)); writeMode = "throw";
+    await confirmBookIDs(); assert.equal(importResults.length, 0); assert.ok(messages.some(message => /导入失败/.test(message)));
+    assert.equal(storage.temporary_weread_notebooksList[0].isbn, ISBN_A, "Resolved remote details survive a DB write failure");
+    reset(); row("", ISBN_A, "doc1"); const expectedWithoutColumn = identity.buildBookIdentityRows(keyValues)[0]; keyValues.pop(); storage.weread_notebooks = null;
+    await assert.rejects(claim(plugin, "av", expectedWithoutColumn, { bookID: "A", isbn: ISBN_A })); assert.equal(keyValues.length, 2);
+    reset(); keyValues[2].values.push({ blockID: "orphan", text: { content: "A" } });
+    assert.equal((await add(plugin, "av", detail("A", ISBN_A))).status, "conflict"); assert.equal(created.length, 0);
+    console.log("Claim safety/readback, missing column/cell, unchanged input and failed-import cache PASS");
     console.log("WeRead book identity smoke: ALL PASS (mocked I/O; not a live SiYuan/WeRead account test)");
 })().catch(error => { console.error(error); process.exitCode = 1; });

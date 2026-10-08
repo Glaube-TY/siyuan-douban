@@ -1,63 +1,54 @@
 import { parseDateToTimestamp } from '../core/formatOp';
-import { sql, getAttributeView, removeAttributeViewBlocks, createDocWithMd } from "@/api";
+import { sql, getAttributeView, createDocWithMd } from "@/api";
 import { downloadWereadCoverSafely } from './downloadWereadCover';
 import { ensureAttributeViewKeys, appendBookToAttributeView } from '../bookHandling/ensureAttributeViewKeys';
 import { bindBookToNote } from '../bookHandling/bindBookToNote';
 import { buildBookIdentityRows } from '../bookHandling/bookDeduplication';
-import { matchWereadBookIdentity } from './api/wereadBookIdentity';
+import { matchWereadBookIdentity, claimWereadBookIDOnExistingRow, bookIdentityFailureMessage } from './api/wereadBookIdentity';
 import { loadWereadSyncedNotebooks } from './wereadSyncStorage';
-import { findBookPrimaryKeyValue } from '../bookHandling/bookDatabasePrimaryKey';
+import { getNoteDocumentBinding, validateNoteDocumentBindings } from '../readingManagement/noteDocumentBinding';
+import { t } from '../i18n';
 import { renderBookNoteTemplate } from '../template/renderBookNoteTemplate';
 import { renderLocalBookTemplateVariables } from '../template/renderLocalBookTemplateVariables';
 import { formatWereadRatingPercent } from './api/formatWereadRating';
 import type { WereadApiDatabaseBookDetail } from './api/buildWereadApiDatabaseBookDetail';
 
-// 添加 useBookID 书籍到数据库
-export async function addUseBookIDsToDatabase(plugin: any, avID: string, bookDetail: WereadApiDatabaseBookDetail) {
-    let getdatabase = await getAttributeView(avID);
-    let originalDatabasekeyValues = getdatabase.av.keyValues;
+type BookIDImportStatus = "created" | "linked_existing" | "already_linked" | "conflict";
 
-    // 检查数据库是否为空或不存在 bookID 列
-    if (originalDatabasekeyValues && Array.isArray(originalDatabasekeyValues)) {
-        // 查找 bookID 列
-        const bookIDKey = originalDatabasekeyValues.find((kv: any) => kv.key?.name === "bookID");
-        const bookNameKey = findBookPrimaryKeyValue(originalDatabasekeyValues);
-
-        // 处理异常情况
-        // 当用户直接删除读书笔记文档，数据库视图会同步删除，但是本地数据库文件中还保留了除书名以外的其他列内容
-        if (bookIDKey && bookNameKey) {
-            const bookIDColumn = bookIDKey.values || [];
-            const bookNameColumn = bookNameKey.values || [];
-
-            // 对比bookNameColumn与bookIDColumn，若他俩存在不同的，则将不同的blockID用removeAttributeViewBlocks方法清理
-            const bookNameBlockIDs = new Set(bookNameColumn.map((item: any) => item.blockID));
-            const bookIDBlockIDs = new Set(bookIDColumn.map((item: any) => item.blockID));
-
-            // 找出在bookID列中但不在书名列中的blockID
-            const blockIDsToRemove = Array.from(bookIDBlockIDs).filter(id => !bookNameBlockIDs.has(id) && id !== undefined);
-
-            // 如果有需要清理的blockID，则调用removeAttributeViewBlocks方法
-            if (blockIDsToRemove.length > 0) {
-                await removeAttributeViewBlocks(avID, blockIDsToRemove);
-
-                // 重新获取数据库信息
-                getdatabase = await getAttributeView(avID);
-                originalDatabasekeyValues = getdatabase.av.keyValues;
-            }
+// Only the user's explicit BookID import may claim an unowned historical ISBN row.
+export async function addUseBookIDsToDatabase(plugin: any, avID: string, bookDetail: WereadApiDatabaseBookDetail): Promise<{ code: number; status: BookIDImportStatus; msg: string }> {
+    const bookID = String(bookDetail.bookId || "").trim();
+    const stateChanged = t(plugin, "bookUpdateStateChanged", "本地书籍状态已发生变化，请重新搜索后再试。");
+    if (!bookID) throw new Error(stateChanged);
+    const database = await getAttributeView(avID);
+    if (!Array.isArray(database?.av?.keyValues)) throw new Error(stateChanged);
+    const keyValues = database.av.keyValues;
+    const rows = buildBookIdentityRows(keyValues);
+    const ownedCells = keyValues.filter((kv: any) => kv.key?.name === "bookID")
+        .flatMap((kv: any) => kv.values || []).filter((cell: any) => String(cell.text?.content || "").trim() === bookID);
+    if (ownedCells.length && !rows.some(row => row.bookID === bookID)) {
+        return { code: 1, status: "conflict", msg: stateChanged };
+    }
+    const match = matchWereadBookIdentity(rows, {
+        bookID,
+        isbn: bookDetail.isbn,
+    }, await loadWereadSyncedNotebooks(plugin), false);
+    if (match.matchType === "bookID" && match.issue) {
+        return { code: 1, status: "conflict", msg: bookIdentityFailureMessage(plugin, match) };
+    }
+    if (!match.issue && match.row?.docBlockID) {
+        const bindings = await validateNoteDocumentBindings([match.row.docBlockID]);
+        if (getNoteDocumentBinding(match.row.docBlockID, bindings).state !== "bound") {
+            return { code: 1, status: "conflict", msg: stateChanged };
         }
-
-        const match = matchWereadBookIdentity(buildBookIdentityRows(originalDatabasekeyValues), {
-            bookID: bookDetail.bookId,
-            isbn: bookDetail.isbn,
-        }, await loadWereadSyncedNotebooks(plugin), false);
-        // 相同 bookID 禁止重复创建；唯一且无冲突的 ISBN 可复用原豆瓣行。
-        // 不按书名阻止不同 bookID 入库，也不自动给旧行补写 bookID。
-        if (match.matchType === "bookID" || (!match.issue && match.row?.docBlockID)) {
-            return {
-                code: 1,
-                msg: "书籍已存在，跳过添加操作"
-            };
+        if (match.matchType === "bookID") {
+            return { code: 0, status: "already_linked", msg: "" };
         }
+        await claimWereadBookIDOnExistingRow(plugin, avID, match.row, { bookID, isbn: bookDetail.isbn });
+        return { code: 0, status: "linked_existing", msg: "" };
+    }
+    if (match.matchType === "bookID") {
+        return { code: 1, status: "conflict", msg: stateChanged };
     }
 
     // 定义书籍属性列
@@ -69,13 +60,13 @@ export async function addUseBookIDsToDatabase(plugin: any, avID: string, bookDet
     // 下载封面
     const originalCover = bookDetail.cover || "";
     const localCover = await downloadWereadCoverSafely(originalCover, bookDetail.title || bookDetail.bookId || "weread_cover");
-    bookDetail.cover = localCover || "";
+    const databaseBookDetail = { ...bookDetail, bookId: bookID, cover: localCover || "" };
 
     // 添加书籍数据到数据库并回查 blockID
     const { blockID, matchingValue } = await appendBookToAttributeView(
         avID,
         databaseKeys,
-        bookDetail,
+        databaseBookDetail,
         buildBlocksValues
     );
 
@@ -111,7 +102,7 @@ export async function addUseBookIDsToDatabase(plugin: any, avID: string, bookDet
         readingStatus: "",
         startDate: "",
         finishDate: "",
-        cover: bookDetail.cover || "",
+        cover: localCover || "",
         description: bookDetail.intro || "",
         authorBio: "",
         wereadRating: formatWereadRatingPercent(bookDetail.newRating),
@@ -131,6 +122,7 @@ export async function addUseBookIDsToDatabase(plugin: any, avID: string, bookDet
 
     return {
         code: 0,
+        status: "created",
         msg: "书籍添加成功"
     };
 }

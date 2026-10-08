@@ -342,12 +342,27 @@ async function handleNewSourcesConfirm(
     avID = blockResult[0]?.markdown?.match(/data-av-id="([^"]+)"/)?.[1] || "";
   }
 
+  const resolvedUseBookIDSources: WereadApiNewSourceItem[] = [];
   if (useBookIDs && useBookIDs.length > 0) {
     await saveUseBookIDBooks(plugin, useBookIDs);
 
     for (const bookItem of useBookIDs) {
       try {
         const bookDetail = await buildWereadApiDatabaseBookDetail(apiKey, bookItem.bookID);
+        if (bookDetail.bookId !== bookItem.bookID) {
+          throw new Error(t(plugin, "bookUpdateStateChanged", "本地书籍状态已发生变化，请重新搜索后再试。"));
+        }
+        resolvedUseBookIDSources.push({
+          ...bookItem,
+          bookID: bookDetail.bookId,
+          title: bookDetail.title || bookItem.title,
+          isbn: bookDetail.isbn || bookItem.isbn,
+          author: bookDetail.author || bookItem.author,
+          introduction: bookDetail.intro || bookItem.introduction,
+          publisher: bookDetail.publisher || bookItem.publisher,
+          publishTime: bookDetail.publishTime || bookItem.publishTime,
+          cover: bookDetail.cover || bookItem.cover,
+        });
         if (avID) {
           const result = await addUseBookIDsToDatabase(plugin, avID, bookDetail);
           if (result?.code !== 0) {
@@ -413,7 +428,7 @@ async function handleNewSourcesConfirm(
 
   await mergeNewSourceDetailsIntoNotebookCache(plugin, [
     ...selectedNormalBooks,
-    ...useBookIDs,
+    ...resolvedUseBookIDSources,
     ...selectedMpAccounts,
   ]);
 
@@ -427,7 +442,7 @@ async function handleNewSourcesConfirm(
 
   await waitForImportedSourcesReady(plugin, [
     ...selectedNormalBooks,
-    ...useBookIDs,
+    ...resolvedUseBookIDSources,
     ...selectedMpAccounts,
   ], avID);
 }
