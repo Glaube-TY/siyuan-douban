@@ -91,7 +91,10 @@
             <div class:settings-dialog-status-ok={verified} class:settings-dialog-status-warn={!verified} class="settings-dialog-status">
                 <SiYuanIcon name={verified ? "success" : "warning"} size={16} />
                 {#if verified}
-                    <span>{tx("settingsApiKeyVerified", "已验证")}：{maskedApiKey} {verifiedAt ? ` / ${new Date(verifiedAt).toLocaleString()}` : ""}</span>
+                    <span>{t(plugin, "settingsApiKeyVerified", "已验证：{key}{time}", {
+                        key: maskedApiKey,
+                        time: verifiedAt ? ` / ${new Date(verifiedAt).toLocaleString()}` : "",
+                    })}</span>
                 {:else if lastError}
                     <span>{lastError}</span>
                 {:else}
