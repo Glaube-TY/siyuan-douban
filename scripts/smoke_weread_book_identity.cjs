@@ -29,7 +29,7 @@ function load(file) {
 }
 
 const ISBN_A = "9787111128069", ISBN_B = "9787302423287";
-let keyValues, storage, docs, children, writes, requests, created, messages, claims, importResults, bookInfos, dialogProps, writeMode, beforeRead, doubanBooks, doubanRequests, infoRequests, rawNotebooks, serial = 0;
+let keyValues, storage, docs, children, writes, requests, created, messages, claims, importResults, bookInfos, dialogProps, writeMode, beforeRead, doubanBooks, doubanRequests, infoRequests, rawNotebooks, removals, serial = 0;
 const source = (bookID, isbn = "", title = "测试书") => ({ bookID, isbn, title, sourceType: "weread_book", updatedTime: 10, noteCount: 1, reviewCount: 0, bookmarkCount: 1, totalNoteCount: 1 });
 const plugin = {
     name: "siyuan-douban", i18n: {},
@@ -46,7 +46,7 @@ function reset() {
     storage = { "settings.json": { bookDatabaseID: "database", noteTemplate: "{{书名}}" }, temporary_weread_notebooksList: [], weread_notebooks: [], weread_customBooksISBN: [] };
     docs = new Set(); children = new Map(); writes = []; requests = []; created = [];
     messages = []; claims = []; importResults = []; bookInfos = new Map(); dialogProps = undefined; writeMode = "ok"; beforeRead = undefined;
-    doubanBooks = new Map(); doubanRequests = []; infoRequests = []; rawNotebooks = { books: [] };
+    doubanBooks = new Map(); doubanRequests = []; infoRequests = []; rawNotebooks = { books: [] }; removals = [];
 }
 function row(bookID, isbn, doc, title = "测试书", rowID = doc || `row-${++serial}`) {
     keyValues[0].values.push({ blockID: rowID, keyID: "title", id: `value-${rowID}`, block: { id: doc, content: title } });
@@ -99,7 +99,7 @@ mock("src/api.ts", {
         assert.ok(item); Object.assign(item, value);
     },
     getChildBlocks: async id => structuredClone(children.get(id) || []),
-    removeAttributeViewBlocks: async () => { throw new Error("Unexpected destructive operation"); },
+    removeAttributeViewBlocks: async (avID, ids) => { removals.push({ avID, ids: structuredClone(ids) }); throw new Error("Unexpected destructive operation"); },
 });
 mock("src/utils/core/formatOp.ts", { generateUniqueBlocked: () => `20261002120000-${String(++serial).padStart(7, "0")}`, parseDateToTimestamp: () => 0 });
 mock("src/utils/bookHandling/changeMainKeyName.ts", { changeMainKeyName: async () => { throw new Error("Unexpected rename"); } });
@@ -467,5 +467,61 @@ async function updatesAreStable(expectedCount = 2) {
     reset(); keyValues[1].values.push({ blockID: "orphan", number: { formattedContent: ISBN_A } });
     const orphanBefore = structuredClone(keyValues); await assert.rejects(linkISBN(plugin, "av", { bookID: "WR_A", isbn: ISBN_A })); assert.deepEqual(keyValues, orphanBefore); assert.equal(created.length, 0);
     console.log("ISBN import boundary PASS: mismatched Douban response rejected before creation; link readback failure cannot report success");
+    // Orphan A/E: unrelated fields survive a confirmed claim and subsequent split-title synchronization.
+    reset(); row("", ISBN_A, "doc1", "A", "legacy-row"); subtitle("legacy-row", "B");
+    keyValues[1].values.push({ blockID: "orphan-isbn", number: { formattedContent: ISBN_B }, id: "old-isbn-cell" });
+    keyValues[2].values.push({ itemID: "orphan-bookid", text: { content: "OTHER" }, id: "old-bookid-cell" });
+    const expectedClaim = structuredClone(keyValues); expectedClaim[2].values[0].text.content = "WR_A";
+    storage.temporary_weread_notebooksList = [source("WR_A", "", "A：B")];
+    await confirmISBNs([source("WR_A", ISBN_A, "A：B")]);
+    assert.deepEqual(keyValues, expectedClaim); assert.equal(created.length, 0); assert.equal(doubanRequests.length, 0); assert.equal(removals.length, 0);
+    assert.ok(messages.every(message => !/导入失败/.test(message))); assert.equal((await detect(plugin)).newSources.length, 0);
+    assert.equal((await preflight(plugin)).items[0].matchType, "bookID");
+    assert.equal((await sync(plugin, "mock-key", "template", { mode: "update" })).success, 1);
+    assert.deepEqual(writes, [{ bookID: "WR_A", docBlockID: "doc1" }]); await updatesAreStable(1);
+    assert.deepEqual(keyValues, expectedClaim); assert.equal(removals.length, 0);
+    console.log("Orphan A/E PASS: unrelated ISBN/bookID preserved, existing row claimed without duplicate or deletion, split title/subtitle retained, two updates unchanged");
+
+    // Orphan B: actual WeRead ISBN import must bypass generic Douban orphan cleanup.
+    reset(); row("OTHER", ISBN_B, "other-doc", "Other");
+    keyValues[1].values.push({ blockID: "orphan-isbn", text: { content: ISBN_B }, id: "old-isbn-cell" });
+    keyValues[2].values.push({ blockID: "orphan-bookid", text: { content: "HISTORICAL" } });
+    const beforeNewImport = structuredClone(keyValues);
+    storage.temporary_weread_notebooksList = [source("WR_A", "", "A：B")]; doubanBooks.set(ISBN_A, douban(ISBN_A, "A", "B"));
+    await confirmISBNs([source("WR_A", ISBN_A, "A：B")]);
+    assert.equal(created.length, 1); const newRow = created[0].id;
+    assert.equal(cellText("ISBN", newRow), ISBN_A); assert.equal(cellText("bookID", newRow), "WR_A");
+    assert.equal(cellText("书名", newRow), "A"); assert.equal(cellText("副标题", newRow), "B"); assert.equal(claims[0].itemID, newRow);
+    for (const column of beforeNewImport) assert.deepEqual(keyValues.find(kv => kv.key.id === column.key.id).values.filter(cell => cell.blockID !== newRow), column.values);
+    assert.equal(removals.length, 0); assert.ok(messages.every(message => !/导入失败/.test(message)));
+    assert.equal((await detect(plugin)).newSources.length, 0);
+    assert.equal((await sync(plugin, "mock-key", "template", { mode: "update" })).success, 1); await updatesAreStable(1);
+    assert.equal(removals.length, 0);
+    console.log("Orphan B PASS: new ISBN row/document linked, unrelated historical cells and row unchanged, no cleanup");
+
+    // Orphan C/D: normalized target ISBN and exact target bookID remain blocking identities, never legal rows.
+    for (const [columnIndex, cell, identifier] of [
+        [1, { blockID: "orphan", number: { formattedContent: ISBN_A } }, "ISBN"],
+        [1, { itemID: "orphan", text: { content: "９７８-７１１１１２８０６９" } }, "ISBN"],
+        [2, { blockID: "orphan", text: { content: " WR_A " } }, "bookID"],
+    ]) {
+        reset(); row("", ISBN_A, "doc1", "A"); keyValues[columnIndex].values.push(cell);
+        const beforeConflict = structuredClone(keyValues);
+        await assert.rejects(linkISBN(plugin, "av", { bookID: "WR_A", isbn: ISBN_A }), new RegExp(identifier + ".*检查数据库"));
+        assert.deepEqual(keyValues, beforeConflict); assert.equal(claims.length, 0); assert.equal(created.length, 0); assert.equal(removals.length, 0);
+    }
+    reset(); row("OTHER", ISBN_B, "other-doc"); keyValues[1].values.push({ blockID: "orphan", text: { content: ISBN_A } });
+    storage.temporary_weread_notebooksList = [source("WR_A", "", "A：B")];
+    const beforeRejectedImport = structuredClone(keyValues);
+    await confirmISBNs([source("WR_A", ISBN_A, "A：B")]);
+    assert.deepEqual(keyValues, beforeRejectedImport); assert.equal(doubanRequests.length, 0); assert.equal(claims.length, 0); assert.equal(created.length, 0); assert.equal(removals.length, 0);
+    assert.ok(messages.some(message => /ISBN.*检查数据库/.test(message))); assert.ok(messages.every(message => !/成功导入/.test(message)));
+    console.log("Orphan C/D PASS: target ISBN/bookID conflicts rejected before DB writes or deletion, including normalized text and itemID cells; confirmation handler reports database identity check");
+
+    // Other callers keep the previous cleanup default; the mock prevents any actual deletion.
+    reset(); keyValues[1].values.push({ blockID: "orphan", number: { formattedContent: ISBN_B } });
+    const legacyCleanup = await addDouban("av", { ...douban(ISBN_A), ISBN: ISBN_A }, plugin);
+    assert.equal(legacyCleanup.code, 1); assert.deepEqual(removals, [{ avID: "av", ids: ["orphan"] }]); assert.equal(created.length, 0);
+    console.log("Douban cleanup default compatibility PASS: unchanged for callers without options");
     console.log("WeRead book identity smoke: ALL PASS (mocked I/O; not a live SiYuan/WeRead account test)");
 })().catch(error => { console.error(error); process.exitCode = 1; });

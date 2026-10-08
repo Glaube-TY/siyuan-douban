@@ -1079,6 +1079,7 @@
     "managementStaleNotice": "No matching local book was found for these historical items. Identical titles do not establish identity, and these records will not prevent sources from appearing in the pending list again.",
     "wereadSyncedHistoryInvalid": "WeRead sync history has an invalid format. The operation was stopped; back up and check weread_notebooks first.",
     "wereadISBNImportMismatch": "The Douban ISBN could not be verified against the selected ISBN. Import was stopped.",
+    "wereadIdentityOrphanConflict": "An orphaned field matches the current {identifier}. Import was stopped; check the database primary key and identity fields.",
     "wereadIdentityConfirmationNoMatch": "Source identity needs confirmation: bookID, ISBN and the current title did not match a local book. Verify the ISBN in new-source confirmation or import using BookID.",
     "wereadIdentityConfirmationMissingISBN": "Source identity needs confirmation: bookID did not match, the cache has no valid ISBN, and the current title did not match. Fetch or enter an ISBN in new-source confirmation, or import using BookID.",
     "wereadIdentityAmbiguousTitle": "Multiple books have the same normalized title. Match by bookID or ISBN instead.",

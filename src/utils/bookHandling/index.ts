@@ -9,7 +9,7 @@ import { isValidISBN, normalizeISBN } from './isbn';
 import { renderBookNoteTemplate } from '../template/renderBookNoteTemplate';
 import { renderLocalBookTemplateVariables } from '../template/renderLocalBookTemplateVariables';
 
-export async function loadAVData(avID: string, fullData: any, _plugin: any) {
+export async function loadAVData(avID: string, fullData: any, _plugin: any, options?: { cleanupOrphans?: boolean }) {
     try {
         // 判断数据库中是否含有该书籍（以 ISBN 为依据）
         let originalDatabase = await getAttributeView(avID);
@@ -23,7 +23,7 @@ export async function loadAVData(avID: string, fullData: any, _plugin: any) {
 
             // 处理异常情况
             // 当用户直接删除读书笔记文档，数据库视图会同步删除，但是本地数据库文件中还保留了除书名以外的其他列内容
-            if (isbnKey && bookNameKey) {
+            if (options?.cleanupOrphans !== false && isbnKey && bookNameKey) {
                 const ISBNColumn = isbnKey.values || [];
                 const bookNameColumn = bookNameKey.values || [];
 

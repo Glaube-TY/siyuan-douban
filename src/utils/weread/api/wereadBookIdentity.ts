@@ -125,9 +125,14 @@ export async function linkWereadISBNSourceToDatabase(
     const keyValues = database.av.keyValues;
     const rows = buildBookIdentityRows(keyValues);
     const rowIDs = new Set(rows.map(row => row.rowBlockID));
-    // Do not let the generic Douban import clean up orphaned identity cells.
-    if (keyValues.filter((kv: any) => kv.key?.name === "ISBN" || kv.key?.name === "bookID")
-        .some((kv: any) => (kv.values || []).some((cell: any) => !rowIDs.has(String(cell.blockID || cell.itemID || "").trim())))) throw new Error(changed);
+    for (const column of keyValues.filter((kv: any) => kv.key?.name === "ISBN" || kv.key?.name === "bookID")) {
+        const conflictingOrphan = (column.values || []).some((cell: any) => {
+            if (rowIDs.has(String(cell.blockID || cell.itemID || "").trim())) return false;
+            const value = getAttributeViewValueText(cell);
+            return column.key.name === "bookID" ? value === bookID : isValidISBN(value) && normalizeISBN(value) === isbn;
+        });
+        if (conflictingOrphan) throw new Error(t(plugin, "wereadIdentityOrphanConflict", "存在与当前 {identifier} 相同的孤立字段，已停止导入；请检查数据库主键与身份字段。", { identifier: column.key.name }));
+    }
     const match = matchWereadBookIdentity(rows, { bookID, isbn }, await loadWereadSyncedNotebooks(plugin), false);
     if (match.issue) throw new Error(bookIdentityFailureMessage(plugin, match));
     if (!match.row) {
