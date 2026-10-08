@@ -4,6 +4,8 @@ import { findBookPrimaryKeyValue } from "../../bookHandling/bookDatabasePrimaryK
 import { buildBookIdentityRows } from "../../bookHandling/bookDeduplication";
 import { loadWereadSyncedNotebooks } from "../wereadSyncStorage";
 import { matchWereadBookIdentity, bookIdentityFailureMessage } from "./wereadBookIdentity";
+import { isValidISBN } from "../../bookHandling/isbn";
+import { t } from "../../i18n";
 
 interface WereadPluginLike {
   loadData: (key: string) => Promise<any>;
@@ -122,7 +124,9 @@ export async function findWereadApiBookTargetDoc(
     if (match.issue) return { ...context, success: false, message: bookIdentityFailureMessage(plugin, match) };
     if (!match.row) return {
       ...context, success: false,
-      message: "未找到对应的读书笔记文档，请先确保数据库中已有这本书，并填写 bookID 或 ISBN",
+      message: isValidISBN(target.isbn)
+        ? t(plugin, "wereadIdentityConfirmationNoMatch", "需要确认来源身份：bookID、ISBN 和当前书名均未匹配本地书籍。请在新来源确认中核对 ISBN，或使用 BookID 导入。")
+        : t(plugin, "wereadIdentityConfirmationMissingISBN", "需要确认来源身份：bookID 未匹配，缓存缺少有效 ISBN，当前书名也未匹配。请在新来源确认中获取或填写 ISBN，或使用 BookID 导入。"),
     };
     const docBlockID = match.row.docBlockID;
     if (!docBlockID) return { ...context, success: false, message: "数据库行已匹配，但主键列未绑定真实文档 ID" };

@@ -12,6 +12,7 @@ import { buildWereadApiDatabaseBookDetail } from "./buildWereadApiDatabaseBookDe
 import { buildWereadApiMpAccountSyncData } from "./buildWereadApiMpAccountSyncData";
 import { detectWereadApiNewSources, type WereadApiNewSourceItem } from "./detectWereadApiNewSources";
 import { findWereadApiBookTargetDoc } from "./findWereadApiBookTargetDoc";
+import { linkWereadISBNSourceToDatabase } from "./wereadBookIdentity";
 import { resolveWereadNewSourceISBN } from "./resolveWereadNewSourceISBN";
 import WereadNewBooks from "@/components/common/wereadNewBooksDialog.svelte";
 import type { WereadSyncProgressCallback } from "./wereadSyncProgress";
@@ -383,29 +384,35 @@ async function handleNewSourcesConfirm(
     if (!isValidISBN(isbn)) continue;
 
     try {
-      const html = await fetchBookHtml(isbn);
-      const doubanBook = await fetchDoubanBook(html);
       if (avID) {
-        const result = await loadAVData(avID, {
-          ...doubanBook,
-          ISBN: isbn,
-          addNotes: true,
-          databaseBlockId,
-          noteTemplate,
-          myRating: "",
-          bookCategory: "",
-          readingStatus: "",
-          startDate: "",
-          finishDate: ""
-        }, plugin);
-        if (result?.code !== 0) {
-          showMessage(t(plugin, "newSourcesBookImportFailed", "普通书导入失败：{title}：{error}", { title: book.title || book.bookID, error: result?.msg || "" }));
-        } else {
-          showMessage(t(plugin, "newSourcesBookImported", "成功导入《{title}》", { title: book.title || doubanBook.title || isbn }));
+        const target = { bookID: book.bookID, isbn };
+        const linked = await linkWereadISBNSourceToDatabase(plugin, avID, target);
+        if (!linked) {
+          const html = await fetchBookHtml(isbn);
+          const doubanBook = await fetchDoubanBook(html);
+          if (!isValidISBN(doubanBook.isbn) || normalizeISBN(doubanBook.isbn) !== isbn) {
+            throw new Error(t(plugin, "wereadISBNImportMismatch", "无法确认豆瓣 ISBN 与所选 ISBN 一致，已停止导入。"));
+          }
+          const result = await loadAVData(avID, {
+            ...doubanBook,
+            ISBN: isbn,
+            addNotes: true,
+            databaseBlockId,
+            noteTemplate,
+            myRating: "",
+            bookCategory: "",
+            readingStatus: "",
+            startDate: "",
+            finishDate: ""
+          }, plugin);
+          if (result?.code !== 0) throw new Error(result?.msg || t(plugin, "uiUnknownError", "未知错误"));
+          if (!result.rowBlockID) throw new Error(t(plugin, "bookUpdateVerificationFailed", "回读验证未通过"));
+          await linkWereadISBNSourceToDatabase(plugin, avID, target, result.rowBlockID);
         }
+        showMessage(t(plugin, "newSourcesBookImported", "成功导入《{title}》", { title: book.title || isbn }));
       }
-    } catch {
-      showMessage(t(plugin, "newSourcesBookImportFailedShort", "普通书导入失败：{title}", { title: book.title || book.bookID }));
+    } catch (e) {
+      showMessage(t(plugin, "newSourcesBookImportFailed", "普通书导入失败：{title}：{error}", { title: book.title || book.bookID, error: e?.message || t(plugin, "uiUnknownError", "未知错误") }));
     }
   }
 

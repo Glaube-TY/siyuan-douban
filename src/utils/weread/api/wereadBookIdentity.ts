@@ -108,3 +108,38 @@ export async function claimWereadBookIDOnExistingRow(
         throw new Error(t(plugin, "bookUpdateVerificationFailed", "回读验证未通过"));
     }
 }
+
+/** Link only a user-confirmed ISBN import; an inserted row must match its exact returned ID. */
+export async function linkWereadISBNSourceToDatabase(
+    plugin: any,
+    avID: string,
+    target: { bookID: string; isbn: string },
+    expectedRowBlockID?: string,
+): Promise<"linked_existing" | "already_linked" | null> {
+    const bookID = String(target.bookID || "").trim();
+    const isbn = normalizeISBN(target.isbn);
+    const changed = t(plugin, "bookUpdateStateChanged", "本地书籍状态已发生变化，请重新搜索后再试。");
+    if (!bookID || !isValidISBN(isbn)) throw new Error(changed);
+    const database = await getAttributeView(avID);
+    if (!Array.isArray(database?.av?.keyValues)) throw new Error(changed);
+    const keyValues = database.av.keyValues;
+    const rows = buildBookIdentityRows(keyValues);
+    const rowIDs = new Set(rows.map(row => row.rowBlockID));
+    // Do not let the generic Douban import clean up orphaned identity cells.
+    if (keyValues.filter((kv: any) => kv.key?.name === "ISBN" || kv.key?.name === "bookID")
+        .some((kv: any) => (kv.values || []).some((cell: any) => !rowIDs.has(String(cell.blockID || cell.itemID || "").trim())))) throw new Error(changed);
+    const match = matchWereadBookIdentity(rows, { bookID, isbn }, await loadWereadSyncedNotebooks(plugin), false);
+    if (match.issue) throw new Error(bookIdentityFailureMessage(plugin, match));
+    if (!match.row) {
+        if (expectedRowBlockID) throw new Error(changed);
+        return null;
+    }
+    if (match.row.isbn !== isbn || (expectedRowBlockID && match.row.rowBlockID !== expectedRowBlockID)) throw new Error(changed);
+    if (!match.row.bookID) {
+        await claimWereadBookIDOnExistingRow(plugin, avID, match.row, { bookID, isbn });
+        return "linked_existing";
+    }
+    const bindings = await validateNoteDocumentBindings([match.row.docBlockID]);
+    if (getNoteDocumentBinding(match.row.docBlockID, bindings).state !== "bound") throw new Error(changed);
+    return "already_linked";
+}

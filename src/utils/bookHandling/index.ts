@@ -144,6 +144,7 @@ export async function loadAVData(avID: string, fullData: any, _plugin: any) {
 
         return {
             code: 0,
+            rowBlockID: blockID,
             msg: "书籍添加成功"
         };
     } catch (error) {

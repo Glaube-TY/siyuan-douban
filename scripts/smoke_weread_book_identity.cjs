@@ -29,7 +29,7 @@ function load(file) {
 }
 
 const ISBN_A = "9787111128069", ISBN_B = "9787302423287";
-let keyValues, storage, docs, children, writes, requests, created, messages, claims, importResults, bookInfos, dialogProps, writeMode, beforeRead, serial = 0;
+let keyValues, storage, docs, children, writes, requests, created, messages, claims, importResults, bookInfos, dialogProps, writeMode, beforeRead, doubanBooks, doubanRequests, infoRequests, rawNotebooks, serial = 0;
 const source = (bookID, isbn = "", title = "测试书") => ({ bookID, isbn, title, sourceType: "weread_book", updatedTime: 10, noteCount: 1, reviewCount: 0, bookmarkCount: 1, totalNoteCount: 1 });
 const plugin = {
     name: "siyuan-douban", i18n: {},
@@ -46,6 +46,7 @@ function reset() {
     storage = { "settings.json": { bookDatabaseID: "database", noteTemplate: "{{书名}}" }, temporary_weread_notebooksList: [], weread_notebooks: [], weread_customBooksISBN: [] };
     docs = new Set(); children = new Map(); writes = []; requests = []; created = [];
     messages = []; claims = []; importResults = []; bookInfos = new Map(); dialogProps = undefined; writeMode = "ok"; beforeRead = undefined;
+    doubanBooks = new Map(); doubanRequests = []; infoRequests = []; rawNotebooks = { books: [] };
 }
 function row(bookID, isbn, doc, title = "测试书", rowID = doc || `row-${++serial}`) {
     keyValues[0].values.push({ blockID: rowID, keyID: "title", id: `value-${rowID}`, block: { id: doc, content: title } });
@@ -137,18 +138,18 @@ mock("src/utils/weread/addUseBookIDs.ts", { addUseBookIDsToDatabase: async (...a
     const result = await add(...args); importResults.push(result); return result;
 } });
 mock("src/utils/weread/api/wereadApiGateway.ts", { callWereadApi: async (_key, apiName, { bookId }) => {
-    assert.equal(apiName, "/book/info"); assert.ok(bookInfos.has(bookId)); return structuredClone(bookInfos.get(bookId));
+    assert.equal(apiName, "/book/info"); infoRequests.push(bookId); assert.ok(bookInfos.has(bookId)); return structuredClone(bookInfos.get(bookId));
 } });
 mock("src/libs/dialog.ts", { svelteDialog: ({ constructor }) => {
     constructor({}); return { close() {}, dialog: { element: { classList: { add() {} } } } };
 } });
 mock("src/components/common/wereadNewBooksDialog.svelte", { __esModule: true, default: class { constructor({ props }) { dialogProps = props; } } });
-mock("src/utils/douban/book/getWebPage.ts", { fetchBookHtml: async () => { throw new Error("Unexpected Douban request"); } });
-mock("src/utils/douban/book/fetchBook.ts", { fetchDoubanBook: async () => { throw new Error("Unexpected Douban import"); } });
+mock("src/utils/douban/book/getWebPage.ts", { fetchBookHtml: async isbn => { assert.ok(doubanBooks.has(isbn), "Unexpected Douban request"); doubanRequests.push(isbn); return isbn; } });
+mock("src/utils/douban/book/fetchBook.ts", { fetchDoubanBook: async isbn => structuredClone(doubanBooks.get(isbn)) });
 mock("src/utils/weread/addWereadMpAccounts.ts", {});
 mock("src/utils/weread/api/buildWereadApiMpAccountSyncData.ts", {});
 const { showWereadApiNewSourcesDialogAndSync: showNewSources } = load("src/utils/weread/api/handleWereadApiNewSources.ts");
-const { claimWereadBookIDOnExistingRow: claim } = load("src/utils/weread/api/wereadBookIdentity.ts");
+const { claimWereadBookIDOnExistingRow: claim, linkWereadISBNSourceToDatabase: linkISBN } = load("src/utils/weread/api/wereadBookIdentity.ts");
 async function confirmBookIDs() {
     const pending = showNewSources(plugin, "mock-key", "update", async () => {});
     await new Promise(setImmediate);
@@ -156,16 +157,35 @@ async function confirmBookIDs() {
     await dialogProps.onConfirm([], [], dialogProps.books);
     assert.equal(await pending, "synced");
 }
+
+async function confirmISBNs(selected) {
+    const pending = showNewSources(plugin, "mock-key", "update", async () => {});
+    await new Promise(setImmediate); assert.ok(dialogProps);
+    await dialogProps.onConfirm(selected, [], []); assert.equal(await pending, "synced");
+}
+const douban = (isbn, title = "第二大脑", subtitle = "建立你的个人知识管理系统") => ({ isbn, title, subtitle, authors: ["作者"], translators: [] });
+const cellText = (name, rowID) => identity.getAttributeViewValueText(keyValues.find(kv => kv.key.name === name)?.values.find(v => v.blockID === rowID));
+function subtitle(rowID, value) {
+    let column = keyValues.find(kv => kv.key.name === "副标题");
+    if (!column) { column = { key: { id: "subtitle", name: "副标题", type: "text" }, values: [] }; keyValues.push(column); }
+    column.values.push({ blockID: rowID, text: { content: value } });
+}
+const { normalizeNotebooks } = load("src/utils/weread/api/normalizers/normalizeNotebooks.ts");
+const { normalizeBookInfo } = load("src/utils/weread/api/normalizers/normalizeBookInfo.ts");
+mock("src/utils/weread/api/wereadApiProvider.ts", { wereadApiProvider: class { async getNotebooks() { return normalizeNotebooks(rawNotebooks); } } });
+const { buildWereadApiNotebookCache: buildCache } = load("src/utils/weread/api/buildWereadApiNotebookCache.ts");
+const { buildWereadApiDatabaseBookDetail: buildDetail } = load("src/utils/weread/api/buildWereadApiDatabaseBookDetail.ts");
+
 const detail = (id, isbn = "") => ({ bookId: id, title: "测试书", isbn, cover: "", intro: "intro" });
-async function updatesAreStable() {
+async function updatesAreStable(expectedCount = 2) {
     const before = requests.length;
     for (let round = 2; round <= 3; round++) {
         const result = await sync(plugin, "mock-key", "template", { mode: "update" });
         assert.equal(result.planned, 0);
-        assert.equal(result.skippedUnchanged, 2);
+        assert.equal(result.skippedUnchanged, expectedCount);
         assert.ok(result.items.every(item => item.status === "skipped_unchanged"));
         assert.equal(requests.length, before, "An unchanged update must not prepare remote details");
-        console.log(`  update #${round}: A/B unchanged, planned=0`);
+        console.log(`  update #${round}: ${expectedCount} source(s) unchanged, planned=0`);
     }
 }
 
@@ -329,5 +349,123 @@ async function updatesAreStable() {
     reset(); keyValues[2].values.push({ blockID: "orphan", text: { content: "A" } });
     assert.equal((await add(plugin, "av", detail("A", ISBN_A))).status, "conflict"); assert.equal(created.length, 0);
     console.log("Claim safety/readback, missing column/cell, unchanged input and failed-import cache PASS");
+
+    // Title A: pure Douban keeps separate fields; ISBN sync does not require the displayed titles to agree.
+    reset(); const bibliographic = douban(ISBN_A);
+    const imported = await addDouban("av", { ...bibliographic, ISBN: ISBN_A, addNotes: true, databaseBlockId: "database", noteTemplate: "{{书名}}" }, plugin);
+    assert.equal(imported.code, 0); assert.ok(imported.rowBlockID);
+    assert.equal(cellText("书名", imported.rowBlockID), bibliographic.title); assert.equal(cellText("副标题", imported.rowBlockID), bibliographic.subtitle);
+    assert.equal(cellText("bookID", imported.rowBlockID), "", "Pure Douban search must not invent a WeRead ID");
+    const combined = bibliographic.title + "：" + bibliographic.subtitle;
+    storage.temporary_weread_notebooksList = [source("WR_A", ISBN_A, combined)];
+    assert.equal((await preflight(plugin)).items[0].matchType, "ISBN"); assert.equal((await detect(plugin)).newSources.length, 0);
+    const bibliographyBefore = structuredClone(keyValues);
+    assert.equal((await sync(plugin, "mock-key", "template", { mode: "update" })).success, 1);
+    assert.deepEqual(writes, [{ bookID: "WR_A", docBlockID: imported.rowBlockID }]); await updatesAreStable(1);
+    assert.deepEqual(keyValues, bibliographyBefore); assert.equal(created.length, 1);
+    console.log("Title A PASS: split title/subtitle vs combined title; ISBN preflight and write target correct; unchanged updates; pure Douban remains unowned");
+
+    // Title B/G: identifiers ignore display punctuation; normalizers and cache retain the full source title.
+    reset(); row("WR_A", ISBN_A, "doc1", "A"); subtitle("doc1", "B");
+    const variants = ["A：B", "A: B", "A - B", "A（B）", "Ａ：Ｂ"];
+    for (const title of variants) {
+        assert.equal((await find(plugin, source("WR_A", "", title))).blockID, "doc1");
+        assert.equal((await find(plugin, source("WR_A", "", title))).matchType, "bookID");
+        assert.notEqual(identity.normalizeBookTitle(title), identity.normalizeBookTitle("A"), "Do not strip subtitle punctuation");
+        const rawBook = { bookId: "12345", title, isbn: ISBN_A, subtitle: "unconfirmed field" };
+        assert.equal(normalizeBookInfo(rawBook).title, title); assert.equal(normalizeBookInfo(rawBook).subtitle, undefined);
+        rawNotebooks = { books: [{ bookId: "12345", book: rawBook, noteCount: 1 }] };
+        assert.equal(normalizeNotebooks(rawNotebooks)[0].title, title);
+        const cache = await buildCache("mock-key"); assert.equal(cache[0].title, title); assert.equal(cache[0].isbn, ISBN_A);
+        assert.equal(infoRequests.length, 0, "Building lightweight cache must not fetch /book/info");
+        bookInfos.set("12345", rawBook); const resolved = await buildDetail("mock-key", "12345");
+        assert.equal(resolved.title, title); assert.equal(resolved.subtitle, undefined);
+        infoRequests = [];
+    }
+    keyValues[2].values[0].text.content = "";
+    for (const title of variants) assert.equal((await find(plugin, source("WR_A", ISBN_A, title))).matchType, "ISBN");
+    console.log("Title B/G PASS: exact bookID/ISBN survive colon, dash, parentheses and fullwidth variants; full title preserved end to end in metadata");
+
+    reset(); storage.temporary_weread_notebooksList = [source("WR_A", "", "A：B")]; bookInfos.set("WR_A", { ...detail("WR_A", ISBN_A), title: "A：B" });
+    await confirmBookIDs(); assert.equal(importResults[0].status, "created"); assert.equal(cellText("书名", created[0].id), "A：B");
+    assert.equal(keyValues.some(kv => kv.key.name === "副标题"), false, "Do not invent an independent WeRead subtitle");
+    assert.equal((await preflight(plugin)).items[0].matchType, "bookID");
+    assert.equal((await sync(plugin, "mock-key", "template", { mode: "update" })).success, 1); await updatesAreStable(1);
+    console.log("BookID full-title import PASS: complete title retained, no invented subtitle, exact identity and stable updates");
+
+    // Title C: missing identifiers stop before remote preparation; explicit BookID resolves the split-title row.
+    reset(); row("", ISBN_A, "doc1", "A", "legacy-row"); subtitle("legacy-row", "B");
+    storage.temporary_weread_notebooksList = [source("WR_A", "", "A：B")];
+    const beforeConfirmation = structuredClone(keyValues);
+    const missing = await preflight(plugin); assert.equal(missing.failed, 1);
+    assert.match(missing.items[0].message, /需要确认来源身份.*bookID 未匹配.*ISBN.*书名/);
+    const unready = await sync(plugin, "mock-key", "template", { mode: "update" });
+    assert.equal(unready.planned, 0); assert.equal(unready.skippedNotReady, 1); assert.equal(unready.failed, 0);
+    assert.equal(requests.length, 0); assert.equal(infoRequests.length, 0); assert.deepEqual(keyValues, beforeConfirmation);
+    bookInfos.set("WR_A", { ...detail("WR_A", ISBN_A), title: "A：B" }); await confirmBookIDs();
+    assert.equal(importResults[0].status, "linked_existing"); assert.equal(created.length, 0);
+    assert.equal(cellText("书名", "legacy-row"), "A"); assert.equal(cellText("副标题", "legacy-row"), "B");
+    assert.equal((await detect(plugin)).newSources.length, 0);
+    assert.equal((await sync(plugin, "mock-key", "template", { mode: "update" })).success, 1); await updatesAreStable(1);
+    console.log("Title C PASS: bookID unmatched + ISBN missing + title/subtitle display difference => identity confirmation, no remote preparation; explicit BookID repairs it");
+
+    // Title D: the actual ISBN-confirmation handler creates and binds a Douban row, then persists its WeRead ID.
+    reset(); storage.temporary_weread_notebooksList = [source("WR_A", "", "A：B")]; doubanBooks.set(ISBN_A, douban(ISBN_A, "A", "B"));
+    await confirmISBNs([source("WR_A", ISBN_A, "A：B")]);
+    assert.equal(created.length, 1); const createdRow = created[0].id;
+    assert.equal(cellText("书名", createdRow), "A"); assert.equal(cellText("副标题", createdRow), "B"); assert.equal(cellText("bookID", createdRow), "WR_A");
+    assert.equal(created[0].titlePath, "/books/A"); assert.equal(storage.temporary_weread_notebooksList[0].title, "A：B");
+    assert.equal(claims[0].itemID, createdRow); assert.ok(messages.every(message => !/导入失败/.test(message)));
+    storage.temporary_weread_notebooksList[0].isbn = "";
+    assert.equal((await preflight(plugin)).items[0].matchType, "bookID"); assert.equal((await detect(plugin)).newSources.length, 0);
+    assert.equal((await sync(plugin, "mock-key", "template", { mode: "update" })).success, 1); await updatesAreStable(1);
+    assert.equal(infoRequests.length, 0); console.log("Title D PASS: ISBN-confirmed new row linked by exact rowID, separate subtitle, original document path, future missing ISBN uses bookID");
+
+    reset(); row("", ISBN_A, "doc1", "A", "legacy-row"); subtitle("legacy-row", "B"); storage.temporary_weread_notebooksList = [source("WR_A", "", "A：B")];
+    await confirmISBNs([source("WR_A", ISBN_A, "A：B")]);
+    assert.equal(created.length, 0); assert.equal(doubanRequests.length, 0); assert.equal(cellText("bookID", "legacy-row"), "WR_A");
+    assert.equal(cellText("书名", "legacy-row"), "A"); assert.equal(cellText("副标题", "legacy-row"), "B");
+    assert.ok(messages.every(message => !/导入失败|已存在/.test(message))); assert.equal((await detect(plugin)).newSources.length, 0);
+    await assert.rejects(linkISBN(plugin, "av", { bookID: "WR_A", isbn: ISBN_A }, "wrong-row"));
+    console.log("ISBN existing-row confirmation PASS: no duplicate, no metadata changes, no false failure, no unnecessary Douban request; exact row guard retained");
+
+    // Title E/H: same main title, different ISBN/source/subtitle => independent notes, including identical display titles.
+    for (const secondSubtitle of ["C", "B"]) {
+        reset(); const entries = [source("WR_A", ISBN_A, "A：B"), source("WR_B", ISBN_B, "A：" + secondSubtitle)];
+        storage.temporary_weread_notebooksList = entries.map(book => ({ ...book, isbn: "" }));
+        doubanBooks.set(ISBN_A, douban(ISBN_A, "A", "B")); doubanBooks.set(ISBN_B, douban(ISBN_B, "A", secondSubtitle));
+        await confirmISBNs(entries); assert.equal(created.length, 2); assert.notEqual(created[0].id, created[1].id);
+        assert.equal(cellText("副标题", created[0].id), "B"); assert.equal(cellText("副标题", created[1].id), secondSubtitle);
+        const booksBeforeSync = structuredClone(keyValues);
+        assert.equal((await sync(plugin, "mock-key", "template", { mode: "update" })).success, 2);
+        assert.deepEqual(writes.map(w => w.docBlockID), created.map(doc => doc.id)); await updatesAreStable(); assert.deepEqual(keyValues, booksBeforeSync);
+    }
+    console.log("Title E/H PASS: same main title with different or identical subtitles, different ISBNs/bookIDs => independent rows and documents, unchanged updates");
+
+    // Title F and diagnostics: no fuzzy match, no silent ISBN/owner override, distinguish identity failures.
+    reset(); row("", "", "doc1", "A：B"); row("", "", "doc2", "A：C");
+    const noIdentifiers = await find(plugin, { bookID: "", title: "A", isbn: "" }); assert.equal(noIdentifiers.success, false); assert.match(noIdentifiers.message, /需要确认来源身份/);
+    reset(); row("", "", "doc1", "A"); row("", "", "doc2", "A"); subtitle("doc1", "B"); subtitle("doc2", "C");
+    assert.match((await find(plugin, source("WR_A", "", "A"))).message, /多个同名/);
+    reset(); row("", ISBN_A, "doc1", "A"); subtitle("doc1", "B");
+    assert.match((await find(plugin, source("WR_A", ISBN_B, "A"))).message, /ISBN 不同/);
+    assert.match((await find(plugin, source("WR_A", ISBN_B, "different"))).message, /需要确认来源身份.*ISBN/);
+    reset(); row("WR_A", ISBN_A, "doc1", "A");
+    const ownerBefore = structuredClone(keyValues);
+    await assert.rejects(linkISBN(plugin, "av", { bookID: "WR_B", isbn: ISBN_A }), /其他 bookID/); assert.deepEqual(keyValues, ownerBefore);
+    reset(); row("", ISBN_A, "doc1", "A"); row("", ISBN_A, "doc2", "A");
+    await assert.rejects(linkISBN(plugin, "av", { bookID: "WR_A", isbn: ISBN_A }), /多个相同 ISBN/); assert.equal(claims.length, 0);
+    reset(); row("", ISBN_A, "", "A"); assert.match((await find(plugin, source("WR_A", ISBN_A))).message, /未绑定真实文档/);
+    reset(); row("", ISBN_A, "doc1", "A"); storage.weread_notebooks = [{ ...source("WR_A"), blockID: "doc1" }, { ...source("WR_B"), blockID: "doc1" }];
+    await assert.rejects(linkISBN(plugin, "av", { bookID: "WR_A", isbn: ISBN_A }), /共用同一/); assert.equal(claims.length, 0);
+    console.log("Title F/diagnostics PASS: no truncated-title association; ambiguous title, ISBN conflict, unmatched identifiers, unbound document, shared history all distinguished");
+
+    reset(); storage.temporary_weread_notebooksList = [source("WR_A", "", "A：B")]; doubanBooks.set(ISBN_A, douban(ISBN_B, "A", "B"));
+    await confirmISBNs([source("WR_A", ISBN_A, "A：B")]); assert.equal(created.length, 0); assert.equal(claims.length, 0); assert.ok(messages.some(message => /豆瓣 ISBN.*所选 ISBN/.test(message)));
+    reset(); storage.temporary_weread_notebooksList = [source("WR_A", "", "A：B")]; doubanBooks.set(ISBN_A, douban(ISBN_A, "A", "B")); writeMode = "noop";
+    await confirmISBNs([source("WR_A", ISBN_A, "A：B")]); assert.equal(created.length, 1); assert.equal(cellText("bookID", created[0].id), ""); assert.ok(messages.some(message => /回读验证未通过/.test(message))); assert.ok(messages.every(message => !/成功导入/.test(message)));
+    reset(); keyValues[1].values.push({ blockID: "orphan", number: { formattedContent: ISBN_A } });
+    const orphanBefore = structuredClone(keyValues); await assert.rejects(linkISBN(plugin, "av", { bookID: "WR_A", isbn: ISBN_A })); assert.deepEqual(keyValues, orphanBefore); assert.equal(created.length, 0);
+    console.log("ISBN import boundary PASS: mismatched Douban response rejected before creation; link readback failure cannot report success");
     console.log("WeRead book identity smoke: ALL PASS (mocked I/O; not a live SiYuan/WeRead account test)");
 })().catch(error => { console.error(error); process.exitCode = 1; });
