@@ -17,7 +17,8 @@
 | 字段 | 说明 |
 |------|------|
 | `bookId` | 书籍 ID |
-| `deepLink` | 跳转链接；展示时直接作为 `[打开阅读]({deepLink})` 使用 |
+| `readerLink` | 阅读器跳转链接；展示为 `[打开阅读]({readerLink})` |
+| `deepLink` | 书籍详情跳转链接；没有 `readerLink` 时可展示为 `[查看详情]({deepLink})` |
 | `title` | 书名 |
 | `author` | 作者 |
 | `translator` | 译者 |
@@ -95,7 +96,8 @@
 | 变量 | 说明 |
 |------|------|
 | `{{bookID}}` | 当前微信读书书籍的真实 bookID。 |
-| `{{wereadDeepLink}}` | `/book/info` 返回的官方跳转链接，原值透传；接口缺失时为空字符串，不拼接备用链接。 |
+| `{{wereadReaderLink}}` | `/book/info` 返回的官方阅读器跳转链接，原值透传；接口缺失时为空字符串，不拼接备用链接。 |
+| `{{wereadDeepLink}}` | `/book/info` 返回的官方书籍详情链接，原值透传；接口缺失时为空字符串，不拼接备用链接。 |
 
 ## 输出格式
 - 书籍详情：展示书名、作者、评分、简介等核心信息

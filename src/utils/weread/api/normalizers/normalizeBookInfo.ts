@@ -5,6 +5,7 @@ export function normalizeBookInfo(raw: RawBookInfoResponse): NormalizedWereadBoo
   return {
     bookId: raw.bookId || "",
     deepLink: typeof raw.deepLink === "string" ? raw.deepLink : undefined,
+    readerLink: typeof raw.readerLink === "string" ? raw.readerLink : "",
     title: raw.title || "",
     author: raw.author || "",
     cover: raw.cover || "",

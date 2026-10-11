@@ -11,6 +11,7 @@ export function convertWereadApiBookToTemplateData(data: WereadApiBookSyncData):
   const book: WereadTemplateBook = {
     bookId: data.bookInfo.bookId,
     deepLink: data.bookInfo.deepLink,
+    readerLink: data.bookInfo.readerLink || "",
     title: data.bookInfo.title,
     author: data.bookInfo.author,
     cover: data.bookInfo.cover,

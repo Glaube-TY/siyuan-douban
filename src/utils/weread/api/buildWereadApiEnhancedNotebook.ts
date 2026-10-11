@@ -46,6 +46,7 @@ export async function buildWereadApiEnhancedNotebook(
     bookDetails: {
       bookId: templateData.book.bookId,
       deepLink: templateData.book.deepLink,
+      readerLink: templateData.book.readerLink || "",
       title: templateData.book.title,
       author: templateData.book.author,
       authors: templateData.book.author,

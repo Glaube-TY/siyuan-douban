@@ -23,7 +23,7 @@ export interface EnhancedWereadNotebookLike {
     title: string;
     isbn?: string;
     updatedTime: number;
-    bookDetails?: { bookId?: string; intro?: string; deepLink?: string };
+    bookDetails?: { bookId?: string; intro?: string; deepLink?: string; readerLink?: string };
     bestHighlights?: { bestBookMarks?: { items?: Array<{ markText: string }> } };
     highlights: any;
     comments?: { reviews?: any[] };
@@ -104,7 +104,7 @@ function createItemFactory(
     bookID: string,
     title: string,
     sourceType: "book",
-    variables: Pick<TemplateVariables, "bookID" | "wereadDeepLink">
+    variables: Pick<TemplateVariables, "bookID" | "wereadDeepLink" | "wereadReaderLink">
 ) {
     let order = 0;
     return function createItem(

@@ -37,7 +37,7 @@ const result = await callWereadApi<T>(apiKey, apiName, params);
 ```
 
 **调用规则：**
-1. 每个请求自动注入 `skill_version: "1.0.4"`，开发者无需手动添加。
+1. 每个请求自动注入 `skill_version: "1.0.5"`，开发者无需手动添加。
 2. 参数直接放在请求体里，不要包 `params` 对象。
 3. API Key 不允许 `console.log`。
 4. 鉴权失败返回 `{ errcode: -2013, errmsg: "鉴权失败" }`。
@@ -371,6 +371,13 @@ books[] 项：
 ---
 
 ### 4.4 `/book/info` — 书籍详情
+
+**官方 Skill v1.0.5 链接字段（普通书）：**
+- `readerLink` 是阅读器跳转链接，对应普通书模板变量 `{{wereadReaderLink}}`。
+- `deepLink` 是书籍详情跳转链接，继续对应 `{{wereadDeepLink}}`；`{{bookID}}` 仍为当前书籍 ID。
+- 两者分别直接使用官方返回原值，缺失时模板输出空字符串，不互相替代，不自行拼接 `weread://` 或 Web Reader URL。
+- 新变量支持普通书顶层、章节、笔记和评论片段；用户自行修改模板时沿用现有 templateHash / renderHash 更新受管理区域，不修改保存的模板、同步单元身份或索引 schema。
+- 这些变量不属于公众号模板；公众号继续独立处理。
 
 **请求参数：**
 | 参数 | 类型 | 必填 | 说明 |

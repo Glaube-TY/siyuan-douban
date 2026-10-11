@@ -41,6 +41,7 @@ export interface RawNotebooksResponse {
 export interface RawBookInfoResponse {
   bookId: string;
   deepLink?: string;
+  readerLink?: string;
   title?: string;
   author?: string;
   cover?: string;

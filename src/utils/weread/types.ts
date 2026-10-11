@@ -37,6 +37,7 @@ export interface WereadBookSummary {
 export interface WereadBookDetail {
     bookId: string;
     deepLink?: string;
+    readerLink?: string;
     title: string;
     author: string;
     authors: string;

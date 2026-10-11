@@ -21,6 +21,7 @@ export interface NormalizedWereadNotebook {
 export interface NormalizedWereadBookInfo {
   bookId: string;
   deepLink?: string;
+  readerLink?: string;
   title: string;
   author: string;
   cover: string;
@@ -101,6 +102,7 @@ export interface WereadApiBookSyncData {
 export interface WereadTemplateBook {
   bookId: string;
   deepLink?: string;
+  readerLink?: string;
   title: string;
   author: string;
   cover: string;
