@@ -149,11 +149,12 @@ export interface WereadSyncPlanItem {
   bookID: string;
   title: string;
   reason?: string;
+  action?: "import_isbn" | "import_bookID" | "import_mp" | "update" | "ignore";
 }
 
 export interface WereadSyncPlanConfirmPayload {
   mode: "all" | "update";
-  sourceType: "book" | "mp";
+  sourceType: "book" | "mp" | "mixed";
   title: string;
   plannedItems: WereadSyncPlanItem[];
   skippedCount?: number;

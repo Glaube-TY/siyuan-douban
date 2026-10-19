@@ -24,17 +24,14 @@
     import {
         maskWereadApiKey,
     } from "@/utils/weread/api/wereadApiAuth";
-    import { syncWereadApiNormalBooks } from "@/utils/weread/api/syncWereadApiNormalBooks";
-    import { syncWereadApiMpAccounts } from "@/utils/weread/api/syncWereadApiMpAccounts";
+    import { runWorkbenchManualWereadApiSync } from "@/utils/weread/api/workbenchManualSyncWereadApi";
     import { ensureWereadApiModeState } from "@/utils/weread/api/wereadApiModeState";
-    import { showWereadApiNewSourcesDialogAndSync } from "@/utils/weread/api/handleWereadApiNewSources";
     import { buildApiBookShelf } from "@/utils/weread/api/buildApiBookShelf";
     import { attachWereadApiLocalNoteDocs } from "@/utils/weread/api/findWereadApiBookTargetDoc";
     import { buildWereadApiNotebookCache } from "@/utils/weread/api/buildWereadApiNotebookCache";
     import { mergeWereadNotebookLocalMetadata } from "@/utils/weread/api/mergeWereadNotebookLocalMetadata";
     import { buildWereadApiReadingStats } from "@/utils/weread/api/buildWereadApiReadingStats";
     import { formatReadingDuration } from "@/utils/weread/api/formatWereadReadingStats";
-    import { buildWereadSyncReport, saveWereadSyncReportAndApplyStatus } from "@/utils/storage/syncReportBuilder";
     import type { WereadReadingDashboard } from "@/utils/weread/api/buildWereadApiReadingStats";
     import type { WereadSyncProgressEvent, WereadSyncPlanConfirmPayload } from "@/utils/weread/api/wereadSyncProgress";
     import WereadSyncPlanConfirmDialog from "@/components/common/WereadSyncPlanConfirmDialog.svelte";
@@ -48,7 +45,6 @@
     import wereadUseBookIDBooksDialog from "@/components/common/wereadUseBookIDBooksDialog.svelte";
     import WereadBookManagementDialog from "@/components/common/WereadBookManagementDialog.svelte";
     import { loadCustomISBNBooksWithMigration, loadIgnoredBooks } from "@/utils/weread/wereadSyncStorage";
-    import { tryRunWereadSync } from "@/utils/weread/api/wereadSyncRunGuard";
 
     async function getCurrentValidBookIdentifiers(plugin: any): Promise<{ validISBNs: Set<string>, validBookIDs: Set<string>, validBookNames: Set<string> }> {
         const settings = await plugin.loadData("settings.json") || {};
@@ -253,194 +249,20 @@
         }
     }
 
-    async function runWereadApiManualSync(mode: "all" | "update", options?: { manageLoading?: boolean; forceBookIDs?: string[]; forceMpBookIDs?: string[] }) {
-        const startedAt = Date.now();
-        let normalResult: any = null;
-        let mpResult: any = null;
-        const template = (await plugin.loadData("weread_templates") || "").trim();
-        if (!template) {
-            const report = buildWereadSyncReport({
-                startedAt,
-                endedAt: Date.now(),
-                trigger: "manual",
-                errors: [i18nText("wereadApiManualSyncNeedTemplate", "请先配置微信读书笔记模板")],
-            });
-            await saveWereadSyncReportAndApplyStatus(plugin, report);
-            handleSyncProgress({
-                stage: "finished",
-                message: i18nText("wereadSyncTemplateFailed", "同步失败：请先配置微信读书笔记模板"),
-                status: "failed",
-            });
-            showMessage(i18n.wereadApiManualSyncNeedTemplate || "请先配置微信读书笔记模板");
-            return;
-        }
-        const apiKey = wereadApiKeyInput.trim();
-        if (!wereadApiKeyVerified || !apiKey) {
-            const report = buildWereadSyncReport({
-                startedAt,
-                endedAt: Date.now(),
-                trigger: "manual",
-                errors: [i18nText("wereadApiKeyNotVerified", "API Key 未验证")],
-            });
-            await saveWereadSyncReportAndApplyStatus(plugin, report);
-            handleSyncProgress({
-                stage: "finished",
-                message: i18nText("wereadSyncApiKeyFailed", "同步失败：请先验证微信读书 API Key"),
-                status: "failed",
-            });
-            showMessage(i18nText("wereadVerifyApiKeyFirst", "请先验证微信读书 API Key"));
-            return;
-        }
-        const manageLoading = options?.manageLoading !== false;
-        if (manageLoading) {
-            isSyncing = true;
-        }
-        try {
-            normalResult = await syncWereadApiNormalBooks(plugin, apiKey, template, {
-                mode,
-                forceBookIDs: options?.forceBookIDs || [],
-                onProgress: handleSyncProgress,
-                confirmPlan: handleSyncPlanConfirm,
-            });
-
-            // 如果普通书同步被取消，不继续执行公众号同步
-            if (!normalResult.cancelled) {
-                const mpTemplate = (await plugin.loadData("weread_mp_templates") || "").trim();
-                if (mpTemplate) {
-                    mpResult = await syncWereadApiMpAccounts(plugin, apiKey, mpTemplate, {
-                        mode,
-                        forceBookIDs: options?.forceMpBookIDs || [],
-                        onProgress: handleSyncProgress,
-                        confirmPlan: handleSyncPlanConfirm,
-                    });
-                }
-            }
-
-            const isCancelled = normalResult.cancelled || mpResult?.cancelled;
-
-            const report = buildWereadSyncReport({
-                startedAt,
-                endedAt: Date.now(),
-                trigger: "manual",
-                normalResult,
-                mpResult,
-                cancelled: isCancelled,
-                warnings: isCancelled ? [i18nText("wereadSyncCancelled", "同步已取消")] : undefined,
-            });
-            await saveWereadSyncReportAndApplyStatus(plugin, report);
-
-            if (isCancelled) {
-                // 统一 emit cancelled 事件（无 sourceType）
-                handleSyncProgress({
-                    stage: "cancelled",
-                    message: i18nText("wereadSyncCancelled", "同步已取消"),
-                    status: "cancelled",
-                });
-                showMessage(i18n.wereadSyncCancelled || "同步已取消");
-                return;
-            }
-
-            const totalPlanned = normalResult.planned + (mpResult?.planned || 0);
-            const totalSuccess = normalResult.success + (mpResult?.success || 0);
-            const totalFailed = normalResult.failed + (mpResult?.failed || 0);
-
-            // 统一 emit 最终 finished 事件（无 sourceType）
-            handleSyncProgress({
-                stage: "finished",
-                total: totalPlanned,
-                message: i18nReplace("wereadSyncCompletedSummary", "同步完成：计划 {planned}，成功 {success}，失败 {failed}", {
-                    "{planned}": String(totalPlanned), "{success}": String(totalSuccess), "{failed}": String(totalFailed),
-                }),
-                status: totalFailed > 0 ? "failed" : "success",
-            });
-
-            if (totalPlanned === 0) {
-                showMessage(i18n.wereadSyncNoWork || "没有需要同步的内容");
-            } else if (totalFailed > 0 && totalPlanned === totalFailed) {
-                showMessage(i18n.wereadSyncFinishedWithError || "微信读书同步完成，部分内容失败");
-            } else {
-                showMessage(i18n.wereadSyncFinished || "微信读书同步完成");
-            }
-        } catch (error) {
-            const report = buildWereadSyncReport({
-                startedAt,
-                endedAt: Date.now(),
-                trigger: "manual",
-                normalResult,
-                mpResult,
-                errors: [error?.message || i18nText("wereadManualSyncException", "手动同步异常")],
-            });
-            await saveWereadSyncReportAndApplyStatus(plugin, report);
-            handleSyncProgress({
-                stage: "finished",
-                message: i18nReplace("wereadSyncFailedWithError", "同步失败：{error}", { "{error}": error?.message || i18nText("wereadManualSyncException", "手动同步异常") }),
-                status: "failed",
-            });
-            showMessage(`${i18n.wereadApiManualSyncFailed || "同步失败"}：${error?.message || ""}`);
-        } finally {
-            if (manageLoading) {
-                isSyncing = false;
-            }
-        }
-    }
-
     async function handleWereadApiManualSyncWithNewSourceDialog(mode: "all" | "update") {
         if (isSyncing || isPreparingWereadApiSync) return;
-        try {
-            await tryRunWereadSync("manual", () => runWereadApiManualSyncWithNewSourceDialog(mode));
-        } catch (error) {
-            const message = localizeKnownUiText(plugin, error?.message || i18nText("wereadApiManualSyncFailed", "同步失败"));
-            showMessage(`${i18n.wereadApiManualSyncFailed || "同步失败"}：${message}`);
-        }
-    }
-
-    async function runWereadApiManualSyncWithNewSourceDialog(mode: "all" | "update") {
-        if (isSyncing || isPreparingWereadApiSync) return;
-        if (!isNotebookListReady) {
-            showMessage(i18n.showMessage15);
-            return;
-        }
-        const template = (await plugin.loadData("weread_templates") || "").trim();
-        if (!template) {
-            showMessage(i18n.wereadApiManualSyncNeedTemplate || "请先配置微信读书笔记模板");
-            return;
-        }
-        const apiKey = wereadApiKeyInput.trim();
         isPreparingWereadApiSync = true;
         isSyncing = true;
-        wereadApiSyncPreparingMessage = i18n.wereadApiCheckingNewSources || "正在检查微信读书新来源，请稍候...";
         openProgressDialog();
-        if (progressDialogRef) {
-            progressDialogRef.addEvent({
-                stage: "checking_sources",
-                message: wereadApiSyncPreparingMessage,
-                status: "running",
-            });
-        }
         try {
-            const result = await showWereadApiNewSourcesDialogAndSync(
-                plugin,
-                apiKey,
-                mode,
-                (forceOptions?) => runWereadApiManualSync(mode, { manageLoading: false, ...forceOptions }),
-                handleSyncProgress,
-            );
-            if (result === "cancelled") {
-                handleSyncProgress({
-                    stage: "cancelled",
-                    message: i18nText("wereadSyncCancelled", "同步已取消"),
-                    status: "cancelled",
-                });
-                showMessage(i18n.wereadSyncCancelled || "同步已取消");
-            }
-        } catch (error) {
-            const message = error?.message || i18nText("wereadApiManualSyncFailed", "同步失败");
-            handleSyncProgress({
-                stage: "finished",
-                message: i18nReplace("wereadSyncFailedWithError", "同步失败：{error}", { "{error}": message }),
-                status: "failed",
+            const result = await runWorkbenchManualWereadApiSync(plugin, mode, {
+                onProgress: handleSyncProgress, confirmPlan: handleSyncPlanConfirm,
             });
-            showMessage(`${i18n.wereadApiManualSyncFailed || "同步失败"}：${message}`);
+            if (result.status === "cancelled") showMessage(i18nText("wereadSyncCancelled", "同步已取消"));
+            else if (result.status === "no_work") showMessage(i18nText("wereadSyncNoWork", "没有需要同步的内容"));
+            else showMessage(i18nText(result.status === "failed" ? "wereadSyncFinishedWithError" : "wereadSyncFinished", "微信读书同步完成"));
+        } catch (error) {
+            showMessage(localizeKnownUiText(plugin, error?.message || i18nText("wereadApiManualSyncFailed", "同步失败")));
         } finally {
             isPreparingWereadApiSync = false;
             wereadApiSyncPreparingMessage = "";
@@ -521,7 +343,6 @@
         isNotebookListLoading = true;
         if (!options?.preserveCacheOnFail) {
             isNotebookListReady = false;
-            await plugin.saveData("weread_notebooksList_readyAt", null);
         }
 
         try {

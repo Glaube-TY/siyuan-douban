@@ -32,7 +32,7 @@ export interface WereadSyncOptions {
     skipNewBookCheck: boolean;
 }
 
-export async function loadWereadAuthState(plugin: PluginLike): Promise<WereadAuthState> {
+export async function loadWereadAuthState(plugin: PluginLike, options?: { migrate?: boolean }): Promise<WereadAuthState> {
     const auth = await loadPluginData(plugin, "weread_auth_settings", DEFAULT_WEREAD_AUTH_SETTINGS);
 
     let apiKey = "";
@@ -50,7 +50,7 @@ export async function loadWereadAuthState(plugin: PluginLike): Promise<WereadAut
             };
         }
         // 兜底：解密成功但旧明文仍残留时，清空明文
-        if (auth.apiKey) {
+        if (auth.apiKey && options?.migrate !== false) {
             try {
                 await plugin.saveData("weread_auth_settings", {
                     ...auth,
@@ -64,7 +64,7 @@ export async function loadWereadAuthState(plugin: PluginLike): Promise<WereadAut
         // 旧用户明文迁移：首次读取时自动加密保存
         apiKey = auth.apiKey;
         try {
-            await plugin.saveData("weread_auth_settings", {
+            if (options?.migrate !== false) await plugin.saveData("weread_auth_settings", {
                 provider: auth.provider || "apiKey",
                 apiKey: "",
                 apiKeyEncrypted: encryptWereadApiKey(apiKey),

@@ -235,7 +235,7 @@ async function saveLegacyCustomISBNBackup(plugin: any, raw: unknown): Promise<vo
     }
 }
 
-export async function loadCustomISBNBooksWithMigration(plugin: any): Promise<WereadCustomISBNBook[]> {
+export async function loadCustomISBNBooksWithMigration(plugin: any, options?: { migrate?: boolean }): Promise<WereadCustomISBNBook[]> {
     let state: PluginStorageJsonState;
     try {
         state = await loadPluginStorageJsonStateStrict(plugin, CUSTOM_ISBN_STORAGE);
@@ -281,7 +281,7 @@ export async function loadCustomISBNBooksWithMigration(plugin: any): Promise<Wer
         throw customISBNFormatError(plugin, raw, "unrecognized storage structure");
     }
 
-    if (!needsMigration) return records;
+    if (!needsMigration || options?.migrate === false) return records;
     if (isNonEmptyLegacyValue) await saveLegacyCustomISBNBackup(plugin, raw);
 
     try {

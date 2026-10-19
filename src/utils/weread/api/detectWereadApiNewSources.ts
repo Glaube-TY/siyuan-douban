@@ -61,7 +61,7 @@ export async function detectWereadApiNewSources(plugin: WereadPluginLike): Promi
   );
   const ignoredBookIDs = getIgnoredBookIDSet(ignoredBooks);
 
-  const customISBNBooks = await loadCustomISBNBooksWithMigration(plugin);
+  const customISBNBooks = await loadCustomISBNBooksWithMigration(plugin, { migrate: false });
   const customISBNByBookID = new Map<string, string>();
   for (const item of customISBNBooks) {
     const bookID = getWereadStorageKey(item);
@@ -76,6 +76,7 @@ export async function detectWereadApiNewSources(plugin: WereadPluginLike): Promi
       const bookID = getWereadStorageKey(item);
       if (!bookID) return null;
       return {
+        pendingImport: item?.pendingImport === true,
         title: item?.title || "",
         isbn: item?.isbn || "",
         bookID,
@@ -90,7 +91,7 @@ export async function detectWereadApiNewSources(plugin: WereadPluginLike): Promi
         category: item?.category || "",
       };
     })
-    .filter(Boolean) as WereadApiNewSourceItem[];
+    .filter(Boolean) as (WereadApiNewSourceItem & { pendingImport: boolean })[];
 
   const normalBookCandidates: WereadApiNewSourceItem[] = [];
   const mpAccounts: WereadApiNewSourceItem[] = [];
@@ -112,8 +113,8 @@ export async function detectWereadApiNewSources(plugin: WereadPluginLike): Promi
 
     if (ignoredBookIDs.has(bookID)) continue;
     if (isMpAccount) {
-      if (syncedBookIDSet.has(bookID)) continue;
-      if (validBookIDsInDB.has(bookID)) continue;
+      if (!item.pendingImport && syncedBookIDSet.has(bookID)) continue;
+      if (!item.pendingImport && validBookIDsInDB.has(bookID)) continue;
       mpAccounts.push({
         title: item.title,
         isbn: "",
@@ -129,7 +130,7 @@ export async function detectWereadApiNewSources(plugin: WereadPluginLike): Promi
       // Preferences and synced history alone do not prove an independent local target.
       // New-source detection intentionally never suppresses a source by title.
       const match = localMatches.get(bookID)!;
-      if (!match.issue && match.row && !sharedTargets.has(match.row.docBlockID)
+      if (!item.pendingImport && !match.issue && match.row && !sharedTargets.has(match.row.docBlockID)
         && getNoteDocumentBinding(match.row.docBlockID, bindings).state === "bound") continue;
       normalBookCandidates.push({
         title: item.title,

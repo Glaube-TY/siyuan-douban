@@ -48,6 +48,8 @@ export function formatWereadApiAutoSyncResultSummary(
   result: WereadApiAutoSyncResult,
   options?: { maxTitles?: number; i18nSource?: unknown }
 ): string {
+  if (result.status === "cancelled") return t(options?.i18nSource, "wereadSyncCancelled", "同步已取消");
+  if (result.status === "no_work") return t(options?.i18nSource, "wereadSyncNoWork", "没有需要同步的内容");
   const maxTitles = options?.maxTitles ?? 3;
 
   const normalSuccess = result.normalResult?.success || 0;
@@ -60,7 +62,7 @@ export function formatWereadApiAutoSyncResultSummary(
   const mpIgnored = result.mpResult?.skippedIgnored || 0;
 
   const totalSuccess = normalSuccess + mpSuccess;
-  const totalFailed = normalFailed + mpFailed;
+  const totalFailed = result.totalFailed ?? normalFailed + mpFailed;
   const totalUnchanged = normalUnchanged + mpUnchanged;
   const totalIgnored = normalIgnored + mpIgnored;
 

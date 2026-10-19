@@ -47,7 +47,7 @@ mock("src/utils/settings/wereadApiKeyCrypto.ts", {
     encryptWereadApiKey: () => "fixture-encrypted", decryptWereadApiKey: () => "fixture-key",
 });
 mock("src/utils/weread/api/preflightWereadApiBooksSync.ts", {
-    preflightWereadApiBooksSync: async () => ({ items: storage[KEY].map(book => ({ bookID: book.bookID, title: book.title, blockID: "doc-" + book.bookID, status: "ready" })) }),
+    preflightWereadApiBooksSync: async plugin => ({ items: (await plugin.loadData(KEY)).map(book => ({ bookID: book.bookID, title: book.title, blockID: "doc-" + book.bookID, status: "ready" })) }),
     rejectSharedWereadSyncTargets: items => items,
 });
 mock("src/utils/weread/api/findWereadApiBookTargetDoc.ts", { findWereadApiBookTargetDoc: unexpected });
@@ -58,7 +58,8 @@ mock("src/utils/storage/readingInboxDiff.ts", {});
 mock("src/utils/storage/readingAnnotationStorage.ts", {});
 mock("src/utils/readingCenter/readingAnnotationArchiveBuilder.ts", {});
 mock("src/utils/weread/api/syncWereadApiMpAccounts.ts", { syncWereadApiMpAccounts: unexpected });
-mock("src/utils/weread/api/handleWereadApiNewSources.ts", { showWereadApiNewSourcesDialogAndSync: async (_plugin, _key, _mode, runSync) => { await runSync(); return "synced"; } });
+mock("src/utils/weread/api/handleWereadApiNewSources.ts", { showWereadApiNewSourcesDialogAndSync: async (_plugin, _key, _mode, runSync) => runSync({ selectedBooks: [], ignoredBooks: [], useBookIDs: [], allNewSources: [], remoteDetails: new Map() }) });
+mock("src/utils/weread/api/confirmWereadSyncPlan.ts", { confirmWereadSyncPlan: unexpected });
 mock("src/utils/storage/syncReportBuilder.ts", { buildWereadSyncReport: value => value, saveWereadSyncReportAndApplyStatus: async () => {} });
 const { mergeWereadNotebookLocalMetadata: merge } = load("src/utils/weread/api/mergeWereadNotebookLocalMetadata.ts");
 const { buildWereadApiNotebookCache: buildCache } = load("src/utils/weread/api/buildWereadApiNotebookCache.ts");
@@ -101,12 +102,28 @@ async function seedHistory() {
 }
 const cacheWrites = () => writes.filter(write => write.key === KEY);
 const entries = [
-    ["manual", () => manual(plugin, "update")],
-    ["auto", () => auto(plugin)],
     ["tab", () => tabRefresh()],
     ["tab preserve", () => tabRefresh({ preserveCacheOnFail: true })],
 ];
 (async () => {
+    for (const [name, refresh] of [["manual", () => manual(plugin, "update")], ["auto", () => auto(plugin)]]) {
+        for (const legacyNull of [false, true]) {
+            reset(); await seedHistory(); if (legacyNull) storage[KEY] = null;
+            const before = structuredClone(storage);
+            for (let round = 0; round < 2; round++) {
+                const result = await refresh(); assert.equal(result.status, "no_work"); assert.equal(result.normalResult.skippedUnchanged, 2);
+            }
+            assert.deepEqual(storage, before); assert.equal(writes.length, 0);
+        }
+        reset(); storage[KEY] = [{ bookID: "A", isbn: ISBN_A }, { bookID: "B", isbn: ISBN_B }];
+        const before = structuredClone(storage); networkError = new Error("Fixture network failure");
+        await assert.rejects(refresh(), /Fixture network failure/); assert.deepEqual(storage, before); assert.equal(writes.length, 0);
+        for (const value of [{ books: [] }, "unknown", 42]) {
+            reset(); storage[KEY] = value; const state = structuredClone(storage);
+            await assert.rejects(refresh(), /格式异常/); assert.deepEqual(storage, state); assert.equal(writes.length, 0);
+        }
+        console.log(name + " PASS: missing/historical-null caches are planned in memory; unchanged, failed and damaged preparation has zero writes");
+    }
     for (const [name, refresh] of entries) {
         for (const legacyNull of [true, false]) {
             reset(); await seedHistory();

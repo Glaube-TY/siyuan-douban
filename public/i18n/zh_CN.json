@@ -1135,5 +1135,13 @@
     "readingAnnotationsNoMatches": "没有符合当前筛选条件的批注。",
     "readingAnnotationsArchiveCoverage": "已建立 {archivedSources}/{expectedSources} 个来源",
     "readingAnnotationsBook": "书籍",
-    "readingAnnotationsAccount": "账号"
+    "readingAnnotationsAccount": "账号",
+    "planMixedSources": "普通书籍与公众号",
+    "planNewImports": "新来源导入：",
+    "planExistingUpdates": "已有来源更新：",
+    "planIgnoreSources": "确认后忽略：",
+    "planActionIgnore": "忽略",
+    "planActionUpdate": "更新已有来源",
+    "planActionImport": "导入新来源",
+    "wereadSourcePartialWrite": "导入未完成，可能已有部分写入；已保留数据，请检查后重试：{error}"
 }

@@ -1135,5 +1135,13 @@
     "readingAnnotationsNoMatches": "No annotations match the current filters.",
     "readingAnnotationsArchiveCoverage": "{archivedSources}/{expectedSources} sources indexed",
     "readingAnnotationsBook": "Book",
-    "readingAnnotationsAccount": "Account"
+    "readingAnnotationsAccount": "Account",
+    "planMixedSources": "Books and public accounts",
+    "planNewImports": "New source imports:",
+    "planExistingUpdates": "Existing source updates:",
+    "planIgnoreSources": "Ignore after confirmation:",
+    "planActionIgnore": "Ignore",
+    "planActionUpdate": "Update existing source",
+    "planActionImport": "Import new source",
+    "wereadSourcePartialWrite": "Import incomplete; some data may have been written and has been preserved. Check before retrying: {error}"
 }

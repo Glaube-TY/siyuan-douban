@@ -1,3 +1,4 @@
+import { wereadSourceKey, type WereadApprovedSyncPlan } from "./wereadApprovedSyncPlan";
 import { showMessage } from "siyuan";
 import { svelteDialog } from "@/libs/dialog";
 import { sql, reloadAttributeView } from "@/api";
@@ -14,7 +15,6 @@ import { detectWereadApiNewSources, type WereadApiNewSourceItem } from "./detect
 import { findWereadApiBookTargetDoc } from "./findWereadApiBookTargetDoc";
 import { inspectWereadISBNSourceToDatabase, linkWereadISBNSourceToDatabase } from "./wereadBookIdentity";
 import { ensureExistingBookNoteDocument } from "./ensureExistingBookNoteDocument";
-import { resolveWereadNewSourceISBN } from "./resolveWereadNewSourceISBN";
 import WereadNewBooks from "@/components/common/wereadNewBooksDialog.svelte";
 import type { WereadSyncProgressCallback } from "./wereadSyncProgress";
 import { t } from "@/utils/i18n";
@@ -25,196 +25,80 @@ interface WereadPluginLike {
   i18n: Record<string, string>;
 }
 
+export type WereadSyncOutcome = "completed" | "cancelled" | "failed" | "no_work";
+
+export interface WereadPendingSyncDraft {
+  interacted?: boolean;
+  selectedBooks: WereadApiNewSourceItem[];
+  ignoredBooks: WereadApiNewSourceItem[];
+  useBookIDs: WereadApiNewSourceItem[];
+  allNewSources: WereadApiNewSourceItem[];
+  remoteDetails: Map<string, Awaited<ReturnType<typeof buildWereadApiDatabaseBookDetail>>>;
+}
+
+/** This dialog collects intent only. The task callback owns final confirmation and commit. */
 export async function showWereadApiNewSourcesDialogAndSync(
   plugin: WereadPluginLike,
   apiKey: string,
   _mode: "all" | "update",
-  runSync: (forceOptions?: { forceBookIDs?: string[]; forceMpBookIDs?: string[] }) => Promise<void>,
+  runSync: (draft: WereadPendingSyncDraft) => Promise<WereadSyncOutcome>,
   onProgress?: WereadSyncProgressCallback,
-): Promise<"synced" | "cancelled" | "no_work"> {
-  try {
-    const settings = await plugin.loadData("weread_settings") || {};
-    const skipNewBookCheck = settings.skipNewBookCheck === true;
-
-    if (skipNewBookCheck) {
-      await runSync();
-      return "synced";
+  allowInteraction = true,
+): Promise<WereadSyncOutcome> {
+  const { newSources } = await detectWereadApiNewSources(plugin);
+  const draft: WereadPendingSyncDraft = {
+    selectedBooks: [], ignoredBooks: [], useBookIDs: [],
+    allNewSources: structuredClone(newSources), remoteDetails: new Map(),
+  };
+  const settings = await plugin.loadData("weread_settings") || {};
+  if (!newSources.length || settings.skipNewBookCheck === true || !allowInteraction) return runSync(draft);
+  draft.interacted = true;
+  onProgress?.({ stage: "confirming", total: newSources.length,
+    message: t(plugin, "newSourcesFound", "发现 {count} 个新来源，等待确认处理方式...", { count: newSources.length }), status: "running" });
+  return new Promise<WereadSyncOutcome>((resolve, reject) => {
+    const mobile = typeof window !== "undefined" && window.matchMedia?.("(max-width: 600px)").matches;
+    let submitted = false;
+    async function submit(selectedBooks: WereadApiNewSourceItem[], ignoredBooks: WereadApiNewSourceItem[], useBookIDs: WereadApiNewSourceItem[]) {
+      if (submitted) return;
+      submitted = true;
+      try {
+        const seen = new Set<string>();
+        for (const item of [...selectedBooks, ...ignoredBooks, ...useBookIDs]) {
+          const original = newSources.find(source => source.bookID === item.bookID);
+          if (!original || seen.has(item.bookID) || original.sourceType !== item.sourceType) throw new Error(t(plugin, "bookUpdateStateChanged", "本地书籍状态已发生变化，请重新搜索后再试。"));
+          seen.add(item.bookID);
+        }
+        draft.selectedBooks = structuredClone(selectedBooks);
+        draft.ignoredBooks = structuredClone(ignoredBooks);
+        draft.useBookIDs = structuredClone(useBookIDs);
+        dialog.close();
+        resolve(await runSync(draft));
+      } catch (error) {
+        showMessage(t(plugin, "newSourcesProcessFailed", "处理新来源失败：{error}", { error: error?.message || t(plugin, "uiUnknownError", "未知错误") }));
+        try { dialog.close(); } catch {}
+        reject(error);
+      }
     }
-
-    let newSources: WereadApiNewSourceItem[];
-    try {
-      onProgress?.({
-        stage: "planning",
-        message: t(plugin, "newSourcesChecking", "正在比对本地数据库并检查新书籍和公众号..."),
-        status: "running",
-      });
-      const result = await detectWereadApiNewSources(plugin);
-      newSources = result.newSources;
-    } catch (e) {
-      showMessage(plugin.i18n?.wereadApiCheckNewSourcesFailed || "检查新来源失败");
-      throw e;
-    }
-
-    if (newSources.length === 0) {
-      onProgress?.({
-        stage: "planning",
-        message: t(plugin, "newSourcesNoPending", "没有待处理的新来源，正在生成同步计划..."),
-        status: "running",
-      });
-      await runSync();
-      return "synced";
-    }
-
-    onProgress?.({
-      stage: "confirming",
-      total: newSources.length,
-      message: t(plugin, "newSourcesFound", "发现 {count} 个新来源，等待确认处理方式...", { count: newSources.length }),
-      status: "running",
-    });
-
-    return new Promise<"synced" | "cancelled">((resolve) => {
-    const isMobileViewport = typeof window !== "undefined"
-      && window.matchMedia?.("(max-width: 600px)").matches;
-    const desktopDialogWidth = typeof window !== "undefined"
-      ? `${Math.min(920, Math.max(560, window.innerWidth - 48))}px`
-      : "920px";
     const dialog = svelteDialog({
       title: plugin.i18n.newBooksConfirm || "确认新来源",
-      width: isMobileViewport ? "100vw" : desktopDialogWidth,
-      height: isMobileViewport ? "100dvh" : undefined,
-      disableClose: true,
-      hideCloseIcon: true,
-      constructor: (containerEl: HTMLElement) => {
-        const booksForDialog = newSources.map(book => ({ ...book }));
-
-        return new WereadNewBooks({
-          target: containerEl,
-          props: {
-            i18n: plugin.i18n,
-            books: booksForDialog,
-            onFetchISBN: async (bookID: string) => {
-              const detail = await resolveWereadNewSourceISBN(apiKey, bookID);
-              const source = newSources.find((item) => item.bookID === bookID);
-              if (source) {
-                source.isbn = detail.isbn || source.isbn;
-                source.title = detail.title || source.title;
-                source.author = detail.author || source.author;
-                source.cover = detail.cover || source.cover;
-                source.introduction = detail.introduction || source.introduction;
-                source.publisher = detail.publisher || source.publisher;
-                source.publishTime = detail.publishTime || source.publishTime;
-                await mergeNewSourceDetailsIntoNotebookCache(plugin, [source]);
-              }
-              return detail;
-            },
-            onConfirm: async (
-              selectedBooks: WereadApiNewSourceItem[],
-              ignoredBooks: WereadApiNewSourceItem[],
-              useBookIDs: WereadApiNewSourceItem[]
-            ) => {
-              try {
-                if (selectedBooks.length === 0 && (!useBookIDs || useBookIDs.length === 0)) {
-                  dialog.close();
-                  resolve("cancelled");
-                  return;
-                }
-
-                onProgress?.({
-                  stage: "confirming",
-                  total: newSources.length,
-                  message: t(plugin, "newSourcesConfirmed", "已确认新来源，正在导入所选来源并准备同步..."),
-                  status: "running",
-                });
-
-                const importResult = await handleNewSourcesConfirm(
-                  plugin,
-                  apiKey,
-                  selectedBooks,
-                  ignoredBooks,
-                  useBookIDs,
-                  newSources
-                );
-
-                const forceBookIDs = importResult.successfulBookIDs;
-                const forceMpBookIDs = importResult.successfulMpBookIDs;
-                const bookIDCount = (useBookIDs || []).filter(book => forceBookIDs.includes(book.bookID)).length;
-                const selectedCount = forceBookIDs.length + forceMpBookIDs.length - bookIDCount;
-                const ignoredCount = ignoredBooks?.length || 0;
-
-                showMessage(
-                  plugin.i18n?.wereadApiNewSourceImportThenSyncDetailed
-                    ?.replace("{selected}", String(selectedCount))
-                    ?.replace("{bookID}", String(bookIDCount))
-                    ?.replace("{ignored}", String(ignoredCount))
-                    ?.replace("{failed}", String(importResult.failed.length))
-                  || `已处理新来源：导入 ${selectedCount} 个，使用 BookID ${bookIDCount} 个，失败 ${importResult.failed.length} 个，忽略 ${ignoredCount} 个，正在同步笔记内容...`,
-                  5000
-                );
-                dialog.close();
-
-                try {
-                  await runSync({ forceBookIDs, forceMpBookIDs });
-                  resolve("synced");
-                } catch (e) {
-                  showMessage(t(plugin, "wereadSyncFailedWithError", "同步失败：{error}", { error: e?.message || t(plugin, "uiUnknownError", "未知错误") }));
-                  resolve("cancelled");
-                }
-              } catch (e) {
-                showMessage(t(plugin, "newSourcesProcessFailed", "处理新来源失败：{error}", { error: e?.message || t(plugin, "uiUnknownError", "未知错误") }));
-                try { dialog.close(); } catch {}
-                resolve("cancelled");
-              }
-            },
-            onContinue: async (ignoredBooks: WereadApiNewSourceItem[]) => {
-              try {
-                onProgress?.({
-                  stage: "planning",
-                  message: t(plugin, "newSourcesSkippedPlanning", "已跳过新来源导入，正在生成已有来源同步计划..."),
-                  status: "running",
-                });
-                showMessage(
-                  plugin.i18n?.wereadApiContinueSyncingDetailed
-                    || "已跳过新来源导入，正在同步已有书籍...",
-                  5000
-                );
-
-                try {
-                  await saveIgnoredBooks(plugin, ignoredBooks || []);
-                } catch (e) {
-                  console.warn("保存忽略书籍失败，但继续同步", e);
-                }
-
-                dialog.close();
-
-                try {
-                  await runSync();
-                  resolve("synced");
-                } catch (e) {
-                  showMessage(t(plugin, "newSourcesContinueFailed", "继续同步失败：{error}", { error: e?.message || t(plugin, "uiUnknownError", "未知错误") }));
-                  resolve("cancelled");
-                }
-              } catch (e) {
-                showMessage(t(plugin, "newSourcesContinueFailed", "继续同步失败：{error}", { error: e?.message || t(plugin, "uiUnknownError", "未知错误") }));
-                try { dialog.close(); } catch {}
-                resolve("cancelled");
-              }
-            },
-            onCancel: () => {
-              dialog.close();
-              resolve("cancelled");
-            },
-          },
-        });
-      },
+      width: mobile ? "100vw" : "min(920px, 94vw)", height: mobile ? "100dvh" : undefined,
+      disableClose: true, hideCloseIcon: true,
+      constructor: container => new WereadNewBooks({ target: container, props: {
+        i18n: plugin.i18n, books: structuredClone(newSources),
+        onFetchISBN: async (bookID: string) => {
+          if (submitted || !newSources.some(source => source.bookID === bookID)) throw new Error("Unknown source");
+          const detail = await buildWereadApiDatabaseBookDetail(apiKey, bookID);
+          if (submitted || detail.bookId !== bookID) throw new Error(t(plugin, "bookUpdateStateChanged", "本地书籍状态已发生变化，请重新搜索后再试。"));
+          draft.remoteDetails.set(bookID, detail);
+          return { ...detail, isbn: isValidISBN(detail.isbn) ? normalizeISBN(detail.isbn) : "", introduction: detail.intro };
+        },
+        onConfirm: submit,
+        onContinue: (ignored: WereadApiNewSourceItem[]) => submit([], ignored, []),
+        onCancel: () => { if (!submitted) { submitted = true; dialog.close(); resolve("cancelled"); } },
+      } }),
     });
-    if (isMobileViewport) {
-      dialog.dialog.element.classList.add("siyuan-douban-mobile-subdialog");
-    }
+    if (mobile) dialog.dialog.element.classList.add("siyuan-douban-mobile-subdialog");
   });
-  } catch (e) {
-    showMessage(t(plugin, "wereadSyncFailedWithError", "同步失败：{error}", { error: e?.message || t(plugin, "uiUnknownError", "未知错误") }));
-    throw e;
-  }
 }
 
 function sleep(ms: number) {
@@ -311,23 +195,30 @@ async function mergeNewSourceDetailsIntoNotebookCache(
   await plugin.saveData("temporary_weread_notebooksList", updatedCache);
 }
 
-async function handleNewSourcesConfirm(
+export async function commitWereadNewSources(
   plugin: WereadPluginLike,
   apiKey: string,
   selectedBooks: WereadApiNewSourceItem[],
   ignoredBooks: WereadApiNewSourceItem[],
   useBookIDs: WereadApiNewSourceItem[],
-  allNewSources: WereadApiNewSourceItem[]
+  allNewSources: WereadApiNewSourceItem[],
+  remoteDetails = new Map<string, Awaited<ReturnType<typeof buildWereadApiDatabaseBookDetail>>>(),
+  approvedPlan?: WereadApprovedSyncPlan,
 ): Promise<{ successfulBookIDs: string[]; successfulMpBookIDs: string[]; failed: Array<{ bookID: string; message: string }> }> {
+  const approved = new Map(approvedPlan?.items.map(item => [wereadSourceKey(item), item.action]));
+  for (const [sources, action] of [[selectedBooks, "import_isbn"], [useBookIDs, "import_bookID"], [ignoredBooks, "ignore"]] as const) {
+    for (const source of sources) {
+      const expectedAction = action !== "ignore" && source.sourceType === "weread_mp_account" ? "import_mp" : action;
+      if (!approvedPlan || approved.get(wereadSourceKey(source)) !== expectedAction) throw new Error(t(plugin, "bookUpdateStateChanged", "本地书籍状态已发生变化，请重新搜索后再试。"));
+    }
+  }
+  if (!approvedPlan) throw new Error(t(plugin, "bookUpdateStateChanged", "本地书籍状态已发生变化，请重新搜索后再试。"));
   const successfulSources: WereadApiNewSourceItem[] = [];
   const failed: Array<{ bookID: string; message: string }> = [];
   const selectedNormalBooks = selectedBooks.filter(b => b.sourceType !== "weread_mp_account");
   const selectedMpAccounts = selectedBooks.filter(b => b.sourceType === "weread_mp_account");
   const ignoredNormalBooks = ignoredBooks.filter(b => b.sourceType !== "weread_mp_account");
   const ignoredMpAccounts = ignoredBooks.filter(b => b.sourceType === "weread_mp_account");
-
-  await saveCustomBooksISBN(plugin, selectedNormalBooks, allNewSources);
-  await saveIgnoredBooks(plugin, [...ignoredNormalBooks, ...ignoredMpAccounts]);
 
   const settings = await plugin.loadData("settings.json") || {};
   const databaseBlockId = settings?.bookDatabaseID || "";
@@ -339,11 +230,11 @@ async function handleNewSourcesConfirm(
 
   const resolvedUseBookIDSources: WereadApiNewSourceItem[] = [];
   if (useBookIDs && useBookIDs.length > 0) {
-    await saveUseBookIDBooks(plugin, useBookIDs);
 
     for (const bookItem of useBookIDs) {
+      let writeAttempted = false;
       try {
-        const bookDetail = await buildWereadApiDatabaseBookDetail(apiKey, bookItem.bookID);
+        const bookDetail = remoteDetails.get(bookItem.bookID) || await buildWereadApiDatabaseBookDetail(apiKey, bookItem.bookID);
         if (bookDetail.bookId !== bookItem.bookID) {
           throw new Error(t(plugin, "bookUpdateStateChanged", "本地书籍状态已发生变化，请重新搜索后再试。"));
         }
@@ -359,6 +250,7 @@ async function handleNewSourcesConfirm(
           cover: bookDetail.cover || bookItem.cover,
         });
         if (avID) {
+          writeAttempted = true;
           const result = await addUseBookIDsToDatabase(plugin, avID, bookDetail);
           if (result?.code !== 0) throw new Error(result?.msg || t(plugin, "uiUnknownError", "未知错误"));
           successfulSources.push(resolvedUseBookIDSources.at(-1)!);
@@ -366,7 +258,7 @@ async function handleNewSourcesConfirm(
           throw new Error(t(plugin, "wereadBookNoteRepairFailed", "已找到本地书籍，但其读书笔记绑定异常，无法自动修复；请检查数据库配置与绑定。"));
         }
       } catch (e) {
-        failed.push({ bookID: bookItem.bookID, message: e?.message || "" });
+        failed.push({ bookID: bookItem.bookID, message: writeAttempted ? t(plugin, "wereadSourcePartialWrite", "导入未完成，可能已有部分写入；已保留数据，请检查后重试：{error}", { error: e?.message || t(plugin, "uiUnknownError", "未知错误") }) : e?.message || "" });
         showMessage(t(plugin, "newSourcesBookIdImportFailed", "bookID 导入失败：{title}：{error}", { title: bookItem.title || bookItem.bookID, error: e?.message || t(plugin, "uiUnknownError", "未知错误") }));
       }
     }
@@ -382,6 +274,7 @@ async function handleNewSourcesConfirm(
       continue;
     }
 
+    let writeAttempted = false;
     try {
       if (avID) {
         const target = { bookID: book.bookID, isbn };
@@ -395,6 +288,7 @@ async function handleNewSourcesConfirm(
           return detail;
         };
         if (existing) {
+          writeAttempted = true;
           await ensureExistingBookNoteDocument(plugin, avID, existing, target, async () => {
             const detail = await loadDouban();
             return {
@@ -410,6 +304,7 @@ async function handleNewSourcesConfirm(
           await linkWereadISBNSourceToDatabase(plugin, avID, target, existing.rowBlockID);
         } else {
           const doubanBook = await loadDouban();
+          writeAttempted = true;
           const result = await loadAVData(avID, {
             ...doubanBook,
             ISBN: isbn,
@@ -432,12 +327,13 @@ async function handleNewSourcesConfirm(
         throw new Error(t(plugin, "wereadBookNoteRepairFailed", "已找到本地书籍，但其读书笔记绑定异常，无法自动修复；请检查数据库配置与绑定。"));
       }
     } catch (e) {
-      failed.push({ bookID: book.bookID, message: e?.message || "" });
+      failed.push({ bookID: book.bookID, message: writeAttempted ? t(plugin, "wereadSourcePartialWrite", "导入未完成，可能已有部分写入；已保留数据，请检查后重试：{error}", { error: e?.message || t(plugin, "uiUnknownError", "未知错误") }) : e?.message || "" });
       showMessage(t(plugin, "newSourcesBookImportFailed", "普通书导入失败：{title}：{error}", { title: book.title || book.bookID, error: e?.message || t(plugin, "uiUnknownError", "未知错误") }));
     }
   }
 
   for (const mp of selectedMpAccounts) {
+    let writeAttempted = false;
     try {
       const syncData = await buildWereadApiMpAccountSyncData(apiKey, mp.bookID);
       const record: MpAccountRecord = {
@@ -447,22 +343,17 @@ async function handleNewSourcesConfirm(
         accountCover: syncData.accountInfo.accountCover,
       };
       if (avID) {
+        writeAttempted = true;
         await ensureMpAccountInDatabase(plugin, avID, record);
         successfulSources.push(mp);
       } else {
         throw new Error(t(plugin, "uiUnknownError", "未知错误"));
       }
     } catch (e) {
-      failed.push({ bookID: mp.bookID, message: e?.message || "" });
+      failed.push({ bookID: mp.bookID, message: writeAttempted ? t(plugin, "wereadSourcePartialWrite", "导入未完成，可能已有部分写入；已保留数据，请检查后重试：{error}", { error: e?.message || t(plugin, "uiUnknownError", "未知错误") }) : e?.message || "" });
       showMessage(t(plugin, "newSourcesMpImportFailed", "公众号导入失败：{title}", { title: mp.title || mp.bookID }));
     }
   }
-
-  await mergeNewSourceDetailsIntoNotebookCache(plugin, [
-    ...selectedNormalBooks,
-    ...resolvedUseBookIDSources,
-    ...selectedMpAccounts,
-  ]);
 
   if (avID) {
     try {
@@ -480,7 +371,7 @@ async function handleNewSourcesConfirm(
       bookID: source.bookID, isbn: source.isbn, title: source.title,
     }, { cleanupOrphans: false });
     if (!result.success || !result.blockID || result.matchType !== "bookID") {
-      const message = result.message || t(plugin, "bookUpdateVerificationFailed", "回读验证未通过");
+      const message = t(plugin, "wereadSourcePartialWrite", "导入未完成，可能已有部分写入；已保留数据，请检查后重试：{error}", { error: result.message || t(plugin, "bookUpdateVerificationFailed", "回读验证未通过") });
       failed.push({ bookID: source.bookID, message });
       showMessage(source.sourceType === "weread_mp_account"
         ? t(plugin, "newSourcesMpImportFailed", "公众号导入失败：{title}", { title: source.title })
@@ -489,5 +380,12 @@ async function handleNewSourcesConfirm(
     }
     (source.sourceType === "weread_mp_account" ? successfulMpBookIDs : successfulBookIDs).push(source.bookID);
   }
+  const successful = new Set([...successfulBookIDs, ...successfulMpBookIDs]);
+  const verifiedSources = successfulSources.filter(source => successful.has(source.bookID));
+  await saveCustomBooksISBN(plugin, verifiedSources.filter(source => selectedNormalBooks.some(book => book.bookID === source.bookID)), allNewSources);
+  if (ignoredBooks.length) await saveIgnoredBooks(plugin, [...ignoredNormalBooks, ...ignoredMpAccounts]);
+  const verifiedBookIDs = useBookIDs.filter(source => successful.has(source.bookID));
+  if (verifiedBookIDs.length) await saveUseBookIDBooks(plugin, verifiedBookIDs);
+  await mergeNewSourceDetailsIntoNotebookCache(plugin, [...selectedNormalBooks, ...resolvedUseBookIDSources, ...selectedMpAccounts]);
   return { successfulBookIDs: [...new Set(successfulBookIDs)], successfulMpBookIDs: [...new Set(successfulMpBookIDs)], failed };
 }

@@ -48,6 +48,7 @@ function getValidISBN(value: unknown): string {
 export async function mergeWereadNotebookLocalMetadata(
   plugin: WereadPluginLike,
   freshNotebooks: unknown,
+  options?: { migrate?: boolean },
 ): Promise<any[]> {
   if (!Array.isArray(freshNotebooks)) throw new Error("微信读书有笔记来源数据格式异常");
 
@@ -55,7 +56,7 @@ export async function mergeWereadNotebookLocalMetadata(
     loadOptionalArrayStorageStrict(plugin, "temporary_weread_notebooksList"),
     loadOptionalArrayStorageStrict(plugin, "weread_api_bookshelf_cache"),
     loadOptionalArrayStorageStrict(plugin, "weread_notebooks"),
-    loadCustomISBNBooksWithMigration(plugin),
+    loadCustomISBNBooksWithMigration(plugin, options),
   ]);
 
   const temporaryByBookID = buildRecordMap(temporaryCache, "temporary_weread_notebooksList");
@@ -80,7 +81,7 @@ export async function mergeWereadNotebookLocalMetadata(
       ...localRecords.map((record) => getValidISBN(record?.isbn)),
     ].find(Boolean) || "";
 
-    const merged = { ...fresh, bookID, isbn };
+    const merged = { ...fresh, bookID, isbn, ...(temporaryByBookID.get(bookID)?.pendingImport === true ? { pendingImport: true } : {}) };
     if (!getText(fresh?.title)) {
       merged.title = localRecords.map((record) => getText(record?.title)).find(Boolean) || "";
     }

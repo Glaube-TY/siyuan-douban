@@ -11,9 +11,13 @@
   const tx = (key: string, fallback: string, params: Record<string, string | number> = {}) => t(plugin, key, fallback, params);
 
   $: modeLabel = payload.mode === "all" ? tx("planModeAll", "全部同步") : tx("planModeUpdate", "更新同步");
-  $: sourceTypeLabel = payload.sourceType === "book" ? tx("planNormalBooks", "普通书籍") : tx("planMpAccounts", "公众号");
+  $: sourceTypeLabel = payload.sourceType === "mixed" ? tx("planMixedSources", "普通书籍与公众号") : payload.sourceType === "book" ? tx("planNormalBooks", "普通书籍") : tx("planMpAccounts", "公众号");
   $: displayItems = payload.plannedItems.slice(0, MAX_DISPLAY_ITEMS);
   $: remainingCount = Math.max(0, payload.plannedItems.length - MAX_DISPLAY_ITEMS);
+  $: importCount = payload.plannedItems.filter(item => item.action?.startsWith("import_")).length;
+  $: updateCount = payload.plannedItems.filter(item => item.action === "update").length;
+  $: ignoreCount = payload.plannedItems.filter(item => item.action === "ignore").length;
+  $: syncCount = payload.plannedItems.filter(item => item.action !== "ignore").length;
   $: isAllMode = payload.mode === "all";
 </script>
 
@@ -33,8 +37,13 @@
     </div>
     <div class="info-row">
       <span class="info-label">{tx("planWillSync", "本次将同步：")}</span>
-      <span class="info-value highlight">{tx("planItemCount", "{count} 项", { count: payload.plannedItems.length })}</span>
+      <span class="info-value highlight">{tx("planItemCount", "{count} 项", { count: syncCount })}</span>
     </div>
+    {#if payload.sourceType === "mixed"}
+      <div class="info-row"><span class="info-label">{tx("planNewImports", "新来源导入：")}</span><span class="info-value">{tx("planItemCount", "{count} 项", { count: importCount })}</span></div>
+      <div class="info-row"><span class="info-label">{tx("planExistingUpdates", "已有来源更新：")}</span><span class="info-value">{tx("planItemCount", "{count} 项", { count: updateCount })}</span></div>
+      {#if ignoreCount}<div class="info-row"><span class="info-label">{tx("planIgnoreSources", "确认后忽略：")}</span><span class="info-value">{tx("planItemCount", "{count} 项", { count: ignoreCount })}</span></div>{/if}
+    {/if}
     {#if payload.skippedCount && payload.skippedCount > 0}
       <div class="info-row">
         <span class="info-label">{tx("planSkipped", "跳过：")}</span>
@@ -56,6 +65,7 @@
       {#each displayItems as item}
         <div class="item-row">
           <span class="item-title">{item.title || item.bookID}</span>
+          {#if item.action}<span class="item-reason"> — {item.action === "ignore" ? tx("planActionIgnore", "忽略") : item.action === "update" ? tx("planActionUpdate", "更新已有来源") : tx("planActionImport", "导入新来源")} · {item.sourceType === "book" ? tx("planNormalBooks", "普通书籍") : tx("planMpAccounts", "公众号")}</span>{/if}
           {#if item.reason}
             <span class="item-reason">（{item.reason}）</span>
           {/if}

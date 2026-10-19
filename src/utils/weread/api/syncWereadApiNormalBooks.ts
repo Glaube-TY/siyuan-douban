@@ -1,3 +1,4 @@
+import { restrictWereadSyncPlan, type WereadApprovedSyncPlan } from "./wereadApprovedSyncPlan";
 import { normalizeWereadPositionMark } from "../../core/configDefaults";
 import { buildWereadApiEnhancedNotebook } from "./buildWereadApiEnhancedNotebook";
 import { findWereadApiBookTargetDoc } from "./findWereadApiBookTargetDoc";
@@ -100,9 +101,8 @@ export interface WereadApiNormalBooksSyncResult {
   }>;
 }
 
-export async function syncWereadApiNormalBooks(
+export async function planWereadApiNormalBooks(
   plugin: WereadPluginLike,
-  apiKey: string,
   template: string,
   options: {
     mode: "all" | "update";
@@ -110,7 +110,7 @@ export async function syncWereadApiNormalBooks(
     onProgress?: WereadSyncProgressCallback;
     confirmPlan?: WereadSyncPlanConfirmCallback;
   }
-): Promise<WereadApiNormalBooksSyncResult> {
+) {
   options.onProgress?.({
     stage: "planning",
     sourceType: "book",
@@ -119,24 +119,7 @@ export async function syncWereadApiNormalBooks(
   });
   const cache = await plugin.loadData("temporary_weread_notebooksList");
 
-  if (!Array.isArray(cache) || cache.length === 0) {
-    return {
-      total: 0,
-      planned: 0,
-      success: 0,
-      failed: 1,
-      skippedMp: 0,
-      skippedIgnored: 0,
-      skippedNotReady: 0,
-      skippedUnchanged: 0,
-      items: [{
-        bookID: "",
-        title: "",
-        status: "failed",
-        message: "请先拉取有笔记书籍缓存",
-      }],
-    };
-  }
+  if (!Array.isArray(cache)) throw new Error("temporary_weread_notebooksList 格式异常");
 
   const preflight = await preflightWereadApiBooksSync(plugin);
   const ignoredBookIDs = getIgnoredBookIDSet(await loadIgnoredBooks(plugin));
@@ -336,15 +319,31 @@ export async function syncWereadApiNormalBooks(
     items.push(unchanged);
   }
 
-  let success = 0;
-  let failed = 0;
-
-  const savedPositionMark = await plugin.loadData("weread_position_mark");
-  const wereadPositionMark = normalizeWereadPositionMark(savedPositionMark);
-
-  const successBookIDs: string[] = [];
-
   const plannedItems = Array.from(plannedMap.values());
+  return { cache, preflight, readyMap, oldNotebooks, items, plannedItems, notReadyItems, skippedUnchangedItems, ignoredItems, skippedUnchanged, forceBookIDSet, ignoredDetailMessage, mpItems };
+}
+
+export async function syncWereadApiNormalBooks(
+  plugin: WereadPluginLike,
+  apiKey: string,
+  template: string,
+  options: {
+    mode: "all" | "update";
+    forceBookIDs?: string[];
+    onProgress?: WereadSyncProgressCallback;
+    confirmPlan?: WereadSyncPlanConfirmCallback;
+    approvedPlan?: WereadApprovedSyncPlan;
+  }
+): Promise<WereadApiNormalBooksSyncResult> {
+  const { cache, preflight, readyMap, oldNotebooks, items, plannedItems, notReadyItems, skippedUnchangedItems, ignoredItems, skippedUnchanged, forceBookIDSet, ignoredDetailMessage, mpItems } = await planWereadApiNormalBooks(plugin, template, options);
+  restrictWereadSyncPlan(plannedItems, readyMap, "book", options.approvedPlan, plugin);
+  if (options.approvedPlan) {
+    const allowed = new Set(options.approvedPlan.items.filter(item => item.sourceType === "book").map(item => item.bookID));
+    for (let i = items.length - 1; i >= 0; i--) if (!allowed.has(items[i].bookID)) items.splice(i, 1);
+  }
+  let success = 0, failed = 0;
+  const successBookIDs: string[] = [];
+  const wereadPositionMark = normalizeWereadPositionMark(await plugin.loadData("weread_position_mark"));
 
   for (const skipped of [...notReadyItems, ...skippedUnchangedItems]) {
     options.onProgress?.({
@@ -403,7 +402,7 @@ export async function syncWereadApiNormalBooks(
   }
 
   // 计划确认回调
-  if (options.confirmPlan) {
+  if (!options.approvedPlan && options.confirmPlan) {
     const planItemsForConfirm: WereadSyncPlanItem[] = plannedItems.map(item => ({
       sourceType: "book",
       bookID: item.bookID,
@@ -607,6 +606,8 @@ export async function syncWereadApiNormalBooks(
     }
 
     try {
+      const currentTarget = await findWereadApiBookTargetDoc(plugin, { bookID: prepared.bookID, title: prepared.title, isbn: prepared.isbn }, { cleanupOrphans: false });
+      if (!currentTarget.success || currentTarget.blockID !== prepared.targetBlockID) throw new Error(t(plugin, "wereadIdentityTargetChanged", "同步目标在预检后发生变化，已停止写入；请重新确认本地书籍绑定。"));
       const incremental = await syncWereadBookIncremental({
         plugin,
         docBlockID: prepared.targetBlockID,

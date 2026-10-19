@@ -1,3 +1,5 @@
+import { t } from "../../i18n";
+import { restrictWereadSyncPlan, type WereadApprovedSyncPlan } from "./wereadApprovedSyncPlan";
 import { normalizeWereadPositionMark } from "../../core/configDefaults";
 import { buildWereadApiMpAccountSyncData } from "./buildWereadApiMpAccountSyncData";
 import { findWereadApiBookTargetDoc } from "./findWereadApiBookTargetDoc";
@@ -13,7 +15,7 @@ import { syncWereadMpIncremental } from "../incremental/syncMpIncremental";
 import { loadWereadNoteUnitBlockIndex } from "../incremental/blockIndexStorage";
 import { hasUsableWereadSourceIndexForDoc } from "../incremental/indexValidation";
 import { hashText } from "../incremental/hash";
-import { getIgnoredBookIDSet, loadIgnoredBooks } from "../wereadSyncStorage";
+import { getIgnoredBookIDSet, loadIgnoredBooks, loadWereadSyncedNotebooks } from "../wereadSyncStorage";
 import type { WereadIncrementalSyncStats, WereadRenderModel } from "../incremental/types";
 import type { WereadSyncProgressCallback, WereadSyncPlanConfirmCallback, WereadSyncPlanItem } from "./wereadSyncProgress";
 
@@ -83,12 +85,11 @@ export interface WereadApiMpAccountsSyncResult {
     }>;
 }
 
-export async function syncWereadApiMpAccounts(
+export async function planWereadApiMpAccounts(
     plugin: WereadPluginLike,
-    apiKey: string,
     mpTemplate: string,
     options: { mode: "all" | "update"; forceBookIDs?: string[]; onProgress?: WereadSyncProgressCallback; confirmPlan?: WereadSyncPlanConfirmCallback }
-): Promise<WereadApiMpAccountsSyncResult> {
+) {
     options.onProgress?.({
         stage: "planning",
         sourceType: "mp",
@@ -98,24 +99,7 @@ export async function syncWereadApiMpAccounts(
 
     const cache = await plugin.loadData("temporary_weread_notebooksList");
 
-    if (!Array.isArray(cache) || cache.length === 0) {
-        return {
-            total: 0,
-            planned: 0,
-            success: 0,
-            failed: 1,
-            skippedNormalBook: 0,
-            skippedIgnored: 0,
-            skippedNotReady: 0,
-            skippedUnchanged: 0,
-            items: [{
-                bookID: "",
-                title: "",
-                status: "failed",
-                message: "请先拉取有笔记书籍缓存",
-            }],
-        };
-    }
+    if (!Array.isArray(cache)) throw new Error("temporary_weread_notebooksList 格式异常");
 
     const preflight = await preflightWereadApiMpSync(plugin);
 
@@ -188,7 +172,7 @@ export async function syncWereadApiMpAccounts(
 
     const finalReadyItems = Array.from(readyMap.values());
 
-    const oldNotebooks: OldRecord[] = await plugin.loadData("weread_notebooks") || [];
+    const oldNotebooks: OldRecord[] = await loadWereadSyncedNotebooks(plugin);
     const noteUnitIndex = await loadWereadNoteUnitBlockIndex(plugin);
     const oldMap = new Map<string, OldRecord>();
     for (const old of oldNotebooks) {
@@ -314,15 +298,25 @@ export async function syncWereadApiMpAccounts(
         items.push(unchanged);
     }
 
-    let success = 0;
-    let failed = 0;
-
-    const savedPositionMark = await plugin.loadData("weread_position_mark");
-    const wereadPositionMark = normalizeWereadPositionMark(savedPositionMark);
-
-    const successBookIDs: string[] = [];
-
     const plannedItems = Array.from(plannedMap.values());
+    return { cache, preflight, readyMap, oldNotebooks, items, plannedItems, notReadyItems, skippedUnchangedItems, ignoredItems, skippedUnchanged, forceBookIDSet, ignoredDetailMessage, normalBookItems };
+}
+
+export async function syncWereadApiMpAccounts(
+    plugin: WereadPluginLike,
+    apiKey: string,
+    mpTemplate: string,
+    options: { mode: "all" | "update"; forceBookIDs?: string[]; onProgress?: WereadSyncProgressCallback; confirmPlan?: WereadSyncPlanConfirmCallback; approvedPlan?: WereadApprovedSyncPlan }
+): Promise<WereadApiMpAccountsSyncResult> {
+    const { cache, preflight, readyMap, oldNotebooks, items, plannedItems, notReadyItems, skippedUnchangedItems, ignoredItems, skippedUnchanged, forceBookIDSet, ignoredDetailMessage, normalBookItems } = await planWereadApiMpAccounts(plugin, mpTemplate, options);
+    restrictWereadSyncPlan(plannedItems, readyMap, "mp", options.approvedPlan, plugin);
+    if (options.approvedPlan) {
+        const allowed = new Set(options.approvedPlan.items.filter(item => item.sourceType === "mp").map(item => item.bookID));
+        for (let i = items.length - 1; i >= 0; i--) if (!allowed.has(items[i].bookID)) items.splice(i, 1);
+    }
+    let success = 0, failed = 0;
+    const successBookIDs: string[] = [];
+    const wereadPositionMark = normalizeWereadPositionMark(await plugin.loadData("weread_position_mark"));
 
     for (const item of notReadyItems) {
       if (forceBookIDSet.has(item.bookID) && readyMap.has(item.bookID)) continue;
@@ -393,7 +387,7 @@ export async function syncWereadApiMpAccounts(
     }
 
     // 计划确认回调
-    if (options.confirmPlan) {
+    if (!options.approvedPlan && options.confirmPlan) {
       options.onProgress?.({
         stage: "confirming",
         sourceType: "mp",
@@ -504,6 +498,9 @@ export async function syncWereadApiMpAccounts(
             return { ok: false, bookID, title, message: targetResult.message || "同步前未找到目标文档" };
           }
 
+          if (targetResult.blockID !== readyMap.get(bookID)?.blockID) {
+            return { ok: false, bookID, title, message: t(plugin, "wereadIdentityTargetChanged", "同步目标在预检后发生变化，已停止写入；请重新确认本地书籍绑定。") };
+          }
           if (!markdown || typeof markdown !== "string" || markdown.length === 0) {
             return { ok: false, bookID, title, message: "渲染后的 Markdown 内容为空" };
           }
@@ -600,6 +597,8 @@ export async function syncWereadApiMpAccounts(
       }
 
       try {
+        const currentTarget = await findWereadApiBookTargetDoc(plugin, { bookID: prepared.bookID, title: prepared.title, isbn: "" }, { cleanupOrphans: false });
+        if (!currentTarget.success || currentTarget.blockID !== prepared.targetBlockID) throw new Error(t(plugin, "wereadIdentityTargetChanged", "同步目标在预检后发生变化，已停止写入；请重新确认本地书籍绑定。"));
         const incremental = await syncWereadMpIncremental({
           plugin,
           docBlockID: prepared.targetBlockID,

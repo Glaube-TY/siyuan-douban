@@ -182,20 +182,30 @@ mock("src/utils/douban/book/getWebPage.ts", { fetchBookHtml: async isbn => { ass
 mock("src/utils/douban/book/fetchBook.ts", { fetchDoubanBook: async isbn => { if (duringDouban) { const run = duringDouban; duringDouban = undefined; run(); } return structuredClone(doubanBooks.get(isbn)); } });
 mock("src/utils/weread/addWereadMpAccounts.ts", {});
 mock("src/utils/weread/api/buildWereadApiMpAccountSyncData.ts", {});
-const { showWereadApiNewSourcesDialogAndSync: showNewSources } = load("src/utils/weread/api/handleWereadApiNewSources.ts");
+const { commitWereadNewSources, showWereadApiNewSourcesDialogAndSync: showNewSources } = load("src/utils/weread/api/handleWereadApiNewSources.ts");
 const { claimWereadBookIDOnExistingRow: claim, linkWereadISBNSourceToDatabase: linkISBN } = load("src/utils/weread/api/wereadBookIdentity.ts");
+// Identity smoke supplies an approved commit boundary; cancellation is covered by the task smoke.
+function commitSelection(runSync) {
+    return async draft => {
+        const result = await commitWereadNewSources(plugin, "mock-key", draft.selectedBooks, draft.ignoredBooks, draft.useBookIDs, draft.allNewSources, draft.remoteDetails, {
+            items: [...draft.selectedBooks.map(book => ({ ...book, sourceType: book.sourceType === "weread_mp_account" ? "mp" : "book", action: book.sourceType === "weread_mp_account" ? "import_mp" : "import_isbn" })), ...draft.useBookIDs.map(book => ({ ...book, sourceType: "book", action: "import_bookID" })), ...draft.ignoredBooks.map(book => ({ ...book, sourceType: book.sourceType === "weread_mp_account" ? "mp" : "book", action: "ignore" }))],
+        });
+        await runSync({ forceBookIDs: result.successfulBookIDs, forceMpBookIDs: result.successfulMpBookIDs });
+        return "completed";
+    };
+}
 async function confirmBookIDs(runSync = async options => forceRuns.push(options)) {
-    const pending = showNewSources(plugin, "mock-key", "update", runSync);
+    const pending = showNewSources(plugin, "mock-key", "update", commitSelection(runSync));
     await new Promise(setImmediate);
     assert.ok(dialogProps, "Actual new-source dialog must be shown");
     await dialogProps.onConfirm([], [], dialogProps.books);
-    assert.equal(await pending, "synced");
+    assert.equal(await pending, "completed");
 }
 
 async function confirmISBNs(selected, runSync = async options => forceRuns.push(options)) {
-    const pending = showNewSources(plugin, "mock-key", "update", runSync);
+    const pending = showNewSources(plugin, "mock-key", "update", commitSelection(runSync));
     await new Promise(setImmediate); assert.ok(dialogProps);
-    await dialogProps.onConfirm(selected, [], []); assert.equal(await pending, "synced");
+    await dialogProps.onConfirm(selected, [], []); assert.equal(await pending, "completed");
 }
 const douban = (isbn, title = "第二大脑", subtitle = "建立你的个人知识管理系统") => ({ isbn, title, subtitle, authors: ["作者"], translators: [] });
 const cellText = (name, rowID) => identity.getAttributeViewValueText(keyValues.find(kv => kv.key.name === name)?.values.find(v => v.blockID === rowID));
@@ -787,7 +797,7 @@ async function updatesAreStable(expectedCount = 2) {
         if (useBookID) await confirmBookIDs(runSync); else await confirmISBNs(chosen, runSync);
         assert.deepEqual(forceRuns[0].forceBookIDs, ["WR_A"]); assert.deepEqual(new Set(writes.map(write => write.bookID)), new Set(["WR_A", "WR_Z"]));
         assert.equal(created.length, 1); assert.equal(cellText("bookID", "bad-b"), ""); assert.deepEqual((await detect(plugin)).normalBooks.map(book => book.bookID), ["WR_B"]);
-        assert.ok(messages.some(message => /失败 1 个/.test(message)));
+        assert.ok(messages.some(message => /导入失败：B/.test(message)));
     }
     console.log("Repair G PASS: mixed ISBN and BookID batches force only successful A; invalid B remains pending while unrelated existing Z still syncs");
 
