@@ -42,6 +42,7 @@ export async function validateNoteDocumentBindings(
     try {
         const idList = uniqueIds.map(quoteSqlText).join(",");
         blocks = await sql(`SELECT id, type FROM blocks WHERE id IN (${idList})`);
+        if (!Array.isArray(blocks)) throw new Error("文档绑定查询返回格式异常");
     } catch (error) {
         console.error("[noteDocumentBinding] batch validation failed:", error);
         for (const candidateId of uniqueIds) {

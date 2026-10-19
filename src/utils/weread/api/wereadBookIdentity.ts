@@ -3,6 +3,7 @@ import { findConflictingWereadDocBindings, getWereadStorageKey, loadWereadSynced
 import { t } from "../../i18n";
 import { addAttributeViewKey, getAttributeView, reloadAttributeView, setAttributeViewBlockAttrStrict } from "@/api";
 import { isValidISBN, normalizeISBN } from "../../bookHandling/isbn";
+import { WEREAD_IDENTITY_READBACK_DELAYS, wereadBookIdentityError } from "./wereadBookIdentityDiagnostics";
 import { generateUniqueBlocked } from "../../core/formatOp";
 import { getNoteDocumentBinding, validateNoteDocumentBindings } from "../../readingManagement/noteDocumentBinding";
 
@@ -51,61 +52,88 @@ export async function claimWereadBookIDOnExistingRow(
     const bookID = String(target.bookID || "").trim();
     const isbn = normalizeISBN(target.isbn);
     const changed = t(plugin, "bookUpdateStateChanged", "本地书籍状态已发生变化，请重新搜索后再试。");
-    if (!bookID || !isValidISBN(isbn) || expectedRow.bookID || !expectedRow.docBlockID) throw new Error(changed);
+    const fail = (stage: string, reason: string, actual?: BookIdentityRow, counts?: Record<string, number | boolean>) =>
+        wereadBookIdentityError(changed, stage, reason, expectedRow, actual, counts);
+    if (!bookID || !isValidISBN(isbn)) throw fail("claim.input", "INVALID_SOURCE_ID");
+    if (expectedRow.bookID) throw fail("claim.input", "BOOKID_ALREADY_SET");
+    if (!expectedRow.docBlockID) throw fail("claim.input", "DOCUMENT_ID_MISSING");
 
-    let database = await getAttributeView(avID);
-    if (!Array.isArray(database?.av?.keyValues)) throw new Error(changed);
-    const history = await loadWereadSyncedNotebooks(plugin);
-    const bindings = await validateNoteDocumentBindings([expectedRow.docBlockID]);
-    if (getNoteDocumentBinding(expectedRow.docBlockID, bindings).state !== "bound") throw new Error(changed);
-    const initial = matchWereadBookIdentity(buildBookIdentityRows(database.av.keyValues), { bookID, isbn }, history, false);
-    if (initial.issue || initial.matchType !== "ISBN" || !initial.row || initial.row.bookID
-        || initial.row.rowBlockID !== expectedRow.rowBlockID || initial.row.docBlockID !== expectedRow.docBlockID
-        || initial.row.isbn !== expectedRow.isbn || initial.row.title !== expectedRow.title) throw new Error(changed);
+    async function readAV(stage: string) {
+        let database: any;
+        try { database = await getAttributeView(avID); }
+        catch { throw fail(stage, "AV_READ_FAILED"); }
+        if (!Array.isArray(database?.av?.keyValues)) throw fail(stage, "AV_READ_INVALID");
+        assertNoWereadOrphanIdentityConflict(plugin, database.av.keyValues, { bookID, isbn });
+        return database;
+    }
+    function checkMatch(match: BookIdentityMatch, stage: string): BookIdentityRow {
+        if (match.issue) throw fail(stage, "IDENTITY_" + match.issue.toUpperCase());
+        const row = match.row;
+        if (!row) throw fail(stage, "ISBN_MATCH_MISSING");
+        if (row.bookID) throw fail(stage, "BOOKID_ALREADY_SET", row);
+        if (match.matchType !== "ISBN") throw fail(stage, "ISBN_MATCH_MISSING", row);
+        if (row.rowBlockID !== expectedRow.rowBlockID) throw fail(stage, "ROW_ID_CHANGED", row);
+        if (row.docBlockID !== expectedRow.docBlockID) throw fail(stage, "DOCUMENT_ID_CHANGED", row);
+        if (row.isbn !== expectedRow.isbn || row.isbn !== isbn) throw fail(stage, "ISBN_MISMATCH", row);
+        if (row.title !== expectedRow.title) throw fail(stage, "TITLE_CHANGED", row);
+        return row;
+    }
+
+    let database: any;
+    for (const [attempt, delay] of WEREAD_IDENTITY_READBACK_DELAYS.entries()) {
+        if (delay) await new Promise(resolve => setTimeout(resolve, delay));
+        database = await readAV("claim.preflight");
+        const history = await loadWereadSyncedNotebooks(plugin);
+        const row = checkMatch(matchWereadBookIdentity(buildBookIdentityRows(database.av.keyValues), { bookID, isbn }, history, false), "claim.preflight");
+        const binding = getNoteDocumentBinding(row.docBlockID, await validateNoteDocumentBindings([row.docBlockID]));
+        if (binding.state === "bound") break;
+        if (binding.state !== "missing") throw fail("claim.document", "DOCUMENT_BINDING_INVALID", row);
+        if (attempt === WEREAD_IDENTITY_READBACK_DELAYS.length - 1) throw fail("claim.document", "DOCUMENT_INDEX_NOT_VISIBLE", row, { attempts: attempt + 1, documentBound: false });
+    }
     if (!database.av.keyValues.some((kv: any) => kv.key?.name === "bookID")) {
         // Add only the identity column; preserve the primary key and all user metadata.
-        await addAttributeViewKey({
-            avID, keyID: generateUniqueBlocked(), keyName: "bookID", keyType: "text", keyIcon: "",
-            previousKeyID: database.av.keyValues.at(-1)?.key?.id || "",
-        });
+        try {
+            await addAttributeViewKey({
+                avID, keyID: generateUniqueBlocked(), keyName: "bookID", keyType: "text", keyIcon: "",
+                previousKeyID: database.av.keyValues.at(-1)?.key?.id || "",
+            });
+        } catch { throw fail("claim.column", "BOOKID_COLUMN_WRITE_FAILED"); }
     }
 
     // Read again immediately before writing: never overwrite a newly claimed owner.
-    database = await getAttributeView(avID);
-    if (!Array.isArray(database?.av?.keyValues)) throw new Error(changed);
+    database = await readAV("claim.before_write");
     const keyValues = database.av.keyValues;
     const rows = buildBookIdentityRows(keyValues);
     const currentHistory = await loadWereadSyncedNotebooks(plugin);
-    const match = matchWereadBookIdentity(rows, { bookID, isbn }, currentHistory, false);
-    const current = match.row;
+    const current = checkMatch(matchWereadBookIdentity(rows, { bookID, isbn }, currentHistory, false), "claim.before_write");
     const bookIDColumns = keyValues.filter((kv: any) => kv.key?.name === "bookID");
     const column = bookIDColumns[0];
     const cells = (column?.values || []).filter((v: any) => String(v.blockID || v.itemID || "").trim() === expectedRow.rowBlockID);
-    if (match.issue || match.matchType !== "ISBN" || !current || current.bookID
-        || current.rowBlockID !== expectedRow.rowBlockID || current.docBlockID !== expectedRow.docBlockID
-        || current.isbn !== isbn || current.isbn !== expectedRow.isbn || current.title !== expectedRow.title
-        || rows.filter(row => row.rowBlockID === expectedRow.rowBlockID).length !== 1
-        || rows.some(row => row.bookID === bookID)
-        || findConflictingWereadDocBindings(currentHistory).has(current.docBlockID)
-        || bookIDColumns.length !== 1 || !column.key?.id || column.key.type !== "text"
-        || cells.length > 1 || cells.some((cell: any) => getAttributeViewValueText(cell))
-        || column.values?.some((cell: any) => getAttributeViewValueText(cell) === bookID)) throw new Error(changed);
+    if (rows.filter(row => row.rowBlockID === expectedRow.rowBlockID).length !== 1) throw fail("claim.before_write", "ROW_ID_AMBIGUOUS", current);
+    if (rows.some(row => row.bookID === bookID)) throw fail("claim.before_write", "BOOKID_ALREADY_SET", current);
+    if (findConflictingWereadDocBindings(currentHistory).has(current.docBlockID)) throw fail("claim.before_write", "SHARED_DOCUMENT_CONFLICT", current);
+    if (bookIDColumns.length !== 1 || !column.key?.id || column.key.type !== "text") throw fail("claim.before_write", "BOOKID_COLUMN_INVALID", current, { columns: bookIDColumns.length, keyPresent: !!column?.key?.id, textType: column?.key?.type === "text" });
+    if (cells.length > 1 || cells.some((cell: any) => getAttributeViewValueText(cell))
+        || column.values?.some((cell: any) => getAttributeViewValueText(cell) === bookID)) throw fail("claim.before_write", "BOOKID_CELL_CONFLICT", current, { cells: cells.length, cellIDPresent: !!cells[0]?.id });
+    const binding = getNoteDocumentBinding(current.docBlockID, await validateNoteDocumentBindings([current.docBlockID]));
+    if (binding.state !== "bound") throw fail("claim.before_write", "DOCUMENT_BINDING_INVALID", current);
 
-    await setAttributeViewBlockAttrStrict({
-        avID,
-        keyID: column.key.id,
-        itemID: current.rowBlockID,
-        ...(cells[0]?.id ? { cellID: cells[0].id } : {}),
-        value: { text: { content: bookID } },
-    });
+    try {
+        await setAttributeViewBlockAttrStrict({
+            avID,
+            keyID: column.key.id,
+            itemID: current.rowBlockID,
+            ...(cells[0]?.id ? { cellID: cells[0].id } : {}),
+            value: { text: { content: bookID } },
+        });
+    } catch { throw fail("claim.write", "CLAIM_WRITE_FAILED", current); }
     await reloadAttributeView(avID);
-    const refreshed = await getAttributeView(avID);
-    if (!Array.isArray(refreshed?.av?.keyValues)) throw new Error(changed);
+    const refreshed = await readAV("claim.readback");
     const verifiedRows = buildBookIdentityRows(refreshed.av.keyValues);
     const verified = verifiedRows.filter(row => row.rowBlockID === current.rowBlockID);
     if (verified.length !== 1 || verified[0].bookID !== bookID || verified[0].docBlockID !== current.docBlockID
         || verified[0].isbn !== isbn || verifiedRows.filter(row => row.bookID === bookID).length !== 1) {
-        throw new Error(t(plugin, "bookUpdateVerificationFailed", "回读验证未通过"));
+        throw wereadBookIdentityError(t(plugin, "bookUpdateVerificationFailed", "回读验证未通过"), "claim.readback", "CLAIM_READBACK_FAILED", { ...current, bookID }, verified[0], { rows: verified.length });
     }
 }
 
@@ -134,19 +162,23 @@ export async function inspectWereadISBNSourceToDatabase(
     const bookID = String(target.bookID || "").trim();
     const isbn = normalizeISBN(target.isbn);
     const changed = t(plugin, "bookUpdateStateChanged", "本地书籍状态已发生变化，请重新搜索后再试。");
-    if (!bookID || !isValidISBN(isbn)) throw new Error(changed);
-    const database = await getAttributeView(avID);
-    if (!Array.isArray(database?.av?.keyValues)) throw new Error(changed);
+    const fail = (reason: string, row?: BookIdentityRow) => wereadBookIdentityError(changed, "isbn.inspect", reason, undefined, row);
+    if (!bookID || !isValidISBN(isbn)) throw fail("INVALID_SOURCE_ID");
+    let database: any;
+    try { database = await getAttributeView(avID); }
+    catch { throw fail("AV_READ_FAILED"); }
+    if (!Array.isArray(database?.av?.keyValues)) throw fail("AV_READ_INVALID");
     const keyValues = database.av.keyValues;
     const rows = buildBookIdentityRows(keyValues);
     assertNoWereadOrphanIdentityConflict(plugin, keyValues, { bookID, isbn });
     const match = matchWereadBookIdentity(rows, { bookID, isbn }, await loadWereadSyncedNotebooks(plugin), false);
-    if (match.issue) throw new Error(bookIdentityFailureMessage(plugin, match));
+    if (match.issue) throw wereadBookIdentityError(bookIdentityFailureMessage(plugin, match), "isbn.inspect", "IDENTITY_" + match.issue.toUpperCase());
     if (!match.row) {
-        if (expectedRowBlockID) throw new Error(changed);
+        if (expectedRowBlockID) throw fail("ISBN_MATCH_MISSING");
         return null;
     }
-    if (match.row.isbn !== isbn || (expectedRowBlockID && match.row.rowBlockID !== expectedRowBlockID)) throw new Error(changed);
+    if (match.row.isbn !== isbn) throw fail("ISBN_MISMATCH", match.row);
+    if (expectedRowBlockID && match.row.rowBlockID !== expectedRowBlockID) throw fail("ROW_ID_CHANGED", match.row);
     return match.row;
 }
 
@@ -164,6 +196,6 @@ export async function linkWereadISBNSourceToDatabase(
         return "linked_existing";
     }
     const bindings = await validateNoteDocumentBindings([row.docBlockID]);
-    if (getNoteDocumentBinding(row.docBlockID, bindings).state !== "bound") throw new Error(t(plugin, "bookUpdateStateChanged", "本地书籍状态已发生变化，请重新搜索后再试。"));
+    if (getNoteDocumentBinding(row.docBlockID, bindings).state !== "bound") throw wereadBookIdentityError(t(plugin, "bookUpdateStateChanged", "本地书籍状态已发生变化，请重新搜索后再试。"), "isbn.link", "DOCUMENT_BINDING_INVALID", row);
     return "already_linked";
 }

@@ -7,6 +7,9 @@ const ts = require("typescript");
 const root = path.resolve(__dirname, "..");
 const mocks = new Map();
 const modules = new Map();
+const diagnostics = [];
+const originalWarn = console.warn;
+console.warn = (label, ...args) => label === "[weread/book-identity]" ? diagnostics.push(args[0]) : originalWarn(label, ...args);
 const mock = (file, exports) => mocks.set(path.join(root, file), exports);
 function load(file) {
     const absolute = path.resolve(root, file);
@@ -29,7 +32,7 @@ function load(file) {
 }
 
 const ISBN_A = "9787111128069", ISBN_B = "9787302423287";
-let keyValues, storage, docs, children, writes, requests, created, messages, claims, importResults, bookInfos, dialogProps, writeMode, beforeRead, doubanBooks, doubanRequests, infoRequests, rawNotebooks, removals, blockTypes, docAttrs, rendered, bindingWrites, forceRuns, repairFailure, afterRender, duringDouban, delayedDocReads, pendingBinding, serial = 0;
+let keyValues, storage, docs, children, writes, requests, created, messages, claims, importResults, bookInfos, dialogProps, writeMode, beforeRead, doubanBooks, doubanRequests, infoRequests, rawNotebooks, removals, blockTypes, docAttrs, rendered, bindingWrites, forceRuns, repairFailure, afterRender, duringDouban, delayedDocReads, pendingBinding, visibilityRead, serial = 0;
 const source = (bookID, isbn = "", title = "测试书") => ({ bookID, isbn, title, sourceType: "weread_book", updatedTime: 10, noteCount: 1, reviewCount: 0, bookmarkCount: 1, totalNoteCount: 1 });
 const plugin = {
     name: "siyuan-douban", i18n: {},
@@ -47,7 +50,7 @@ function reset() {
     docs = new Set(); children = new Map(); writes = []; requests = []; created = [];
     messages = []; claims = []; importResults = []; bookInfos = new Map(); dialogProps = undefined; writeMode = "ok"; beforeRead = undefined;
     doubanBooks = new Map(); doubanRequests = []; infoRequests = []; rawNotebooks = { books: [] }; removals = [];
-    blockTypes = new Map(); docAttrs = new Map(); rendered = []; bindingWrites = []; forceRuns = []; repairFailure = ""; afterRender = undefined; duringDouban = undefined; delayedDocReads = 0; pendingBinding = undefined;
+    blockTypes = new Map(); docAttrs = new Map(); rendered = []; bindingWrites = []; forceRuns = []; repairFailure = ""; afterRender = undefined; duringDouban = undefined; delayedDocReads = 0; pendingBinding = undefined; visibilityRead = undefined;
 }
 function row(bookID, isbn, doc, title = "测试书", rowID = doc || `row-${++serial}`) {
     keyValues[0].values.push({ blockID: rowID, keyID: "title", id: `value-${rowID}`, block: { id: doc, content: title } });
@@ -57,6 +60,7 @@ function row(bookID, isbn, doc, title = "测试书", rowID = doc || `row-${++ser
 }
 mock("src/api.ts", {
     sql: async query => {
+        if (visibilityRead) { const value = visibilityRead(query); if (value !== undefined) return value; }
         if (query.includes('id = "database"') || query.includes("id = 'database'")) return [{ markdown: '<div data-av-id="av"></div>', box: "box", hpath: "/books", root_id: "parent" }];
         if (query.includes("FROM attributes")) return [...docAttrs].filter(([id]) => query.includes(`'${id}'`)).map(([, attrs]) => ({ value: attrs["custom-avs"] }));
         if (repairFailure === "doc-lag" && docs.has("delayed-row") && query.includes("delayed-row") && delayedDocReads++ < 2) return [];
@@ -207,6 +211,77 @@ async function updatesAreStable(expectedCount = 2) {
 }
 
 (async () => {
+    // Sanitized shape from real SiYuan 3.8.7: AV binding is visible before its SQL document index.
+    reset(); storage.temporary_weread_notebooksList = [source("WR_VISIBILITY", ISBN_A)]; doubanBooks.set(ISBN_A, douban(ISBN_A));
+    afterRender = () => {
+        const rowID = created[0].id;
+        Object.assign(keyValues[0].values[0], { type: "block", createdAt: 1, updatedAt: 1 });
+        Object.assign(keyValues[0].values[0].block, { refSubtype: "d", created: 1, updated: 1 });
+        Object.assign(keyValues[2].values[0], { type: "text", isDetached: true, createdAt: 1, updatedAt: 1 });
+        let missingReads = 2;
+        visibilityRead = query => query.includes("SELECT id, type") && query.includes(rowID) && missingReads-- > 0 ? [] : undefined;
+    };
+    await confirmISBNs([source("WR_VISIBILITY", ISBN_A)]);
+    assert.equal(claims.length, 1, "New ISBN import must wait for SQL visibility, then claim bookID exactly once");
+    assert.equal(created.length, 1); assert.equal(bindingWrites.length, 1); assert.equal(keyValues[0].values.length, 1);
+    assert.deepEqual(forceRuns[0].forceBookIDs, ["WR_VISIBILITY"]);
+    console.log("SQL visibility PASS: real AV response shape, delayed document index, one create/bind/claim");
+    const originalTimer = global.setTimeout;
+    global.setTimeout = (callback, _delay, ...args) => originalTimer(callback, 0, ...args);
+    try {
+        for (const [change, reason] of [["title", "TITLE_CHANGED"], ["row", "ROW_ID_CHANGED"], ["document", "DOCUMENT_ID_CHANGED"], ["owner", "IDENTITY_BOOKID_CONFLICT"], ["isbn", "ISBN_MATCH_MISSING"], ["history", "IDENTITY_SHARED_DOC"], ["read-error", "AV_READ_FAILED"], ["column", "BOOKID_COLUMN_INVALID"]]) {
+            reset(); row("", ISBN_A, "doc-visibility");
+            const expected = identity.buildBookIdentityRows(keyValues)[0]; let queries = 0;
+            visibilityRead = query => {
+                if (!query.includes("SELECT id, type") || queries++ !== 0) return undefined;
+                if (change === "title") keyValues[0].values[0].block.content = "Concurrent title";
+                if (change === "row") keyValues.forEach(column => column.values.forEach(cell => { cell.blockID = "other-row"; }));
+                if (change === "document") keyValues[0].values[0].block.id = "other-doc";
+                if (change === "owner") keyValues[2].values[0].text.content = "OTHER";
+                if (change === "isbn") keyValues[1].values[0].number.formattedContent = ISBN_B;
+                if (change === "history") storage.weread_notebooks = [{ bookID: "OTHER", blockID: "doc-visibility" }];
+                if (change === "read-error") beforeRead = () => { throw new Error("Fixture AV read failure"); };
+                if (change === "column") keyValues[2].key.type = "number";
+                return [];
+            };
+            await assert.rejects(claim(plugin, "av", expected, { bookID: "WR_VISIBILITY", isbn: ISBN_A }), error => error.reasonCode === reason);
+            assert.equal(claims.length, 0); assert.equal(created.length, 0); assert.equal(bindingWrites.length, 0);
+            assert.ok(queries <= 2, "Identity conflicts stop instead of exhausting the read budget");
+        }
+        for (const invalid of [null, { bad: true }]) {
+            reset(); row("", ISBN_A, "doc-invalid-query"); let queries = 0;
+            visibilityRead = query => query.includes("SELECT id, type") ? (++queries, invalid) : undefined;
+            await assert.rejects(claim(plugin, "av", identity.buildBookIdentityRows(keyValues)[0], { bookID: "WR_VISIBILITY", isbn: ISBN_A }), error => error.reasonCode === "DOCUMENT_BINDING_INVALID");
+            assert.equal(queries, 1); assert.equal(claims.length, 0);
+        }
+        reset(); row("", ISBN_A, "permanently-missing"); let missingQueries = 0;
+        visibilityRead = query => query.includes("SELECT id, type") ? (++missingQueries, []) : undefined;
+        await assert.rejects(claim(plugin, "av", identity.buildBookIdentityRows(keyValues)[0], { bookID: "WR_VISIBILITY", isbn: ISBN_A }), error => error.reasonCode === "DOCUMENT_INDEX_NOT_VISIBLE" && error.stage === "claim.document");
+        assert.equal(missingQueries, load("src/utils/weread/api/wereadBookIdentityDiagnostics.ts").WEREAD_IDENTITY_READBACK_DELAYS.length);
+        assert.equal(claims.length, 0); assert.equal(created.length, 0);
+
+        reset(); row("", ISBN_A, "", "TEST repair", "repair-index-delay"); let attributeReads = 0;
+        storage.temporary_weread_notebooksList = [source("WR_REPAIR_DELAY", ISBN_A)]; doubanBooks.set(ISBN_A, douban(ISBN_A));
+        visibilityRead = query => query.includes("FROM attributes") && attributeReads++ < 6 ? [] : undefined;
+        await confirmISBNs([source("WR_REPAIR_DELAY", ISBN_A)]);
+        assert.equal(created.length, 1); assert.equal(bindingWrites.length, 1); assert.equal(claims.length, 1);
+        assert.deepEqual(forceRuns[0].forceBookIDs, ["WR_REPAIR_DELAY"]);
+    } finally { global.setTimeout = originalTimer; }
+    console.log("SQL visibility safety PASS: per-read identity checks, bounded missing state, invalid SQL rejected, delayed attribute index, no repeated writes");
+
+    const diagnosticError = load("src/utils/weread/api/wereadBookIdentityDiagnostics.ts").wereadBookIdentityError;
+    const privateValue = "SYNTHETIC_PRIVATE_IDENTITY_VALUE";
+    const privateRow = { rowBlockID: privateValue, docBlockID: privateValue, title: privateValue, bookID: privateValue, isbn: privateValue };
+    for (const language of ["zh_CN", "en_US"]) {
+        const i18n = JSON.parse(fs.readFileSync(path.join(root, "public/i18n/" + language + ".json"), "utf8"));
+        const error = diagnosticError(i18n.bookUpdateStateChanged, "claim.preflight", "TITLE_CHANGED", privateRow, { ...privateRow, title: "Changed" });
+        assert.ok(error.message.startsWith(i18n.bookUpdateStateChanged)); assert.equal(error.reasonCode, "TITLE_CHANGED");
+        assert.equal(error.message.includes(privateValue), false); assert.equal(JSON.stringify(diagnostics.at(-1)).includes(privateValue), false);
+        assert.equal(diagnostics.at(-1).titleMatches, false);
+    }
+    console.log("Identity diagnostics PASS: stable stage/reason, localized error text, masked IDs and no raw titles/credentials");
+
+
     reset(); row("", ISBN_A, "", "A", "row1");
     storage["settings.json"].noteTemplate = "{{书名}}|{{我的评分}}|{{书籍分类}}|{{阅读状态}}|{{开始日期}}|{{读完日期}}";
     storage.temporary_weread_notebooksList = [source("WR_A", ISBN_A, "A：B")];
