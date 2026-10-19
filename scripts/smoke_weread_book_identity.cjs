@@ -32,7 +32,7 @@ function load(file) {
 }
 
 const ISBN_A = "9787111128069", ISBN_B = "9787302423287";
-let keyValues, storage, docs, children, writes, requests, created, messages, claims, importResults, bookInfos, dialogProps, writeMode, beforeRead, doubanBooks, doubanRequests, infoRequests, rawNotebooks, removals, blockTypes, docAttrs, rendered, bindingWrites, forceRuns, repairFailure, afterRender, duringDouban, delayedDocReads, pendingBinding, visibilityRead, serial = 0;
+let keyValues, storage, docs, children, writes, requests, created, messages, claims, importResults, bookInfos, dialogProps, writeMode, beforeRead, doubanBooks, doubanRequests, infoRequests, rawNotebooks, removals, blockTypes, docAttrs, rendered, bindingWrites, forceRuns, repairFailure, afterRender, duringDouban, delayedDocReads, pendingBinding, visibilityRead, columnReadLag, claimReadLag, pendingVisibility, readbackHook, columnAdds, visibilityReads, columnWriteFails, serial = 0;
 const source = (bookID, isbn = "", title = "测试书") => ({ bookID, isbn, title, sourceType: "weread_book", updatedTime: 10, noteCount: 1, reviewCount: 0, bookmarkCount: 1, totalNoteCount: 1 });
 const plugin = {
     name: "siyuan-douban", i18n: {},
@@ -51,6 +51,7 @@ function reset() {
     messages = []; claims = []; importResults = []; bookInfos = new Map(); dialogProps = undefined; writeMode = "ok"; beforeRead = undefined;
     doubanBooks = new Map(); doubanRequests = []; infoRequests = []; rawNotebooks = { books: [] }; removals = [];
     blockTypes = new Map(); docAttrs = new Map(); rendered = []; bindingWrites = []; forceRuns = []; repairFailure = ""; afterRender = undefined; duringDouban = undefined; delayedDocReads = 0; pendingBinding = undefined; visibilityRead = undefined;
+    columnReadLag = 0; claimReadLag = 0; pendingVisibility = undefined; readbackHook = undefined; columnAdds = []; visibilityReads = 0; columnWriteFails = false;
 }
 function row(bookID, isbn, doc, title = "测试书", rowID = doc || `row-${++serial}`) {
     keyValues[0].values.push({ blockID: rowID, keyID: "title", id: `value-${rowID}`, block: { id: doc, content: title } });
@@ -71,7 +72,9 @@ mock("src/api.ts", {
         if (pendingBinding && pendingBinding.reads-- <= 0) {
             Object.assign(keyValues[0].values.find(cell => cell.blockID === pendingBinding.itemID), pendingBinding.value); pendingBinding = undefined;
         }
-        return { av: { keyValues: structuredClone(keyValues) } };
+        const visible = structuredClone(pendingVisibility && pendingVisibility.remaining-- > 0 ? pendingVisibility.snapshot : keyValues);
+        if (pendingVisibility) { visibilityReads++; if (readbackHook) readbackHook(visible, pendingVisibility.phase); }
+        return { av: { keyValues: visible } };
     },
     reloadAttributeView: async () => {},
     setAttributeViewBlockAttrStrict: async payload => {
@@ -80,15 +83,21 @@ mock("src/api.ts", {
         claims.push(structuredClone(payload));
         if (writeMode === "throw") throw new Error("strict write rejected");
         if (writeMode === "noop") return;
+        const beforeWrite = structuredClone(keyValues);
         const column = keyValues.find(kv => kv.key.id === payload.keyID);
         let cell = column.values.find(v => v.blockID === payload.itemID);
         if (cell?.id) assert.equal(payload.cellID, cell.id);
         else assert.equal(payload.cellID, undefined);
         if (!cell) { cell = { blockID: payload.itemID }; column.values.push(cell); }
         Object.assign(cell, payload.value);
+        if (claimReadLag) pendingVisibility = { remaining: claimReadLag, snapshot: beforeWrite, phase: "claim" };
     },
     getAttributeViewKeysByAvID: async () => structuredClone(keyValues.map(kv => kv.key)),
-    addAttributeViewKey: async ({ keyID, keyName, keyType }) => keyValues.push({ key: { id: keyID, name: keyName, type: keyType }, values: [] }),
+    addAttributeViewKey: async ({ keyID, keyName, keyType }) => {
+        const beforeAdd = structuredClone(keyValues);
+        keyValues.push({ key: { id: keyID, name: keyName, type: keyType }, values: [] });
+        if (keyName === "bookID") { columnAdds.push(keyID); if (columnReadLag) pendingVisibility = { remaining: columnReadLag, snapshot: beforeAdd, phase: "column" }; }
+    },
     appendAttributeViewDetachedBlocksWithValues: async (_avID, rows) => {
         for (const values of rows) {
             const rowID = values[0].blockID;
@@ -118,6 +127,10 @@ mock("src/api.ts", {
     getChildBlocks: async id => structuredClone(children.get(id) || []),
     removeAttributeViewBlocks: async (avID, ids) => { removals.push({ avID, ids: structuredClone(ids) }); throw new Error("Unexpected destructive operation"); },
 });
+mocks.get(path.join(root, "src/api.ts")).addAttributeViewKeyStrict = payload => {
+    if (columnWriteFails) throw new Error("Fixture column write rejected");
+    return mocks.get(path.join(root, "src/api.ts")).addAttributeViewKey(payload);
+};
 mock("src/utils/core/formatOp.ts", { generateUniqueBlocked: () => `20261002120000-${String(++serial).padStart(7, "0")}`, parseDateToTimestamp: () => 0 });
 mock("src/utils/bookHandling/changeMainKeyName.ts", { changeMainKeyName: async () => { throw new Error("Unexpected rename"); } });
 mock("src/utils/weread/downloadWereadCover.ts", { downloadWereadCoverSafely: async () => "" });
@@ -211,6 +224,81 @@ async function updatesAreStable(expectedCount = 2) {
 }
 
 (async () => {
+    const realReadbackTimer = global.setTimeout;
+    global.setTimeout = (callback, _delay, ...args) => realReadbackTimer(callback, 0, ...args);
+    try {
+        const readbackFailures = [];
+        for (const phase of ["column", "claim"]) for (const staleReads of [1, 2]) {
+            reset(); row("", ISBN_A, "readback-doc");
+            const expected = identity.buildBookIdentityRows(keyValues)[0];
+            if (phase === "column") { keyValues.pop(); columnReadLag = staleReads; } else claimReadLag = staleReads;
+            try {
+                await claim(plugin, "av", expected, { bookID: "WR_READBACK", isbn: ISBN_A });
+                assert.equal(cellText("bookID", expected.rowBlockID), "WR_READBACK");
+                assert.equal(claims.length, 1); assert.equal(columnAdds.length, phase === "column" ? 1 : 0);
+                assert.equal(created.length, 0); assert.equal(bindingWrites.length, 0);
+            } catch (error) { readbackFailures.push({ phase, staleReads, reason: error.reasonCode || error.message }); }
+        }
+        assert.deepEqual(readbackFailures, [], "Successful writes with delayed AV visibility must not be rejected");
+        const conflicts = [["owner", "IDENTITY_BOOKID_CONFLICT"], ["type", "BOOKID_COLUMN_INVALID"], ["cells", "BOOKID_CELL_CONFLICT"], ["row", "ROW_ID_CHANGED"], ["doc", "DOCUMENT_ID_CHANGED"], ["isbn", "ISBN_MATCH_MISSING"], ["column-id", "BOOKID_COLUMN_CHANGED"], ["duplicate-column", "BOOKID_COLUMN_INVALID"], ["history", "IDENTITY_SHARED_DOC"]];
+        for (const phase of ["column", "claim"]) for (const [change, reason] of conflicts) {
+            reset(); row("", ISBN_A, "readback-doc"); const expected = identity.buildBookIdentityRows(keyValues)[0];
+            if (phase === "column") { keyValues.pop(); columnReadLag = 2; } else claimReadLag = 2;
+            readbackHook = (visible, currentPhase) => {
+                assert.equal(currentPhase, phase);
+                if (!visible.some(column => column.key.name === "bookID")) visible.push(structuredClone(keyValues.find(column => column.key.name === "bookID")));
+                const column = visible.find(column => column.key.name === "bookID");
+                if (change === "owner") column.values = [{ blockID: expected.rowBlockID, text: { content: "OTHER" } }];
+                if (change === "type") column.key.type = "number";
+                if (change === "cells") column.values = [1, 2].map(id => ({ id, blockID: expected.rowBlockID, text: { content: "" } }));
+                if (change === "row") visible.forEach(column => column.values?.forEach(cell => { cell.blockID = "other-row"; }));
+                if (change === "doc") visible[0].values[0].block.id = "other-doc";
+                if (change === "isbn") visible[1].values[0].number.formattedContent = ISBN_B;
+                if (change === "column-id") column.key.id = "replaced-key";
+                if (change === "duplicate-column") visible.push(structuredClone(column));
+                if (change === "history") storage.weread_notebooks = [{ bookID: "OTHER", blockID: expected.docBlockID }];
+            };
+            await assert.rejects(claim(plugin, "av", expected, { bookID: "WR_READBACK", isbn: ISBN_A }), error => error.reasonCode === reason && error.stage === (phase === "column" ? "claim.column_readback" : "claim.readback"));
+            assert.equal(visibilityReads, 1, "A true conflict stops at its first read");
+            assert.equal(claims.length, phase === "claim" ? 1 : 0); assert.equal(columnAdds.length, phase === "column" ? 1 : 0);
+            assert.equal(created.length, 0); assert.equal(bindingWrites.length, 0);
+        }
+        for (const phase of ["column", "claim"]) {
+            reset(); row("", ISBN_A, "readback-doc"); const expected = identity.buildBookIdentityRows(keyValues)[0];
+            if (phase === "column") { keyValues.pop(); columnReadLag = 100; } else claimReadLag = 100;
+            await assert.rejects(claim(plugin, "av", expected, { bookID: "WR_READBACK", isbn: ISBN_A }), error => error.reasonCode === (phase === "column" ? "BOOKID_COLUMN_NOT_VISIBLE" : "CLAIM_READBACK_FAILED"));
+            assert.equal(visibilityReads, 7); assert.equal(claims.length, phase === "claim" ? 1 : 0);
+            assert.equal(columnAdds.length, phase === "column" ? 1 : 0);
+            pendingVisibility = undefined;
+            assert.equal(await linkISBN(plugin, "av", { bookID: "WR_READBACK", isbn: ISBN_A }, expected.rowBlockID), phase === "claim" ? "already_linked" : "linked_existing");
+            assert.equal(claims.length, 1); assert.equal(columnAdds.length, phase === "column" ? 1 : 0);
+        }
+        for (const phase of ["column", "claim"]) {
+            reset(); row("", ISBN_A, "readback-doc"); const expected = identity.buildBookIdentityRows(keyValues)[0];
+            if (phase === "column") { keyValues.pop(); columnWriteFails = true; } else writeMode = "throw";
+            await assert.rejects(claim(plugin, "av", expected, { bookID: "WR_READBACK", isbn: ISBN_A }), error => error.reasonCode === (phase === "column" ? "BOOKID_COLUMN_WRITE_FAILED" : "CLAIM_WRITE_FAILED"));
+            assert.equal(visibilityReads, 0); assert.equal(columnAdds.length, 0); assert.equal(claims.length, phase === "claim" ? 1 : 0);
+        }
+
+    } finally { global.setTimeout = realReadbackTimer; }
+    console.log("Claim/column visibility PASS: first or second read stays stale, one column creation and one bookID write");
+    console.log("Claim readback safety PASS: conflicts fail immediately, bounded timeout/retry is idempotent, rejected writes are never repeated");
+    let kernelReply; const kernelCalls = []; const actualApi = { exports: {} };
+    const apiCode = ts.transpileModule(fs.readFileSync(path.join(root, "src/api.ts"), "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
+    new Function("require", "module", "exports", apiCode)(name => {
+        assert.equal(name, "siyuan");
+        return { fetchSyncPost: async (url, body) => { kernelCalls.push({ url, body }); return kernelReply; } };
+    }, actualApi, actualApi.exports);
+    kernelReply = { code: 0, data: null }; assert.equal(await actualApi.exports.addAttributeViewKeyStrict({ avID: "TEST_AV" }), null);
+    kernelReply = { code: 1, msg: "Fixture rejected", data: null };
+    await assert.rejects(actualApi.exports.addAttributeViewKeyStrict({ avID: "TEST_AV" }), /Fixture rejected/);
+    await assert.rejects(actualApi.exports.setAttributeViewBlockAttrStrict({ avID: "TEST_AV" }), /Fixture rejected/);
+    kernelReply = { code: 0, data: { value: { type: "text", text: { content: "TEST_OWNER" } } } };
+    assert.deepEqual(await actualApi.exports.setAttributeViewBlockAttrStrict({ avID: "TEST_AV" }), kernelReply.data);
+    assert.deepEqual(kernelCalls.map(call => call.url), ["/api/av/addAttributeViewKey", "/api/av/addAttributeViewKey", "/api/av/setAttributeViewBlockAttr", "/api/av/setAttributeViewBlockAttr"]);
+    console.log("Strict AV writes PASS: actual API wrappers check kernel code; null column success and value write envelopes preserved");
+
+
     // Sanitized shape from real SiYuan 3.8.7: AV binding is visible before its SQL document index.
     reset(); storage.temporary_weread_notebooksList = [source("WR_VISIBILITY", ISBN_A)]; doubanBooks.set(ISBN_A, douban(ISBN_A));
     afterRender = () => {

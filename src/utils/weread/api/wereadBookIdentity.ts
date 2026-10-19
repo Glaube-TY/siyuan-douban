@@ -1,7 +1,7 @@
 import { buildBookIdentityRows, getAttributeViewValueText, matchBookIdentity, type BookIdentityMatch, type BookIdentityRow, type BookIdentityTarget } from "../../bookHandling/bookDeduplication";
 import { findConflictingWereadDocBindings, getWereadStorageKey, loadWereadSyncedNotebooks } from "../wereadSyncStorage";
 import { t } from "../../i18n";
-import { addAttributeViewKey, getAttributeView, reloadAttributeView, setAttributeViewBlockAttrStrict } from "@/api";
+import { addAttributeViewKeyStrict, getAttributeView, reloadAttributeView, setAttributeViewBlockAttrStrict } from "@/api";
 import { isValidISBN, normalizeISBN } from "../../bookHandling/isbn";
 import { WEREAD_IDENTITY_READBACK_DELAYS, wereadBookIdentityError } from "./wereadBookIdentityDiagnostics";
 import { generateUniqueBlocked } from "../../core/formatOp";
@@ -66,12 +66,12 @@ export async function claimWereadBookIDOnExistingRow(
         assertNoWereadOrphanIdentityConflict(plugin, database.av.keyValues, { bookID, isbn });
         return database;
     }
-    function checkMatch(match: BookIdentityMatch, stage: string): BookIdentityRow {
+    function checkMatch(match: BookIdentityMatch, stage: string, allowClaimed = false): BookIdentityRow {
         if (match.issue) throw fail(stage, "IDENTITY_" + match.issue.toUpperCase());
         const row = match.row;
         if (!row) throw fail(stage, "ISBN_MATCH_MISSING");
-        if (row.bookID) throw fail(stage, "BOOKID_ALREADY_SET", row);
-        if (match.matchType !== "ISBN") throw fail(stage, "ISBN_MATCH_MISSING", row);
+        if (row.bookID && (!allowClaimed || row.bookID !== bookID)) throw fail(stage, "BOOKID_ALREADY_SET", row);
+        if (match.matchType !== "ISBN" && !(allowClaimed && match.matchType === "bookID" && row.bookID === bookID)) throw fail(stage, "ISBN_MATCH_MISSING", row);
         if (row.rowBlockID !== expectedRow.rowBlockID) throw fail(stage, "ROW_ID_CHANGED", row);
         if (row.docBlockID !== expectedRow.docBlockID) throw fail(stage, "DOCUMENT_ID_CHANGED", row);
         if (row.isbn !== expectedRow.isbn || row.isbn !== isbn) throw fail(stage, "ISBN_MISMATCH", row);
@@ -90,33 +90,52 @@ export async function claimWereadBookIDOnExistingRow(
         if (binding.state !== "missing") throw fail("claim.document", "DOCUMENT_BINDING_INVALID", row);
         if (attempt === WEREAD_IDENTITY_READBACK_DELAYS.length - 1) throw fail("claim.document", "DOCUMENT_INDEX_NOT_VISIBLE", row, { attempts: attempt + 1, documentBound: false });
     }
+    let claimColumnID = "";
     if (!database.av.keyValues.some((kv: any) => kv.key?.name === "bookID")) {
         // Add only the identity column; preserve the primary key and all user metadata.
+        claimColumnID = generateUniqueBlocked();
         try {
-            await addAttributeViewKey({
-                avID, keyID: generateUniqueBlocked(), keyName: "bookID", keyType: "text", keyIcon: "",
+            await addAttributeViewKeyStrict({
+                avID, keyID: claimColumnID, keyName: "bookID", keyType: "text", keyIcon: "",
                 previousKeyID: database.av.keyValues.at(-1)?.key?.id || "",
             });
         } catch { throw fail("claim.column", "BOOKID_COLUMN_WRITE_FAILED"); }
     }
 
-    // Read again immediately before writing: never overwrite a newly claimed owner.
-    database = await readAV("claim.before_write");
-    const keyValues = database.av.keyValues;
-    const rows = buildBookIdentityRows(keyValues);
-    const currentHistory = await loadWereadSyncedNotebooks(plugin);
-    const current = checkMatch(matchWereadBookIdentity(rows, { bookID, isbn }, currentHistory, false), "claim.before_write");
-    const bookIDColumns = keyValues.filter((kv: any) => kv.key?.name === "bookID");
-    const column = bookIDColumns[0];
-    const cells = (column?.values || []).filter((v: any) => String(v.blockID || v.itemID || "").trim() === expectedRow.rowBlockID);
-    if (rows.filter(row => row.rowBlockID === expectedRow.rowBlockID).length !== 1) throw fail("claim.before_write", "ROW_ID_AMBIGUOUS", current);
-    if (rows.some(row => row.bookID === bookID)) throw fail("claim.before_write", "BOOKID_ALREADY_SET", current);
-    if (findConflictingWereadDocBindings(currentHistory).has(current.docBlockID)) throw fail("claim.before_write", "SHARED_DOCUMENT_CONFLICT", current);
-    if (bookIDColumns.length !== 1 || !column.key?.id || column.key.type !== "text") throw fail("claim.before_write", "BOOKID_COLUMN_INVALID", current, { columns: bookIDColumns.length, keyPresent: !!column?.key?.id, textType: column?.key?.type === "text" });
-    if (cells.length > 1 || cells.some((cell: any) => getAttributeViewValueText(cell))
-        || column.values?.some((cell: any) => getAttributeViewValueText(cell) === bookID)) throw fail("claim.before_write", "BOOKID_CELL_CONFLICT", current, { cells: cells.length, cellIDPresent: !!cells[0]?.id });
-    const binding = getNoteDocumentBinding(current.docBlockID, await validateNoteDocumentBindings([current.docBlockID]));
-    if (binding.state !== "bound") throw fail("claim.before_write", "DOCUMENT_BINDING_INVALID", current);
+    async function readClaimState(stage: string, allowClaimed = false) {
+        const keyValues = (await readAV(stage)).av.keyValues;
+        const rows = buildBookIdentityRows(keyValues);
+        const history = await loadWereadSyncedNotebooks(plugin);
+        const current = checkMatch(matchWereadBookIdentity(rows, { bookID, isbn }, history, false), stage, allowClaimed);
+        const columns = keyValues.filter((kv: any) => kv.key?.name === "bookID");
+        const column = columns[0];
+        if (rows.filter(row => row.rowBlockID === expectedRow.rowBlockID).length !== 1) throw fail(stage, "ROW_ID_AMBIGUOUS", current);
+        if (!allowClaimed && rows.some(row => row.bookID === bookID)) throw fail(stage, "BOOKID_ALREADY_SET", current);
+        if (findConflictingWereadDocBindings(history).has(current.docBlockID)) throw fail(stage, "SHARED_DOCUMENT_CONFLICT", current);
+        if (columns.length > 1 || (column && (!column.key?.id || column.key.type !== "text" || (column.values != null && !Array.isArray(column.values))))) throw fail(stage, "BOOKID_COLUMN_INVALID", current, { columns: columns.length });
+        if (column && claimColumnID && column.key.id !== claimColumnID) throw fail(stage, "BOOKID_COLUMN_CHANGED", current);
+        const cells = (column?.values || []).filter((v: any) => String(v.blockID || v.itemID || "").trim() === expectedRow.rowBlockID);
+        if (cells.length > 1 || cells.some((cell: any) => {
+            const value = getAttributeViewValueText(cell);
+            return value && (!allowClaimed || value !== bookID);
+        }) || column?.values?.some((cell: any) => getAttributeViewValueText(cell) === bookID && String(cell.blockID || cell.itemID || "").trim() !== current.rowBlockID)) throw fail(stage, "BOOKID_CELL_CONFLICT", current, { cells: cells.length });
+        const binding = getNoteDocumentBinding(current.docBlockID, await validateNoteDocumentBindings([current.docBlockID]));
+        if (binding.state !== "bound") throw fail(stage, "DOCUMENT_BINDING_INVALID", current);
+        return { current, column, cells };
+    }
+
+    // Retry only visibility of this successful column creation; never submit the creation twice.
+    const createdColumn = !!claimColumnID;
+    let beforeWrite: Awaited<ReturnType<typeof readClaimState>>;
+    for (const [attempt, delay] of WEREAD_IDENTITY_READBACK_DELAYS.entries()) {
+        if (delay) await new Promise(resolve => setTimeout(resolve, delay));
+        beforeWrite = await readClaimState(createdColumn ? "claim.column_readback" : "claim.before_write");
+        if (beforeWrite.column) break;
+        if (!createdColumn) throw fail("claim.before_write", "BOOKID_COLUMN_INVALID", beforeWrite.current);
+        if (attempt === WEREAD_IDENTITY_READBACK_DELAYS.length - 1) throw fail("claim.column_readback", "BOOKID_COLUMN_NOT_VISIBLE", beforeWrite.current, { attempts: attempt + 1 });
+    }
+    const { current, column, cells } = beforeWrite!;
+    claimColumnID = column.key.id;
 
     try {
         await setAttributeViewBlockAttrStrict({
@@ -128,12 +147,13 @@ export async function claimWereadBookIDOnExistingRow(
         });
     } catch { throw fail("claim.write", "CLAIM_WRITE_FAILED", current); }
     await reloadAttributeView(avID);
-    const refreshed = await readAV("claim.readback");
-    const verifiedRows = buildBookIdentityRows(refreshed.av.keyValues);
-    const verified = verifiedRows.filter(row => row.rowBlockID === current.rowBlockID);
-    if (verified.length !== 1 || verified[0].bookID !== bookID || verified[0].docBlockID !== current.docBlockID
-        || verified[0].isbn !== isbn || verifiedRows.filter(row => row.bookID === bookID).length !== 1) {
-        throw wereadBookIdentityError(t(plugin, "bookUpdateVerificationFailed", "回读验证未通过"), "claim.readback", "CLAIM_READBACK_FAILED", { ...current, bookID }, verified[0], { rows: verified.length });
+    for (const [attempt, delay] of WEREAD_IDENTITY_READBACK_DELAYS.entries()) {
+        if (delay) await new Promise(resolve => setTimeout(resolve, delay));
+        const verified = await readClaimState("claim.readback", true);
+        if (verified.column && verified.current.bookID === bookID) return;
+        if (attempt === WEREAD_IDENTITY_READBACK_DELAYS.length - 1) {
+            throw wereadBookIdentityError(t(plugin, "bookUpdateVerificationFailed", "回读验证未通过"), "claim.readback", "CLAIM_READBACK_FAILED", { ...current, bookID }, verified.current, { attempts: attempt + 1, columnPresent: !!verified.column });
+        }
     }
 }
 

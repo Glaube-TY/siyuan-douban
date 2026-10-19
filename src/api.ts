@@ -543,6 +543,12 @@ export async function addAttributeViewKey(payload: any): Promise<any> {
     return request('/api/av/addAttributeViewKey', payload);
 }
 
+export async function addAttributeViewKeyStrict(payload: any): Promise<any> {
+    const response: IWebSocketData = await fetchSyncPost('/api/av/addAttributeViewKey', payload);
+    if (response.code !== 0) throw new Error(response.msg || "数据库字段创建失败");
+    return response.data;
+}
+
 
 /**
  * 这是思源客户端自身使用的内部属性视图事务，不属于稳定公开的字段重命名 API；
