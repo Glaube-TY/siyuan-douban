@@ -122,7 +122,7 @@ export async function clearWereadApiKey(plugin: PluginLike): Promise<WereadAuthS
         apiProtocolVersion: WEREAD_API_PROTOCOL_VERSION,
         lastError: "",
     });
-    await plugin.saveData("temporary_weread_notebooksList", null);
+    await plugin.saveData("temporary_weread_notebooksList", []);
     await plugin.saveData("weread_notebooksList_readyAt", null);
     await plugin.saveData("weread_reading_stats_cache", null);
     return loadWereadAuthState(plugin);

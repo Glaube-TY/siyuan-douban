@@ -21,7 +21,10 @@ function readRecordArray(value: unknown, storageName: string): any[] {
 
 async function loadOptionalArrayStorageStrict(plugin: WereadPluginLike, storageName: string): Promise<any[]> {
   const state = await loadPluginStorageJsonStateStrict(plugin, storageName);
-  return state.exists ? readRecordArray(state.value, storageName) : [];
+  if (!state.exists) return [];
+  // Older clear/failure paths wrote JSON null only for this temporary cache.
+  if (storageName === "temporary_weread_notebooksList" && state.value === null) return [];
+  return readRecordArray(state.value, storageName);
 }
 
 function buildRecordMap(records: unknown, storageName: string): Map<string, any> {

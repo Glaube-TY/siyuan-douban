@@ -119,8 +119,6 @@ export async function syncWereadApiNormalBooks(
   });
   const cache = await plugin.loadData("temporary_weread_notebooksList");
 
-  await plugin.saveData("temporary_weread_notebooksList", cache);
-
   if (!Array.isArray(cache) || cache.length === 0) {
     return {
       total: 0,

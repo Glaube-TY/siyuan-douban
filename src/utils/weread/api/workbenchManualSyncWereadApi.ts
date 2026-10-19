@@ -144,6 +144,9 @@ async function runWorkbenchManualWereadApiSyncInternal(
   const freshNotebooksList = await buildWereadApiNotebookCache(auth.apiKey);
   const notebooksList = await mergeWereadNotebookLocalMetadata(plugin, freshNotebooksList);
 
+  await plugin.saveData("temporary_weread_notebooksList", notebooksList);
+  await plugin.saveData("weread_notebooksList_readyAt", Date.now());
+
   if (!Array.isArray(notebooksList) || notebooksList.length === 0) {
     options?.onProgress?.({
       stage: "finished",
@@ -170,8 +173,6 @@ async function runWorkbenchManualWereadApiSyncInternal(
     return emptyResult;
   }
 
-  await plugin.saveData("temporary_weread_notebooksList", notebooksList);
-  await plugin.saveData("weread_notebooksList_readyAt", Date.now());
   options?.onProgress?.({
     stage: "planning",
     total: notebooksList.length,

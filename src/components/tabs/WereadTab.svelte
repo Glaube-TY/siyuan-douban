@@ -564,7 +564,6 @@
                 }
             } else {
                 isNotebookListReady = false;
-                await plugin.saveData("temporary_weread_notebooksList", null);
                 await plugin.saveData("weread_notebooksList_readyAt", null);
             }
             console.error("[微信读书] 获取书籍列表失败:", error);

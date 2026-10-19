@@ -65,6 +65,9 @@ export async function autoSyncWereadApi(plugin: WereadPluginLike): Promise<Werea
   const freshNotebooksList = await buildWereadApiNotebookCache(auth.apiKey);
   const notebooksList = await mergeWereadNotebookLocalMetadata(plugin, freshNotebooksList);
 
+  await plugin.saveData("temporary_weread_notebooksList", notebooksList);
+  await plugin.saveData("weread_notebooksList_readyAt", Date.now());
+
   if (!Array.isArray(notebooksList) || notebooksList.length === 0) {
     const emptyResult: WereadApiAutoSyncResult = {
       syncedAt: Date.now(),
@@ -85,9 +88,6 @@ export async function autoSyncWereadApi(plugin: WereadPluginLike): Promise<Werea
     await plugin.saveData("weread_api_last_auto_sync_result", emptyResult);
     return emptyResult;
   }
-
-  await plugin.saveData("temporary_weread_notebooksList", notebooksList);
-  await plugin.saveData("weread_notebooksList_readyAt", Date.now());
 
   let normalResult: WereadApiNormalBooksSyncResult = emptyNormalResult;
   let mpResult: WereadApiMpAccountsSyncResult | undefined = undefined;
