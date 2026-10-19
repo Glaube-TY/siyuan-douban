@@ -109,20 +109,9 @@ export async function claimWereadBookIDOnExistingRow(
     }
 }
 
-/** Link only a user-confirmed ISBN import; an inserted row must match its exact returned ID. */
-export async function linkWereadISBNSourceToDatabase(
-    plugin: any,
-    avID: string,
-    target: { bookID: string; isbn: string },
-    expectedRowBlockID?: string,
-): Promise<"linked_existing" | "already_linked" | null> {
+export function assertNoWereadOrphanIdentityConflict(plugin: any, keyValues: any[], target: BookIdentityTarget): void {
     const bookID = String(target.bookID || "").trim();
     const isbn = normalizeISBN(target.isbn);
-    const changed = t(plugin, "bookUpdateStateChanged", "本地书籍状态已发生变化，请重新搜索后再试。");
-    if (!bookID || !isValidISBN(isbn)) throw new Error(changed);
-    const database = await getAttributeView(avID);
-    if (!Array.isArray(database?.av?.keyValues)) throw new Error(changed);
-    const keyValues = database.av.keyValues;
     const rows = buildBookIdentityRows(keyValues);
     const rowIDs = new Set(rows.map(row => row.rowBlockID));
     for (const column of keyValues.filter((kv: any) => kv.key?.name === "ISBN" || kv.key?.name === "bookID")) {
@@ -133,6 +122,24 @@ export async function linkWereadISBNSourceToDatabase(
         });
         if (conflictingOrphan) throw new Error(t(plugin, "wereadIdentityOrphanConflict", "存在与当前 {identifier} 相同的孤立字段，已停止导入；请检查数据库主键与身份字段。", { identifier: column.key.name }));
     }
+}
+
+/** Inspect identity without requiring a note document; repair is an explicit import step. */
+export async function inspectWereadISBNSourceToDatabase(
+    plugin: any,
+    avID: string,
+    target: { bookID: string; isbn: string },
+    expectedRowBlockID?: string,
+): Promise<BookIdentityRow | null> {
+    const bookID = String(target.bookID || "").trim();
+    const isbn = normalizeISBN(target.isbn);
+    const changed = t(plugin, "bookUpdateStateChanged", "本地书籍状态已发生变化，请重新搜索后再试。");
+    if (!bookID || !isValidISBN(isbn)) throw new Error(changed);
+    const database = await getAttributeView(avID);
+    if (!Array.isArray(database?.av?.keyValues)) throw new Error(changed);
+    const keyValues = database.av.keyValues;
+    const rows = buildBookIdentityRows(keyValues);
+    assertNoWereadOrphanIdentityConflict(plugin, keyValues, { bookID, isbn });
     const match = matchWereadBookIdentity(rows, { bookID, isbn }, await loadWereadSyncedNotebooks(plugin), false);
     if (match.issue) throw new Error(bookIdentityFailureMessage(plugin, match));
     if (!match.row) {
@@ -140,11 +147,23 @@ export async function linkWereadISBNSourceToDatabase(
         return null;
     }
     if (match.row.isbn !== isbn || (expectedRowBlockID && match.row.rowBlockID !== expectedRowBlockID)) throw new Error(changed);
-    if (!match.row.bookID) {
-        await claimWereadBookIDOnExistingRow(plugin, avID, match.row, { bookID, isbn });
+    return match.row;
+}
+
+/** An inserted row must still match its exact returned ID before claim. */
+export async function linkWereadISBNSourceToDatabase(
+    plugin: any,
+    avID: string,
+    target: { bookID: string; isbn: string },
+    expectedRowBlockID?: string,
+): Promise<"linked_existing" | "already_linked" | null> {
+    const row = await inspectWereadISBNSourceToDatabase(plugin, avID, target, expectedRowBlockID);
+    if (!row) return null;
+    if (!row.bookID) {
+        await claimWereadBookIDOnExistingRow(plugin, avID, row, target);
         return "linked_existing";
     }
-    const bindings = await validateNoteDocumentBindings([match.row.docBlockID]);
-    if (getNoteDocumentBinding(match.row.docBlockID, bindings).state !== "bound") throw new Error(changed);
+    const bindings = await validateNoteDocumentBindings([row.docBlockID]);
+    if (getNoteDocumentBinding(row.docBlockID, bindings).state !== "bound") throw new Error(t(plugin, "bookUpdateStateChanged", "本地书籍状态已发生变化，请重新搜索后再试。"));
     return "already_linked";
 }

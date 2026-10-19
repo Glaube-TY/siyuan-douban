@@ -6,7 +6,7 @@ import { bindBookToNote } from '../bookHandling/bindBookToNote';
 import { buildBookIdentityRows } from '../bookHandling/bookDeduplication';
 import { matchWereadBookIdentity, claimWereadBookIDOnExistingRow, bookIdentityFailureMessage } from './api/wereadBookIdentity';
 import { loadWereadSyncedNotebooks } from './wereadSyncStorage';
-import { getNoteDocumentBinding, validateNoteDocumentBindings } from '../readingManagement/noteDocumentBinding';
+import { ensureExistingBookNoteDocument } from './api/ensureExistingBookNoteDocument';
 import { t } from '../i18n';
 import { renderBookNoteTemplate } from '../template/renderBookNoteTemplate';
 import { renderLocalBookTemplateVariables } from '../template/renderLocalBookTemplateVariables';
@@ -36,15 +36,21 @@ export async function addUseBookIDsToDatabase(plugin: any, avID: string, bookDet
     if (match.matchType === "bookID" && match.issue) {
         return { code: 1, status: "conflict", msg: bookIdentityFailureMessage(plugin, match) };
     }
-    if (!match.issue && match.row?.docBlockID) {
-        const bindings = await validateNoteDocumentBindings([match.row.docBlockID]);
-        if (getNoteDocumentBinding(match.row.docBlockID, bindings).state !== "bound") {
-            return { code: 1, status: "conflict", msg: stateChanged };
+    if (!match.issue && match.row) {
+        let row = match.row;
+        try {
+            row = await ensureExistingBookNoteDocument(plugin, avID, match.row, { bookID, isbn: bookDetail.isbn }, async () => ({
+                title: bookDetail.title, author: bookDetail.author || "", publisher: bookDetail.publisher || "",
+                publishDate: bookDetail.publishTime ? String(parseDateToTimestamp(bookDetail.publishTime)) : "",
+                isbn: bookDetail.isbn || "", cover: bookDetail.cover || "", description: bookDetail.intro || "",
+                wereadRating: formatWereadRatingPercent(bookDetail.newRating),
+                wereadRatingCount: bookDetail.newRatingCount ? String(bookDetail.newRatingCount) : "",
+            }));
+        } catch (error: any) {
+            return { code: 1, status: "conflict", msg: error?.message || stateChanged };
         }
-        if (match.matchType === "bookID") {
-            return { code: 0, status: "already_linked", msg: "" };
-        }
-        await claimWereadBookIDOnExistingRow(plugin, avID, match.row, { bookID, isbn: bookDetail.isbn });
+        if (match.matchType === "bookID") return { code: 0, status: "already_linked", msg: "" };
+        await claimWereadBookIDOnExistingRow(plugin, avID, row, { bookID, isbn: bookDetail.isbn });
         return { code: 0, status: "linked_existing", msg: "" };
     }
     if (match.matchType === "bookID") {

@@ -26,7 +26,7 @@ export interface LocalBookTemplateVariables {
     wereadRatingCount: string;
 }
 
-const LOCAL_BOOK_TEMPLATE_VARIABLES: ReadonlyArray<readonly [keyof LocalBookTemplateVariables, string]> = [
+export const LOCAL_BOOK_TEMPLATE_VARIABLES: ReadonlyArray<readonly [keyof LocalBookTemplateVariables, string]> = [
     ["title", "书名"],
     ["subtitle", "副标题"],
     ["originalTitle", "原作名"],
