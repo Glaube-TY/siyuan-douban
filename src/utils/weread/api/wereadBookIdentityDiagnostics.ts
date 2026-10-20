@@ -3,6 +3,27 @@ import type { BookIdentityRow } from "../../bookHandling/bookDeduplication";
 // Real SiYuan SQL document/attribute indexes can lag successful AV and document writes.
 export const WEREAD_IDENTITY_READBACK_DELAYS = [0, 80, 160, 320, 640, 1280, 1280];
 
+export const WEREAD_IDENTITY_STAGES: ReadonlySet<string> = new Set([
+    "isbn.inspect", "isbn.link",
+    "claim.input", "claim.preflight", "claim.document", "claim.column", "claim.column_readback", "claim.before_write", "claim.write", "claim.readback",
+    "note.input", "note.repair", "note.before_create", "note.create", "note.document", "note.readback",
+]);
+
+export interface WereadBookIdentityFailure {
+    stage: string;
+    reasonCode: string;
+}
+
+/** Copy only validated data properties; never inspect message, stack or diagnostic snapshots. */
+export function extractWereadBookIdentityFailure(error: unknown): WereadBookIdentityFailure | null {
+    if (!(error instanceof Error)) return null;
+    const stage = Object.getOwnPropertyDescriptor(error, "stage")?.value;
+    const reasonCode = Object.getOwnPropertyDescriptor(error, "reasonCode")?.value;
+    if (typeof stage !== "string" || !WEREAD_IDENTITY_STAGES.has(stage)
+        || typeof reasonCode !== "string" || !/^[A-Z][A-Z0-9_]{0,63}$/.test(reasonCode)) return null;
+    return { stage, reasonCode };
+}
+
 export function wereadBookIdentityError(
     message: string,
     stage: string,

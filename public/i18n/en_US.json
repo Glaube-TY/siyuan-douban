@@ -1051,6 +1051,7 @@
     "syncSuggestionNewSource": "Import this source in the new-source confirmation dialog first.",
     "syncSuggestionCache": "Check the cache and fetch the noted-books list again.",
     "syncSuggestionIsbn": "Add an ISBN or import with BookID.",
+    "syncSuggestionIdentityLink": "Book identity linking was not completed. Check the existing ISBN, bookID, and note binding. Review eligible records under Identity Linking before retrying the import.",
     "syncSuggestionDiagnostics": "Copy the diagnostic report and inspect the console log.",
     "syncTextItemSuccess": "Sync succeeded: {added} added, {updated} updated, {deleted} deleted, {unchanged} unchanged",
     "syncTextBooksComplete": "Book sync complete: {success} succeeded, {failed} failed, {planned} planned",

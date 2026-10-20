@@ -24,6 +24,7 @@ export type WereadSyncReportReasonCode =
     | "NEW_SOURCE_NOT_IMPORTED"
     | "BOOK_ID_IS_MISSING"
     | "ISBN_MATCH_FAILED"
+    | "BOOK_IDENTITY_LINK_FAILED"
     | "UNKNOWN_ERROR";
 
 /** 同步报告单项（单本书/公众号） */

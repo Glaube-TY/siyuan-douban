@@ -1051,6 +1051,7 @@
     "syncSuggestionNewSource": "请先在新来源确认弹窗中导入该来源。",
     "syncSuggestionCache": "请检查缓存数据是否完整，重新拉取有笔记书籍列表。",
     "syncSuggestionIsbn": "请补充 ISBN 或使用 BookID 导入。",
+    "syncSuggestionIdentityLink": "书籍身份关联未完成，请检查已有书籍的 ISBN、bookID 和读书笔记绑定。可在书籍管理的‘身份关联’中检查符合条件的记录，请勿反复导入。",
     "syncSuggestionDiagnostics": "请复制诊断报告并查看控制台日志。",
     "syncTextItemSuccess": "同步成功：新增 {added} 条，更新 {updated} 条，删除 {deleted} 条，未变化 {unchanged} 条",
     "syncTextBooksComplete": "普通书籍同步完成：成功 {success}，失败 {failed}，计划 {planned}",

@@ -15,6 +15,7 @@ import { detectWereadApiNewSources, type WereadApiNewSourceItem } from "./detect
 import { findWereadApiBookTargetDoc } from "./findWereadApiBookTargetDoc";
 import { inspectWereadISBNSourceToDatabase, linkWereadISBNSourceToDatabase } from "./wereadBookIdentity";
 import { ensureExistingBookNoteDocument } from "./ensureExistingBookNoteDocument";
+import { extractWereadBookIdentityFailure, type WereadBookIdentityFailure } from "./wereadBookIdentityDiagnostics";
 import WereadNewBooks from "@/components/common/wereadNewBooksDialog.svelte";
 import type { WereadSyncProgressCallback } from "./wereadSyncProgress";
 import { t } from "@/utils/i18n";
@@ -26,6 +27,12 @@ interface WereadPluginLike {
 }
 
 export type WereadSyncOutcome = "completed" | "cancelled" | "failed" | "no_work";
+
+export interface WereadNewSourceImportFailure {
+  bookID: string;
+  message: string;
+  identityFailure?: WereadBookIdentityFailure;
+}
 
 export interface WereadPendingSyncDraft {
   interacted?: boolean;
@@ -204,7 +211,7 @@ export async function commitWereadNewSources(
   allNewSources: WereadApiNewSourceItem[],
   remoteDetails = new Map<string, Awaited<ReturnType<typeof buildWereadApiDatabaseBookDetail>>>(),
   approvedPlan?: WereadApprovedSyncPlan,
-): Promise<{ successfulBookIDs: string[]; successfulMpBookIDs: string[]; failed: Array<{ bookID: string; message: string }> }> {
+): Promise<{ successfulBookIDs: string[]; successfulMpBookIDs: string[]; failed: WereadNewSourceImportFailure[] }> {
   const approved = new Map(approvedPlan?.items.map(item => [wereadSourceKey(item), item.action]));
   for (const [sources, action] of [[selectedBooks, "import_isbn"], [useBookIDs, "import_bookID"], [ignoredBooks, "ignore"]] as const) {
     for (const source of sources) {
@@ -214,7 +221,7 @@ export async function commitWereadNewSources(
   }
   if (!approvedPlan) throw new Error(t(plugin, "bookUpdateStateChanged", "本地书籍状态已发生变化，请重新搜索后再试。"));
   const successfulSources: WereadApiNewSourceItem[] = [];
-  const failed: Array<{ bookID: string; message: string }> = [];
+  const failed: WereadNewSourceImportFailure[] = [];
   const selectedNormalBooks = selectedBooks.filter(b => b.sourceType !== "weread_mp_account");
   const selectedMpAccounts = selectedBooks.filter(b => b.sourceType === "weread_mp_account");
   const ignoredNormalBooks = ignoredBooks.filter(b => b.sourceType !== "weread_mp_account");
@@ -258,7 +265,7 @@ export async function commitWereadNewSources(
           throw new Error(t(plugin, "wereadBookNoteRepairFailed", "已找到本地书籍，但其读书笔记绑定异常，无法自动修复；请检查数据库配置与绑定。"));
         }
       } catch (e) {
-        failed.push({ bookID: bookItem.bookID, message: writeAttempted ? t(plugin, "wereadSourcePartialWrite", "导入未完成，可能已有部分写入；已保留数据，请检查后重试：{error}", { error: e?.message || t(plugin, "uiUnknownError", "未知错误") }) : e?.message || "" });
+        failed.push({ bookID: bookItem.bookID, identityFailure: extractWereadBookIdentityFailure(e) || undefined, message: writeAttempted ? t(plugin, "wereadSourcePartialWrite", "导入未完成，可能已有部分写入；已保留数据，请检查后重试：{error}", { error: e?.message || t(plugin, "uiUnknownError", "未知错误") }) : e?.message || "" });
         showMessage(t(plugin, "newSourcesBookIdImportFailed", "bookID 导入失败：{title}：{error}", { title: bookItem.title || bookItem.bookID, error: e?.message || t(plugin, "uiUnknownError", "未知错误") }));
       }
     }
@@ -327,7 +334,7 @@ export async function commitWereadNewSources(
         throw new Error(t(plugin, "wereadBookNoteRepairFailed", "已找到本地书籍，但其读书笔记绑定异常，无法自动修复；请检查数据库配置与绑定。"));
       }
     } catch (e) {
-      failed.push({ bookID: book.bookID, message: writeAttempted ? t(plugin, "wereadSourcePartialWrite", "导入未完成，可能已有部分写入；已保留数据，请检查后重试：{error}", { error: e?.message || t(plugin, "uiUnknownError", "未知错误") }) : e?.message || "" });
+      failed.push({ bookID: book.bookID, identityFailure: extractWereadBookIdentityFailure(e) || undefined, message: writeAttempted ? t(plugin, "wereadSourcePartialWrite", "导入未完成，可能已有部分写入；已保留数据，请检查后重试：{error}", { error: e?.message || t(plugin, "uiUnknownError", "未知错误") }) : e?.message || "" });
       showMessage(t(plugin, "newSourcesBookImportFailed", "普通书导入失败：{title}：{error}", { title: book.title || book.bookID, error: e?.message || t(plugin, "uiUnknownError", "未知错误") }));
     }
   }

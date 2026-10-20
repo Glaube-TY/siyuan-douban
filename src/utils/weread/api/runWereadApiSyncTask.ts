@@ -3,14 +3,13 @@ import { buildBookIdentityRows, normalizeBookTitle } from "../../bookHandling/bo
 import { isValidISBN, normalizeISBN } from "../../bookHandling/isbn";
 import { validateNoteDocumentBindings } from "../../readingManagement/noteDocumentBinding";
 import { loadWereadAuthState } from "../../settings/wereadSettingsService";
-import { buildWereadSyncReport, saveWereadSyncReportAndApplyStatus } from "../../storage/syncReportBuilder";
+import { buildWereadImportFailureReportItem, buildWereadSyncReport, saveWereadSyncReportAndApplyStatus } from "../../storage/syncReportBuilder";
 import { loadCustomISBNBooksWithMigration, loadIgnoredBooks } from "../wereadSyncStorage";
-import { getWereadSourceKey } from "../../storage/readingStorage";
 import { t } from "../../i18n";
 import { buildWereadApiNotebookCache } from "./buildWereadApiNotebookCache";
 import { buildWereadApiDatabaseBookDetail } from "./buildWereadApiDatabaseBookDetail";
 import { mergeWereadNotebookLocalMetadata } from "./mergeWereadNotebookLocalMetadata";
-import { commitWereadNewSources, showWereadApiNewSourcesDialogAndSync, type WereadPendingSyncDraft, type WereadSyncOutcome } from "./handleWereadApiNewSources";
+import { commitWereadNewSources, showWereadApiNewSourcesDialogAndSync, type WereadNewSourceImportFailure, type WereadPendingSyncDraft, type WereadSyncOutcome } from "./handleWereadApiNewSources";
 import { planWereadApiNormalBooks, syncWereadApiNormalBooks, type WereadApiNormalBooksSyncResult } from "./syncWereadApiNormalBooks";
 import { planWereadApiMpAccounts, syncWereadApiMpAccounts, type WereadApiMpAccountsSyncResult } from "./syncWereadApiMpAccounts";
 import { wereadSourceKey, type WereadApprovedSyncPlan, type WereadApprovedSyncItem } from "./wereadApprovedSyncPlan";
@@ -46,7 +45,7 @@ export async function runWereadApiSyncTask(
   const normalEmpty: WereadApiNormalBooksSyncResult = { total: 0, planned: 0, success: 0, failed: 0, skippedMp: 0, skippedIgnored: 0, skippedNotReady: 0, skippedUnchanged: 0, items: [] };
   let normalResult = normalEmpty, mpResult: WereadApiMpAccountsSyncResult | undefined;
   let committed = false;
-  const importFailures: Array<{ bookID: string; title: string; sourceType: "book" | "mp"; message: string }> = [];
+  const importFailures: Array<WereadNewSourceImportFailure & { title: string; sourceType: "book" | "mp" }> = [];
   const result = (status: WereadSyncOutcome, message?: string): WereadApiSyncTaskResult => ({
     status, message, syncedAt: Date.now(), normalResult, mpResult,
     totalPlanned: normalResult.planned + (mpResult?.planned || 0) + importFailures.length,
@@ -57,7 +56,7 @@ export async function runWereadApiSyncTask(
   async function saveReport(error?: string) {
     const report = buildWereadSyncReport({ startedAt, trigger: options.trigger, normalResult, mpResult,
       errors: error ? [error] : undefined });
-    for (const failure of importFailures) report.items.push({ ...failure, sourceKey: getWereadSourceKey(failure.sourceType, failure.bookID), status: "failed", reasonText: failure.message, newBookmarkCount: 0, newReviewCount: 0 });
+    for (const failure of importFailures) report.items.push(buildWereadImportFailureReportItem(failure));
     report.failedCount += importFailures.length;
     report.totalSources += importFailures.length;
     if (importFailures.length) report.status = report.successCount ? "partial_success" : "failed";

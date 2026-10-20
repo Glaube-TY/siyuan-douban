@@ -8,6 +8,8 @@ import type {
     WereadSyncReportStatus,
 } from "../../types/syncReport";
 import { appendWereadSyncReport, getWereadSourceKey, upsertReadingBookStatus } from "./readingStorage";
+import { WEREAD_IDENTITY_STAGES, type WereadBookIdentityFailure } from "../weread/api/wereadBookIdentityDiagnostics";
+import type { WereadNewSourceImportFailure } from "../weread/api/handleWereadApiNewSources";
 
 type PluginLike = {
     loadData: (key: string) => Promise<any>;
@@ -23,6 +25,27 @@ export interface BuildSyncReportInput {
     warnings?: string[];
     errors?: string[];
     cancelled?: boolean;
+}
+
+export function classifyWereadBookIdentityFailure(failure: WereadBookIdentityFailure): WereadSyncReportReasonCode {
+    return failure.stage === "isbn.inspect" && ["ISBN_MATCH_MISSING", "ISBN_MISMATCH"].includes(failure.reasonCode)
+        ? "ISBN_MATCH_FAILED" : "BOOK_IDENTITY_LINK_FAILED";
+}
+
+export function buildWereadImportFailureReportItem(
+    failure: WereadNewSourceImportFailure & { title: string; sourceType: "book" | "mp" },
+): WereadSyncReportItem {
+    const { stage, reasonCode: identityReason } = failure.identityFailure || {};
+    const reasonCode = failure.identityFailure ? classifyWereadBookIdentityFailure(failure.identityFailure) : "UNKNOWN_ERROR";
+    const marker = stage ? `[${stage}/${identityReason}]` : "";
+    // The structured fields are authoritative; message text alone cannot establish an identity stage.
+    const reasonText = marker ? `${failure.message.split(marker).join("").trim()} ${marker}`.trim() : failure.message;
+    return {
+        sourceKey: getWereadSourceKey(failure.sourceType, failure.bookID), sourceType: failure.sourceType,
+        bookID: failure.bookID, title: failure.title, status: "failed", reasonCode,
+        reasonText: maskSensitiveText(reasonText), suggestion: getReasonSuggestion(reasonCode),
+        newBookmarkCount: 0, newReviewCount: 0,
+    };
 }
 
 export function buildWereadSyncReport(input: BuildSyncReportInput): WereadSyncReport {
@@ -228,12 +251,14 @@ function getReportStatus(input: {
 function inferReasonCode(message = "", rawStatus = ""): WereadSyncReportReasonCode | undefined {
     if (rawStatus === "success" || /同步成功/.test(message)) return undefined;
     if (rawStatus === "skipped_ignored") return "BOOK_SKIPPED_BY_USER";
+    // Legacy inference only: accept the generator's fixed message + suffix, never arbitrary bracketed text.
+    const legacy = message.match(/^(?:本地书籍状态已发生变化，请重新搜索后再试。|回读验证未通过|The local book state changed\. Search again and try once more\.|Read-back verification failed) \[([a-z_.]+)\/([A-Z][A-Z0-9_]{0,63})\]$/);
+    if (legacy && WEREAD_IDENTITY_STAGES.has(legacy[1])) return classifyWereadBookIdentityFailure({ stage: legacy[1], reasonCode: legacy[2] });
     const text = `${message} ${rawStatus}`;
     if (!text.trim()) return undefined;
     if (/API Key|api key|认证|验证/.test(text)) return "API_KEY_INVALID";
     if (/请求|网络|fetch|HTTP|接口|TLS|timeout|handshake/.test(text)) return "API_REQUEST_FAILED";
     if (/bookID|bookId/.test(text) && /空|missing|缺失/.test(text)) return "BOOK_ID_IS_MISSING";
-    if (/ISBN|isbn/.test(text) && /失败|找不到|未匹配/.test(text)) return "ISBN_MATCH_FAILED";
     if (/目标文档|本地文档|找不到|未找到/.test(text)) return "TARGET_DOC_NOT_FOUND";
     if (/未准备|not_ready|skipped_not_ready|匹配失败/.test(text)) return "TARGET_DOC_NOT_READY";
     if (/写入|块级同步|文档失败/.test(text)) return "WRITE_BLOCK_FAILED";
@@ -255,6 +280,7 @@ function getReasonSuggestion(code?: WereadSyncReportReasonCode): string {
         NEW_SOURCE_NOT_IMPORTED: "请先在新来源确认弹窗中导入该来源。",
         BOOK_ID_IS_MISSING: "请检查缓存数据是否完整，重新拉取有笔记书籍列表。",
         ISBN_MATCH_FAILED: "请补充 ISBN 或使用 BookID 导入。",
+        BOOK_IDENTITY_LINK_FAILED: "书籍身份关联未完成，请检查已有书籍的 ISBN、bookID 和读书笔记绑定。可在书籍管理的‘身份关联’中检查符合条件的记录，请勿反复导入。",
         UNKNOWN_ERROR: "请复制诊断报告并查看控制台日志。",
     };
     return code ? map[code] || "" : "";
@@ -264,7 +290,7 @@ function maskSensitiveText(text: string): string {
     return String(text || "")
         .replace(/(api[_ -]?key["':=\s]+)([A-Za-z0-9._-]{8,})/gi, "$1***")
         .replace(/([?&]key=)([^&\s]+)/gi, "$1***")
-        .replace(/(Authorization["':=\s]+Bearer\s+)([A-Za-z0-9._-]+)/gi, "$1***");
+        .replace(/(Authorization["':=\s]+(?:Bearer|token)\s+)([A-Za-z0-9._-]+)/gi, "$1***");
 }
 
 function formatDateTime(ts?: number): string {

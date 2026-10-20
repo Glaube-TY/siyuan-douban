@@ -60,6 +60,7 @@ export function localizeKnownUiText(source: I18nSource, value: unknown): string 
         "请先在新来源确认弹窗中导入该来源。": ["syncSuggestionNewSource", "请先在新来源确认弹窗中导入该来源。"],
         "请检查缓存数据是否完整，重新拉取有笔记书籍列表。": ["syncSuggestionCache", "请检查缓存数据是否完整，重新拉取有笔记书籍列表。"],
         "请补充 ISBN 或使用 BookID 导入。": ["syncSuggestionIsbn", "请补充 ISBN 或使用 BookID 导入。"],
+        "书籍身份关联未完成，请检查已有书籍的 ISBN、bookID 和读书笔记绑定。可在书籍管理的‘身份关联’中检查符合条件的记录，请勿反复导入。": ["syncSuggestionIdentityLink", "书籍身份关联未完成，请检查已有书籍的 ISBN、bookID 和读书笔记绑定。可在书籍管理的‘身份关联’中检查符合条件的记录，请勿反复导入。"],
         "请复制诊断报告并查看控制台日志。": ["syncSuggestionDiagnostics", "请复制诊断报告并查看控制台日志。"],
     };
     if (exact[text]) return t(source, exact[text][0], exact[text][1]);
@@ -85,7 +86,9 @@ export function localizeKnownUiText(source: I18nSource, value: unknown): string 
 
     const englishUi = t(source, "uiClose", "关闭") !== "关闭";
     if (englishUi && /[\u3400-\u9fff]/.test(text)) {
-        return t(source, "syncTextSeeDiagnostics", "操作详情请查看同步诊断。");
+        // Preserve a displayed diagnostic suffix, without using message text as classification evidence.
+        const marker = text.match(/\[(?:isbn|claim|note)\.[a-z_]+\/[A-Z][A-Z0-9_]{0,63}\]$/)?.[0];
+        return [t(source, "syncTextSeeDiagnostics", "操作详情请查看同步诊断。"), marker].filter(Boolean).join(" ");
     }
     return text;
 }
