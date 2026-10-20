@@ -92,6 +92,72 @@ async function scenarios() {
         assert.deepEqual(persistent(), before);
         assert.equal(saves.length, 0); assert.equal(mutations.length, 0); assert.equal(created.length, 0); assert.equal(writes.length, 0); assert.equal(reports.length, 0);
     }
+    const { buildWereadSyncPlanSkipBreakdown: skipCounts } = load("src/utils/weread/api/wereadApprovedSyncPlan.ts");
+    const skip = (bookID, status) => ({ bookID, status });
+    const syntheticSkips = [skip("same", "skipped_unchanged"), skip("same", "skipped_unchanged"), skip("disabled", "skipped_ignored"), skip("waiting", "skipped_not_ready"), skip("new", "skipped_not_ready"), skip("chosen-ignore", "skipped_ignored"), skip("updating", "skipped_unchanged"), skip("cross", "skipped_mp"), skip("unknown", "unknown"), skip("conflict", "skipped_not_ready"), skip("conflict", "skipped_unchanged")];
+    const syntheticMp = [skip("same", "skipped_unchanged"), skip("same", "skipped_unchanged"), skip("waiting", "skipped_ignored"), skip("mp-waiting", "skipped_not_ready"), skip("new-mp", "skipped_ignored"), skip("cross", "skipped_normal_book")];
+    const newSources = [{ bookID: "new", sourceType: "weread_book" }, { bookID: "new-mp", sourceType: "weread_mp_account" }];
+    const planned = [{ bookID: "chosen-ignore", sourceType: "book", action: "ignore" }, { bookID: "updating", sourceType: "book", action: "update" }];
+    const unchangedInputs = JSON.stringify([syntheticSkips, syntheticMp, newSources, planned]);
+    assert.deepEqual(skipCounts(syntheticSkips, syntheticMp, newSources, planned), { unchanged: 2, notReady: 2, ignored: 2 });
+    assert.equal(JSON.stringify([syntheticSkips, syntheticMp, newSources, planned]), unchangedInputs);
+    assert.deepEqual(skipCounts([skip("odd", "unknown"), skip("odd", "skipped_ignored")], [], [], []), { unchanged: 0, notReady: 0, ignored: 0 });
+    console.log("Skip classification PASS: composite keys, duplicates, cross-type exclusions, new/import/update/ignore exclusions, unknown and conflicting states, read-only inputs");
+
+    // Execute the actual Svelte template/reactive bindings with its SSR compiler, not source-text matches.
+    const componentSource = fs.readFileSync(path.join(root, "src/components/common/WereadSyncPlanConfirmDialog.svelte"), "utf8");
+    const componentJs = require("svelte/compiler").compile(componentSource.replace(/<script lang="ts">([\s\S]*?)<\/script>/, (_, script) => "<script>" + ts.transpileModule(script, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext } }).outputText + "</script>"), { generate: "ssr", filename: "WereadSyncPlanConfirmDialog.svelte" }).js.code;
+    const componentModule = { exports: {} };
+    new Function("require", "module", "exports", ts.transpileModule(componentJs, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS } }).outputText)(name => name === "../../utils/i18n" ? load("src/utils/i18n.ts") : require(name), componentModule, componentModule.exports);
+    const dictionaries = Object.fromEntries(["zh_CN", "en_US"].map(locale => [locale, JSON.parse(fs.readFileSync(path.join(root, "public/i18n/" + locale + ".json"), "utf8"))]));
+    const renderedRows = (payload, locale = "zh_CN") => {
+        const html = componentModule.exports.default.render({ plugin: { i18n: dictionaries[locale] }, payload, onConfirm() {}, onCancel() {} }).html;
+        return new Map([...html.matchAll(/<div class="info-row[^"]*">([\s\S]*?)<\/div>/g)].map(([, row]) => [...row.matchAll(/<span[^>]*>([\s\S]*?)<\/span>/g)].map(([, text]) => text.replace(/<[^>]*>/g, "").trim())));
+    };
+    for (const locale of ["zh_CN", "en_US"]) {
+        const d = dictionaries[locale], payload = { mode: "update", sourceType: "mixed", title: "Synthetic", plannedItems: [{ bookID: "A", title: "A", sourceType: "book", action: "import_isbn" }, { bookID: "B", title: "B", sourceType: "book", action: "update" }, { bookID: "C", title: "C", sourceType: "mp", action: "update" }, { bookID: "D", title: "D", sourceType: "book", action: "ignore" }], skipBreakdown: { unchanged: 2, notReady: 1, ignored: 1 }, skippedCount: 4 };
+        const itemCount = n => d.planItemCount.replace("{count}", n), rows = renderedRows(payload, locale);
+        assert.equal(rows.get(d.planWillSync), itemCount(3)); assert.equal(rows.get(d.planNewImports), itemCount(1)); assert.equal(rows.get(d.planExistingUpdates), itemCount(2)); assert.equal(rows.get(d.planIgnoreSources), itemCount(1));
+        assert.equal(rows.get(d.planSkippedUnchanged), itemCount(2)); assert.equal(rows.get(d.planSkippedNotReady), itemCount(1)); assert.equal(rows.get(d.planSkippedIgnored), itemCount(1)); assert.equal(rows.has(d.planSkipped), false);
+        const zeroRows = renderedRows({ ...payload, skipBreakdown: { unchanged: 0, notReady: 0, ignored: 0 }, skippedCount: 9 }, locale);
+        for (const key of ["planSkipped", "planSkippedUnchanged", "planSkippedNotReady", "planSkippedIgnored"]) assert.equal(zeroRows.has(d[key]), false);
+        const oneRow = renderedRows({ ...payload, skipBreakdown: { unchanged: 0, notReady: 1, ignored: 0 } }, locale);
+        assert.equal(oneRow.has(d.planSkippedUnchanged), false); assert.equal(oneRow.has(d.planSkippedIgnored), false); assert.equal(oneRow.get(d.planSkippedNotReady), itemCount(1));
+        const legacy = renderedRows({ ...payload, skipBreakdown: undefined, skippedCount: 5 }, locale);
+        assert.equal(legacy.get(d.planSkipped), d.planSkippedCount.replace("{count}", "5"));
+        for (const key of ["planSkippedUnchanged", "planSkippedNotReady", "planSkippedIgnored"]) assert.equal(legacy.has(d[key]), false);
+        assert.equal(renderedRows({ ...payload, skipBreakdown: undefined, skippedCount: 0 }, locale).has(d.planSkipped), false);
+    }
+    console.log("Svelte bindings PASS: bilingual import=1/update=2/sync=3 with ignore excluded, each skip category, zero suppression and neutral legacy payload");
+
+    setup(); choice = "ignore"; const ignoreBefore = persistent(); assert.equal((await run()).status, "cancelled"); zero(ignoreBefore);
+    assert.deepEqual(planCalls[0].skipBreakdown, { unchanged: 0, notReady: 0, ignored: 0 }); assert.equal(planCalls[0].skippedCount, 0);
+    assert.equal(renderedRows(planCalls[0]).get(dictionaries.zh_CN.planWillSync), "0 项"); assert.equal(renderedRows(planCalls[0]).get(dictionaries.zh_CN.planIgnoreSources), "1 项");
+    setup(); const singleBefore = persistent(); assert.equal((await run()).status, "cancelled"); zero(singleBefore);
+    assert.equal(renderedRows(planCalls[0]).get(dictionaries.zh_CN.planNewImports), "1 项"); assert.equal(renderedRows(planCalls[0]).get(dictionaries.zh_CN.planExistingUpdates), "0 项");
+    assert.deepEqual(planCalls[0].skipBreakdown, { unchanged: 0, notReady: 0, ignored: 0 });
+
+    setup();
+    const planHash = load("src/utils/weread/incremental/hash.ts").hashText;
+    storage.weread_notebooks = []; storage.weread_note_unit_block_index_v1 = { schemaVersion: 1, sources: {} };
+    for (const id of ["stable-one", "stable-two"]) {
+        row(id, "", "doc-" + id, id); const book = source(id, "", id); rawNotebooks.books.push(book); storage.weread_notebooks.push({ ...book, blockID: "doc-" + id });
+        storage.weread_note_unit_block_index_v1.sources["book:" + id] = { docBlockID: "doc-" + id, positionMarkBlockID: "mark-" + id, templateHash: planHash("template"), items: { note: { blockIds: ["note-" + id] } } };
+        children.set("doc-" + id, [{ id: "mark-" + id }, { id: "note-" + id }]);
+    }
+    row("disabled-old", "", "doc-disabled", "disabled-old"); rawNotebooks.books.push(source("disabled-old", "", "disabled-old")); storage.weread_ignoredBooks = [{ bookID: "disabled-old", title: "disabled-old" }];
+    const skipBefore = persistent(); assert.equal((await run()).status, "cancelled"); zero(skipBefore);
+    assert.deepEqual(planCalls[0].skipBreakdown, { unchanged: 2, notReady: 0, ignored: 1 }); assert.equal(planCalls[0].skippedCount, 3);
+
+    setup(); row("B", ISBN_B, "doc-b", "B");
+    const normalPlanner = load("src/utils/weread/api/syncWereadApiNormalBooks.ts"), originalPlanner = normalPlanner.planWereadApiNormalBooks;
+    // A temporary read-side loss after new-source inspection makes an existing source not ready.
+    normalPlanner.planWereadApiNormalBooks = async (...args) => { docs.delete("doc-b"); try { return await originalPlanner(...args); } finally { docs.add("doc-b"); } };
+    const notReadyBefore = persistent();
+    try { assert.equal((await run()).status, "cancelled"); zero(notReadyBefore); assert.deepEqual(planCalls[0].skipBreakdown, { unchanged: 0, notReady: 1, ignored: 0 }); assert.equal(planCalls[0].skippedCount, 1); }
+    finally { normalPlanner.planWereadApiNormalBooks = originalPlanner; }
+    console.log("Task payload PASS: new import/ignore never double-count preflight skips; historical unchanged/ignored and existing not-ready are included; cancellation writes zero");
+
     setup(); const initial = persistent();
     assert.equal((await run()).status, "cancelled", JSON.stringify(messages)); zero(initial);
     assert.deepEqual((await detect(plugin)).newSources.map(book => book.bookID), ["A", "B"]); zero(initial);
@@ -223,6 +289,9 @@ async function scenarios() {
         rawNotebooks.books.push(source("Z", "", "Z"));
         const before = persistent(); const output = await run();
         const plan = planCalls[0];
+        assert.deepEqual(plan.skipBreakdown, { unchanged: 0, notReady: 0, ignored: 0 }); assert.equal(plan.skippedCount, 0);
+        const display = renderedRows(plan);
+        assert.equal(display.get(dictionaries.zh_CN.planWillSync), "3 项"); assert.equal(display.get(dictionaries.zh_CN.planNewImports), "1 项"); assert.equal(display.get(dictionaries.zh_CN.planExistingUpdates), "2 项");
         assert.equal(plan.plannedItems.filter(item => item.action.startsWith("import_")).length, 1);
         assert.equal(plan.plannedItems.filter(item => item.action === "update").length, 2);
         assert.deepEqual(plan.plannedItems.filter(item => item.action.startsWith("import_")).map(item => item.bookID), ["A"]);

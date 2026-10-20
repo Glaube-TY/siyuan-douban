@@ -44,10 +44,20 @@
       <div class="info-row"><span class="info-label">{tx("planExistingUpdates", "已有来源更新：")}</span><span class="info-value">{tx("planItemCount", "{count} 项", { count: updateCount })}</span></div>
       {#if ignoreCount}<div class="info-row"><span class="info-label">{tx("planIgnoreSources", "确认后忽略：")}</span><span class="info-value">{tx("planItemCount", "{count} 项", { count: ignoreCount })}</span></div>{/if}
     {/if}
-    {#if payload.skippedCount && payload.skippedCount > 0}
+    {#if payload.skipBreakdown}
+      {#if payload.skipBreakdown.unchanged > 0}
+        <div class="info-row"><span class="info-label">{tx("planSkippedUnchanged", "无变化：")}</span><span class="info-value skipped">{tx("planItemCount", "{count} 项", { count: payload.skipBreakdown.unchanged })}</span></div>
+      {/if}
+      {#if payload.skipBreakdown.notReady > 0}
+        <div class="info-row"><span class="info-label">{tx("planSkippedNotReady", "未就绪：")}</span><span class="info-value skipped">{tx("planItemCount", "{count} 项", { count: payload.skipBreakdown.notReady })}</span></div>
+      {/if}
+      {#if payload.skipBreakdown.ignored > 0}
+        <div class="info-row"><span class="info-label">{tx("planSkippedIgnored", "已停止同步：")}</span><span class="info-value skipped">{tx("planItemCount", "{count} 项", { count: payload.skipBreakdown.ignored })}</span></div>
+      {/if}
+    {:else if payload.skippedCount && payload.skippedCount > 0}
       <div class="info-row">
         <span class="info-label">{tx("planSkipped", "跳过：")}</span>
-        <span class="info-value skipped">{tx("planSkippedCount", "{count} 项（无变化或未就绪）", { count: payload.skippedCount })}</span>
+        <span class="info-value skipped">{tx("planSkippedCount", "{count} 项", { count: payload.skippedCount })}</span>
       </div>
     {/if}
   </div>

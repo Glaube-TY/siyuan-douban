@@ -12,7 +12,7 @@ import { mergeWereadNotebookLocalMetadata } from "./mergeWereadNotebookLocalMeta
 import { commitWereadNewSources, showWereadApiNewSourcesDialogAndSync, type WereadNewSourceImportFailure, type WereadPendingSyncDraft, type WereadSyncOutcome } from "./handleWereadApiNewSources";
 import { planWereadApiNormalBooks, syncWereadApiNormalBooks, type WereadApiNormalBooksSyncResult } from "./syncWereadApiNormalBooks";
 import { planWereadApiMpAccounts, syncWereadApiMpAccounts, type WereadApiMpAccountsSyncResult } from "./syncWereadApiMpAccounts";
-import { wereadSourceKey, type WereadApprovedSyncPlan, type WereadApprovedSyncItem } from "./wereadApprovedSyncPlan";
+import { buildWereadSyncPlanSkipBreakdown, wereadSourceKey, type WereadApprovedSyncPlan, type WereadApprovedSyncItem } from "./wereadApprovedSyncPlan";
 import { findWereadApiBookTargetDoc } from "./findWereadApiBookTargetDoc";
 import { confirmWereadSyncPlan } from "./confirmWereadSyncPlan";
 import type { WereadSyncPlanConfirmCallback, WereadSyncPlanItem, WereadSyncProgressCallback } from "./wereadSyncProgress";
@@ -134,8 +134,9 @@ export async function runWereadApiSyncTask(
         return JSON.stringify({ avID, columns: database.av.keyValues.filter((column: any) => column.key?.type === "block" || ["ISBN", "bookID"].includes(column.key?.name)).map((column: any) => column.key), rows: relevant.map(({ titleValue, ...row }) => row), bindings: Array.from(bindings.entries()) });
       }
       const identityBefore = await identitySnapshot();
+      const skipBreakdown = buildWereadSyncPlanSkipBreakdown(normalPlan.items, mpPlan?.items || [], draft.allNewSources, unique);
       const payload = { mode, sourceType: "mixed" as const, title: t(plugin, "planTitle", "确认微信读书同步"), plannedItems: unique,
-        skippedCount: normalPlan.skippedUnchanged + (mpPlan?.skippedUnchanged || 0) };
+        skipBreakdown, skippedCount: skipBreakdown.unchanged + skipBreakdown.notReady + skipBreakdown.ignored };
       if (!unique.length) return "no_work";
       const confirmed = options.trigger === "auto" && !draft.interacted ? true
         : await (options.confirmPlan || (plan => confirmWereadSyncPlan(plugin, plan)))(structuredClone(payload));

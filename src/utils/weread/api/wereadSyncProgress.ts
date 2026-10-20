@@ -158,6 +158,11 @@ export interface WereadSyncPlanConfirmPayload {
   title: string;
   plannedItems: WereadSyncPlanItem[];
   skippedCount?: number;
+  skipBreakdown?: {
+    unchanged: number;
+    notReady: number;
+    ignored: number;
+  };
 }
 
 export type WereadSyncProgressCallback = (event: WereadSyncProgressEvent) => void;
