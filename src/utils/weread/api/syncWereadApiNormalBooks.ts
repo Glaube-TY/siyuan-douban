@@ -336,16 +336,20 @@ export async function syncWereadApiNormalBooks(
   }
 ): Promise<WereadApiNormalBooksSyncResult> {
   const { cache, preflight, readyMap, oldNotebooks, items, plannedItems, notReadyItems, skippedUnchangedItems, ignoredItems, skippedUnchanged, forceBookIDSet, ignoredDetailMessage, mpItems } = await planWereadApiNormalBooks(plugin, template, options);
-  restrictWereadSyncPlan(plannedItems, readyMap, "book", options.approvedPlan, plugin);
+  const unavailable = restrictWereadSyncPlan(plannedItems, readyMap, "book", items, options.approvedPlan, plugin);
   if (options.approvedPlan) {
     const allowed = new Set(options.approvedPlan.items.filter(item => item.sourceType === "book").map(item => item.bookID));
     for (let i = items.length - 1; i >= 0; i--) if (!allowed.has(items[i].bookID)) items.splice(i, 1);
   }
-  let success = 0, failed = 0;
+  let success = 0, failed = unavailable.length;
   const successBookIDs: string[] = [];
+  const plannedCount = plannedItems.length + unavailable.length;
+  const unavailableIDs = new Set(unavailable.map(item => item.bookID));
+  for (const item of unavailable) options.onProgress?.({ stage: "item_failed", sourceType: "book", bookID: item.bookID, title: item.title, message: item.message, status: "failed" });
   const wereadPositionMark = normalizeWereadPositionMark(await plugin.loadData("weread_position_mark"));
 
   for (const skipped of [...notReadyItems, ...skippedUnchangedItems]) {
+    if (unavailableIDs.has(skipped.bookID)) continue;
     options.onProgress?.({
       stage: "item_skipped",
       sourceType: "book",
@@ -357,6 +361,7 @@ export async function syncWereadApiNormalBooks(
   }
 
   for (const ignored of ignoredItems) {
+    if (unavailableIDs.has(ignored.bookID)) continue;
     options.onProgress?.({
       stage: "item_skipped",
       sourceType: "book",
@@ -367,7 +372,7 @@ export async function syncWereadApiNormalBooks(
     });
   }
 
-  const skippedNotReadyCount = notReadyItems.filter((i) => !forceBookIDSet.has(i.bookID) || !readyMap.has(i.bookID)).length;
+  const skippedNotReadyCount = notReadyItems.filter((i) => !unavailableIDs.has(i.bookID) && (!forceBookIDSet.has(i.bookID) || !readyMap.has(i.bookID))).length;
 
   options.onProgress?.({
     stage: "planning",
@@ -383,16 +388,16 @@ export async function syncWereadApiNormalBooks(
       options.onProgress({
         stage: "finished",
         sourceType: "book",
-        total: 0,
-        message: "普通书没有需要同步的内容",
-        status: "success",
+        total: plannedCount,
+        message: failed ? t(plugin, "wereadSyncFinishedWithError", "微信读书同步完成，部分内容失败") : "普通书没有需要同步的内容",
+        status: failed ? "failed" : "success",
       });
     }
     return {
       total: cache.length,
-      planned: 0,
+      planned: plannedCount,
       success: 0,
-      failed: 0,
+      failed,
       skippedMp: mpItems.length,
       skippedIgnored: ignoredItems.length,
       skippedNotReady: skippedNotReadyCount,
@@ -736,15 +741,15 @@ export async function syncWereadApiNormalBooks(
     options.onProgress({
       stage: "finished",
       sourceType: "book",
-      total: plannedItems.length,
-      message: `普通书籍同步完成：成功 ${success}，失败 ${failed}，计划 ${plannedItems.length}`,
-      status: success > 0 ? "success" : "failed",
+      total: plannedCount,
+      message: `普通书籍同步完成：成功 ${success}，失败 ${failed}，计划 ${plannedCount}`,
+      status: failed ? "failed" : "success",
     });
   }
 
   return {
     total: cache.length,
-    planned: plannedItems.length,
+    planned: plannedCount,
     success,
     failed,
     skippedMp: mpItems.length,

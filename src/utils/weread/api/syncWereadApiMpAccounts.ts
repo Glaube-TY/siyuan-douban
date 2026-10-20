@@ -309,16 +309,20 @@ export async function syncWereadApiMpAccounts(
     options: { mode: "all" | "update"; forceBookIDs?: string[]; onProgress?: WereadSyncProgressCallback; confirmPlan?: WereadSyncPlanConfirmCallback; approvedPlan?: WereadApprovedSyncPlan }
 ): Promise<WereadApiMpAccountsSyncResult> {
     const { cache, preflight, readyMap, oldNotebooks, items, plannedItems, notReadyItems, skippedUnchangedItems, ignoredItems, skippedUnchanged, forceBookIDSet, ignoredDetailMessage, normalBookItems } = await planWereadApiMpAccounts(plugin, mpTemplate, options);
-    restrictWereadSyncPlan(plannedItems, readyMap, "mp", options.approvedPlan, plugin);
+    const unavailable = restrictWereadSyncPlan(plannedItems, readyMap, "mp", items, options.approvedPlan, plugin);
     if (options.approvedPlan) {
         const allowed = new Set(options.approvedPlan.items.filter(item => item.sourceType === "mp").map(item => item.bookID));
         for (let i = items.length - 1; i >= 0; i--) if (!allowed.has(items[i].bookID)) items.splice(i, 1);
     }
-    let success = 0, failed = 0;
+    let success = 0, failed = unavailable.length;
     const successBookIDs: string[] = [];
+    const plannedCount = plannedItems.length + unavailable.length;
+    const unavailableIDs = new Set(unavailable.map(item => item.bookID));
+    for (const item of unavailable) options.onProgress?.({ stage: "item_failed", sourceType: "mp", bookID: item.bookID, title: item.title, message: item.message, status: "failed" });
     const wereadPositionMark = normalizeWereadPositionMark(await plugin.loadData("weread_position_mark"));
 
     for (const item of notReadyItems) {
+      if (unavailableIDs.has(item.bookID)) continue;
       if (forceBookIDSet.has(item.bookID) && readyMap.has(item.bookID)) continue;
       options.onProgress?.({
         stage: "item_skipped",
@@ -331,6 +335,7 @@ export async function syncWereadApiMpAccounts(
     }
 
     for (const item of skippedUnchangedItems) {
+      if (unavailableIDs.has(item.bookID)) continue;
       options.onProgress?.({
         stage: "item_skipped",
         sourceType: "mp",
@@ -342,6 +347,7 @@ export async function syncWereadApiMpAccounts(
     }
 
     for (const ignored of ignoredItems) {
+      if (unavailableIDs.has(ignored.bookID)) continue;
       options.onProgress?.({
         stage: "item_skipped",
         sourceType: "mp",
@@ -352,7 +358,7 @@ export async function syncWereadApiMpAccounts(
       });
     }
 
-    const skippedNotReadyCount = notReadyItems.filter((i) => !forceBookIDSet.has(i.bookID) || !readyMap.has(i.bookID)).length;
+    const skippedNotReadyCount = notReadyItems.filter((i) => !unavailableIDs.has(i.bookID) && (!forceBookIDSet.has(i.bookID) || !readyMap.has(i.bookID))).length;
 
     options.onProgress?.({
       stage: "planning",
@@ -368,16 +374,16 @@ export async function syncWereadApiMpAccounts(
         options.onProgress({
           stage: "finished",
           sourceType: "mp",
-          total: 0,
-          message: "公众号没有需要同步的内容",
-          status: "success",
+          total: plannedCount,
+          message: failed ? t(plugin, "wereadSyncFinishedWithError", "微信读书同步完成，部分内容失败") : "公众号没有需要同步的内容",
+          status: failed ? "failed" : "success",
         });
       }
       return {
         total: cache.length,
-        planned: 0,
+        planned: plannedCount,
         success: 0,
-        failed: 0,
+        failed,
         skippedNormalBook: normalBookItems.length,
         skippedIgnored: ignoredItems.length,
         skippedNotReady: skippedNotReadyCount,
@@ -727,15 +733,15 @@ export async function syncWereadApiMpAccounts(
       options.onProgress({
         stage: "finished",
         sourceType: "mp",
-        total: plannedItems.length,
-        message: `公众号同步完成：成功 ${success}，失败 ${failed}，计划 ${plannedItems.length}`,
-        status: success > 0 ? "success" : "failed",
+        total: plannedCount,
+        message: `公众号同步完成：成功 ${success}，失败 ${failed}，计划 ${plannedCount}`,
+        status: failed ? "failed" : "success",
       });
     }
 
     return {
         total: cache.length,
-        planned: plannedItems.length,
+        planned: plannedCount,
         success,
         failed,
         skippedNormalBook: normalBookItems.length,

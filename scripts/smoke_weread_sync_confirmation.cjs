@@ -199,6 +199,102 @@ async function scenarios() {
     assert.equal((await run()).status, "failed"); assert.equal(writes.length, 0);
     console.log("Execution scope PASS: a rescan cannot add unapproved Y or write a changed MP target");
 
+    for (const disappear of [false, true]) {
+        setup(); selectedIDs = []; decision = true;
+        row("A", ISBN_A, "doc-a", "A"); row("B", ISBN_B, "doc-b", "B");
+        afterApproval = () => {
+            if (disappear) storage.temporary_weread_notebooksList = storage.temporary_weread_notebooksList.filter(book => book.bookID !== "B");
+            else docs.delete("doc-b");
+        };
+        const output = await run();
+        assert.equal(output.status, "failed", "An approved source that becomes unavailable must not report full success");
+        assert.equal(output.totalSuccess, 1); assert.equal(output.totalFailed, 1);
+        assert.deepEqual(writes.map(item => item.bookID), ["A"]);
+        assert.equal(output.normalResult.items.filter(item => item.bookID === "B").length, 1);
+        assert.equal(output.normalResult.items.find(item => item.bookID === "B").status, "failed");
+        assert(reports[0].items.some(item => item.bookID === "B" && item.status === "failed" && item.reasonText));
+        assert.equal(reports[0].status, "partial_success");
+    }
+    console.log("Approved result completeness PASS: not-ready and missing sources remain explicit failures while ready sources continue");
+
+    for (const approve of [false, true]) {
+        setup(); decision = approve;
+        row("B", ISBN_B, "doc-b", "B"); row("Z", "", "doc-z", "Z");
+        rawNotebooks.books.push(source("Z", "", "Z"));
+        const before = persistent(); const output = await run();
+        const plan = planCalls[0];
+        assert.equal(plan.plannedItems.filter(item => item.action.startsWith("import_")).length, 1);
+        assert.equal(plan.plannedItems.filter(item => item.action === "update").length, 2);
+        assert.deepEqual(plan.plannedItems.filter(item => item.action.startsWith("import_")).map(item => item.bookID), ["A"]);
+        if (!approve) { assert.equal(output.status, "cancelled"); zero(before); }
+        else {
+            assert.equal(output.status, "completed"); assert.equal(output.totalSuccess, 3);
+            assert.deepEqual(new Set(writes.map(item => item.bookID)), new Set(["A", "B", "Z"]));
+        }
+    }
+    console.log("Mixed plan PASS: one selected new book plus two existing updates stays import=1/update=2, one final approval, cancellation has zero writes");
+
+    for (const kind of ["book", "mp"]) for (const change of ["ready", "missing", "not-ready", "target", "all-not-ready", "unchanged"]) {
+        setup(); selectedIDs = []; decision = true;
+        const ids = kind === "book" ? ["A", "B"] : ["MP_WXS_A", "MP_WXS_B"];
+        const docIDs = ["doc-approved-a", "doc-approved-b"];
+        if (kind === "mp") {
+            storage.weread_mp_templates = "mp-template";
+            rawNotebooks.books = ids.map(id => ({ ...source(id, "", id), sourceType: "weread_mp_account" }));
+        }
+        ids.forEach((id, i) => row(id, kind === "book" ? [ISBN_A, ISBN_B][i] : "", docIDs[i], id));
+        afterApproval = () => {
+            if (change === "missing") storage.temporary_weread_notebooksList = storage.temporary_weread_notebooksList.filter(book => book.bookID !== ids[1]);
+            if (change === "not-ready" || change === "all-not-ready") docs.delete(docIDs[1]);
+            if (change === "all-not-ready") docs.delete(docIDs[0]);
+            if (change === "target") {
+                docs.add("changed-target");
+                keyValues[0].values.find(cell => cell.blockID === docIDs[1]).block.id = "changed-target";
+            }
+            if (change === "unchanged") {
+                storage.weread_notebooks = rawNotebooks.books.map((book, i) => ({ ...book, blockID: docIDs[i] }));
+                storage.weread_note_unit_block_index_v1 = { schemaVersion: 1, sources: Object.fromEntries(ids.map((id, i) => {
+                    children.set(docIDs[i], [{ id: "mark-" + id }, { id: "note-" + id }]);
+                    return [kind + ":" + id, { docBlockID: docIDs[i], positionMarkBlockID: "mark-" + id, templateHash: hash(kind === "book" ? "template" : "mp-template"), items: { note: { blockIds: ["note-" + id] } } }];
+                })) };
+            }
+        };
+        const output = await run();
+        const result = kind === "book" ? output.normalResult : output.mpResult;
+        assert.equal(planCalls.length, 1); assert.equal(planCalls[0].plannedItems.length, 2);
+        assert.equal(result.items.length, 2, "Every approved source must have exactly one final result");
+        assert.deepEqual(new Set(result.items.map(item => item.bookID)), new Set(ids));
+        if (change === "ready") {
+            assert.equal(output.status, "completed"); assert.equal(output.totalSuccess, 2); assert.equal(output.totalFailed, 0);
+            assert.deepEqual(new Set(writes.map(item => item.bookID)), new Set(ids));
+        } else if (change === "unchanged") {
+            assert.equal(output.status, "completed"); assert.equal(output.totalFailed, 0);
+            assert.equal(writes.length, 0); assert(result.items.every(item => item.status === "skipped_unchanged"));
+        } else {
+            const count = change === "all-not-ready" ? 2 : 1;
+            assert.equal(output.status, "failed"); assert.equal(output.totalFailed, count);
+            assert.equal(output.totalSuccess, 2 - count); assert.equal(output.totalPlanned, 2);
+            assert.equal(writes.length, 2 - count); assert(writes.every(item => item.bookID === ids[0] && item.docBlockID === docIDs[0]));
+            assert.equal(result.items.filter(item => item.status === "failed").length, count);
+            assert.equal(result.skippedNotReady, 0, "Approved failures must not also count as skipped");
+            assert(reports[0].items.filter(item => item.status === "failed").every(item => item.reasonText.includes("[plan.execution/")));
+            assert.equal(reports[0].status, count === 2 ? "failed" : "partial_success");
+        }
+    }
+    console.log("Approved A/B/F PASS: books and MP retain ready, missing, not-ready, changed-target and unchanged outcomes, including all-unavailable batches");
+
+    setup(); decision = true;
+    row("B", ISBN_B, "doc-b", "B"); row("Z", "", "doc-z", "Z");
+    rawNotebooks.books.push(source("Z", "", "Z"));
+    afterRender = () => { throw new Error("Fixture new import failure"); };
+    const mixedFailure = await run();
+    assert.equal(mixedFailure.status, "failed"); assert.equal(mixedFailure.totalFailed, 1); assert.equal(mixedFailure.totalSuccess, 2);
+    assert.deepEqual(new Set(writes.map(item => item.bookID)), new Set(["B", "Z"]));
+    assert.equal(storage.temporary_weread_notebooksList.find(book => book.bookID === "A").pendingImport, true);
+    assert(reports[0].items.some(item => item.bookID === "A" && item.status === "failed"));
+    assert.equal(reports[0].status, "partial_success");
+    console.log("Approved E PASS: failed new import stays pending while two existing approved books update safely");
+
     setup(); selectedIDs = ["A", "B"]; choice = "bookID"; decision = true; bookInfos.delete("A");
     await assert.rejects(run()); assert.equal(saves.length, 0); assert.equal(mutations.length, 0);
     setup(); selectedIDs = ["A", "B"]; choice = "bookID"; decision = true;
