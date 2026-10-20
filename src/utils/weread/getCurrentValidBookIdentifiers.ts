@@ -2,7 +2,7 @@ import { sql, getAttributeView, removeAttributeViewBlocks } from "@/api";
 import { getAttributeViewValueText } from "../bookHandling/bookDeduplication";
 import { findBookPrimaryKeyValue } from "../bookHandling/bookDatabasePrimaryKey";
 
-export async function getCurrentValidBookIdentifiers(plugin: any): Promise<{
+export async function getCurrentValidBookIdentifiers(plugin: any, options?: { cleanupOrphans?: boolean }): Promise<{
     validISBNs: Set<string>;
     validBookIDs: Set<string>;
     validBookNames: Set<string>;
@@ -55,7 +55,12 @@ export async function getCurrentValidBookIdentifiers(plugin: any): Promise<{
             ]),
         );
 
-        if (blockIDsToRemove.length > 0) {
+        if (options?.cleanupOrphans === false) {
+            const primaryRowIDs = new Set(bookNameColumn.map((item: any) => item.blockID || item.itemID));
+            ISBNColumn = ISBNColumn.filter((item: any) => primaryRowIDs.has(item.blockID || item.itemID));
+            bookIDColumn = bookIDColumn.filter((item: any) => primaryRowIDs.has(item.blockID || item.itemID));
+        }
+        if (blockIDsToRemove.length > 0 && options?.cleanupOrphans !== false) {
             await removeAttributeViewBlocks(avID, blockIDsToRemove);
             database = await getAttributeView(avID);
             avData = database?.av || {};

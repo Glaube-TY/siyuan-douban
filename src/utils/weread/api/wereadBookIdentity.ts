@@ -48,6 +48,7 @@ export async function claimWereadBookIDOnExistingRow(
     avID: string,
     expectedRow: BookIdentityRow,
     target: { bookID: string; isbn: string },
+    options?: { existingColumnID: string; beforeWrite: () => Promise<void> },
 ): Promise<void> {
     const bookID = String(target.bookID || "").trim();
     const isbn = normalizeISBN(target.isbn);
@@ -90,7 +91,8 @@ export async function claimWereadBookIDOnExistingRow(
         if (binding.state !== "missing") throw fail("claim.document", "DOCUMENT_BINDING_INVALID", row);
         if (attempt === WEREAD_IDENTITY_READBACK_DELAYS.length - 1) throw fail("claim.document", "DOCUMENT_INDEX_NOT_VISIBLE", row, { attempts: attempt + 1, documentBound: false });
     }
-    let claimColumnID = "";
+    if (options && !database.av.keyValues.some((kv: any) => kv.key?.name === "bookID" && kv.key.id === options.existingColumnID && kv.key.type === "text")) throw fail("claim.before_write", "BOOKID_COLUMN_CHANGED");
+    let claimColumnID = options?.existingColumnID || "";
     if (!database.av.keyValues.some((kv: any) => kv.key?.name === "bookID")) {
         // Add only the identity column; preserve the primary key and all user metadata.
         claimColumnID = generateUniqueBlocked();
@@ -125,7 +127,7 @@ export async function claimWereadBookIDOnExistingRow(
     }
 
     // Retry only visibility of this successful column creation; never submit the creation twice.
-    const createdColumn = !!claimColumnID;
+    const createdColumn = !!claimColumnID && !options;
     let beforeWrite: Awaited<ReturnType<typeof readClaimState>>;
     for (const [attempt, delay] of WEREAD_IDENTITY_READBACK_DELAYS.entries()) {
         if (delay) await new Promise(resolve => setTimeout(resolve, delay));
@@ -137,6 +139,8 @@ export async function claimWereadBookIDOnExistingRow(
     const { current, column, cells } = beforeWrite!;
     claimColumnID = column.key.id;
 
+    // Manual identity repair revalidates source history and AV binding at the write boundary.
+    if (options) await options.beforeWrite();
     try {
         await setAttributeViewBlockAttrStrict({
             avID,

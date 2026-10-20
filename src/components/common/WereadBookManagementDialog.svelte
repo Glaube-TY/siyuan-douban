@@ -6,9 +6,10 @@
     import wereadIgnoredBooksDialog from "./wereadIgnoredBooksDialog.svelte";
     import wereadUseBookIDBooksDialog from "./wereadUseBookIDBooksDialog.svelte";
     import WereadSyncedDataDialog from "./WereadSyncedDataDialog.svelte";
+    import WereadBookIDRepairPanel from "./WereadBookIDRepairPanel.svelte";
     import { t } from "../../utils/i18n";
 
-    type TabKey = "synced" | "ignored" | "isbn" | "bookid";
+    type TabKey = "synced" | "ignored" | "isbn" | "bookid" | "repair";
 
     export let plugin: any;
     export let onConfirm: () => void;
@@ -33,6 +34,7 @@
         { key: "ignored" as TabKey, label: tx("managementIgnored", "忽略书籍") },
         { key: "isbn" as TabKey, label: tx("managementCustomIsbn", "自定义 ISBN") },
         { key: "bookid" as TabKey, label: tx("managementBookId", "bookID 同步") },
+        { key: "repair" as TabKey, label: tx("wereadRepairTab", "身份关联") },
     ];
 
     onMount(async () => {
@@ -40,10 +42,10 @@
             const [synced, ignored, customISBN, useBookID, temporary, identifiers] = await Promise.all([
                 plugin.loadData("weread_notebooks"),
                 loadIgnoredBooks(plugin),
-                loadCustomISBNBooksWithMigration(plugin),
+                loadCustomISBNBooksWithMigration(plugin, { migrate: false }),
                 plugin.loadData("weread_useBookIDBooks"),
                 plugin.loadData("temporary_weread_notebooksList"),
-                getCurrentValidBookIdentifiers(plugin),
+                getCurrentValidBookIdentifiers(plugin, { cleanupOrphans: false }),
             ]);
             syncedRecords = Array.isArray(synced) ? synced : [];
             customISBNBooks = Array.isArray(customISBN) ? customISBN : [];
@@ -68,6 +70,7 @@
             <button
                 class="management-tab"
                 class:active={activeTab === tab.key}
+                aria-pressed={activeTab === tab.key}
                 on:click={() => (activeTab = tab.key)}
             >
                 {tab.label}
@@ -76,7 +79,9 @@
     </div>
 
     <div class="management-body">
-        {#if isLoading}
+        {#if activeTab === "repair"}
+            <WereadBookIDRepairPanel {plugin} />
+        {:else if isLoading}
             <div class="management-empty">{tx("uiLoading", "加载中...")}</div>
         {:else if loadError}
             <div class="management-empty" role="alert">{loadError}</div>
@@ -145,6 +150,7 @@
 
     .management-tabs {
         display: flex;
+        flex-wrap: wrap;
         gap: 4px;
         padding: 12px 16px 0;
         border-bottom: 1px solid var(--b3-border-color);
@@ -160,6 +166,11 @@
         font-size: 13px;
         cursor: pointer;
         transition: color 0.15s ease, border-color 0.15s ease;
+    }
+
+    .management-tab:focus-visible {
+        outline: 2px solid var(--b3-theme-primary);
+        outline-offset: -2px;
     }
 
     .management-tab:hover {
