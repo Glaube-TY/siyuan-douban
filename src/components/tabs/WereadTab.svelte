@@ -469,7 +469,12 @@
     }
 
     async function createIgnoredBooksDialog() {
-        const ignoredBooks = await loadIgnoredBooks(plugin);
+        let ignoredBooks;
+        try { ignoredBooks = await loadIgnoredBooks(plugin); }
+        catch {
+            showMessage(i18nText("wereadManagementLoadFailed", "无法加载微信读书管理数据，请检查存储后重试。"));
+            return;
+        }
 
         if (ignoredBooks.length == 0) {
             showMessage(i18n.showMessage13);

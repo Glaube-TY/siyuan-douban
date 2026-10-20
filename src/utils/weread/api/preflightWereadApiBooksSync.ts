@@ -43,6 +43,7 @@ export async function preflightWereadApiBooksSync(plugin: WereadPluginLike): Pro
     message: string;
   }>;
 }> {
+  const ignoredBookIDs = getIgnoredBookIDSet(await loadIgnoredBooks(plugin));
   const cache = await plugin.loadData("temporary_weread_notebooksList");
 
   if (!Array.isArray(cache) || cache.length === 0) {
@@ -77,7 +78,6 @@ export async function preflightWereadApiBooksSync(plugin: WereadPluginLike): Pro
   let skippedMp = 0;
   let skippedIgnored = 0;
   let failed = 0;
-  const ignoredBookIDs = getIgnoredBookIDSet(await loadIgnoredBooks(plugin));
   const ignoredMessage = plugin.i18n.syncSkippedIgnored || "已设置为停止同步，跳过检测";
 
   for (const book of cache) {

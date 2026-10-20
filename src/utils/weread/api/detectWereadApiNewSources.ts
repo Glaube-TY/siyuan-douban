@@ -29,6 +29,7 @@ export async function detectWereadApiNewSources(plugin: WereadPluginLike): Promi
   normalBooks: WereadApiNewSourceItem[];
   mpAccounts: WereadApiNewSourceItem[];
 }> {
+  const ignoredBooks = await loadIgnoredBooks(plugin);
   const notebooksList = await plugin.loadData("temporary_weread_notebooksList");
   if (!Array.isArray(notebooksList) || notebooksList.length === 0) {
     return { newSources: [], normalBooks: [], mpAccounts: [] };
@@ -52,7 +53,6 @@ export async function detectWereadApiNewSources(plugin: WereadPluginLike): Promi
   const validBookIDsInDB = new Set(rows.map(row => row.bookID).filter(Boolean));
   const bindings = await validateNoteDocumentBindings(rows.map(row => row.docBlockID));
 
-  const ignoredBooks = await loadIgnoredBooks(plugin);
   const syncedNotebooks = await loadWereadSyncedNotebooks(plugin);
   const syncedBookIDSet = new Set<string>(
     syncedNotebooks

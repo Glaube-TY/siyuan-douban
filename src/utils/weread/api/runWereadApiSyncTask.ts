@@ -1,10 +1,12 @@
+import { loadPluginStorageJsonStateStrict } from "../../storage/pluginStorageStrict";
+import { wereadStorageFingerprint } from "../wereadStorageWriteGuard";
 import { getAttributeView, sql } from "@/api";
 import { buildBookIdentityRows, normalizeBookTitle } from "../../bookHandling/bookDeduplication";
 import { isValidISBN, normalizeISBN } from "../../bookHandling/isbn";
 import { validateNoteDocumentBindings } from "../../readingManagement/noteDocumentBinding";
 import { loadWereadAuthState } from "../../settings/wereadSettingsService";
 import { buildWereadImportFailureReportItem, buildWereadSyncReport, saveWereadSyncReportAndApplyStatus } from "../../storage/syncReportBuilder";
-import { loadCustomISBNBooksWithMigration, loadIgnoredBooks } from "../wereadSyncStorage";
+import { loadCustomISBNBooksWithMigration, loadIgnoredBooksStateStrict, mergeIgnoredBooks } from "../wereadSyncStorage";
 import { t } from "../../i18n";
 import { buildWereadApiNotebookCache } from "./buildWereadApiNotebookCache";
 import { buildWereadApiDatabaseBookDetail } from "./buildWereadApiDatabaseBookDetail";
@@ -80,13 +82,16 @@ export async function runWereadApiSyncTask(
 
     async function runDraft(draft: WereadPendingSyncDraft): Promise<WereadSyncOutcome> {
       const newKeys = new Set(draft.allNewSources.map(wereadSourceKey));
-      const ignored = [...await loadIgnoredBooks(plugin), ...draft.ignoredBooks];
+      const ignoredState = await loadIgnoredBooksStateStrict(plugin);
+      const ignored = mergeIgnoredBooks(ignoredState.exists ? ignoredState.value as any[] : [], draft.ignoredBooks);
       // A memory view lets existing planners read the fresh snapshot without saving it.
       const planningPlugin = {
         ...plugin,
         name: plugin.name, i18n: plugin.i18n,
         loadData: async (key: string) => key === "temporary_weread_notebooksList" ? structuredClone(notebooks)
           : key === "weread_ignoredBooks" ? structuredClone(ignored) : plugin.loadData(key),
+        loadDataStrict: async (key: string) => key === "weread_ignoredBooks" ? { exists: true, value: structuredClone(ignored) }
+          : key === "temporary_weread_notebooksList" ? { exists: true, value: structuredClone(notebooks) } : loadPluginStorageJsonStateStrict(plugin, key),
         saveData: async () => { throw new Error("Read-only WeRead preparation"); },
       };
       const selected = [...draft.selectedBooks, ...draft.useBookIDs];
@@ -144,6 +149,7 @@ export async function runWereadApiSyncTask(
       // All drift checks are still reads; a rejection here leaves disk untouched.
       if (identityBefore !== await identitySnapshot() || localState !== await readLocalState()
         || JSON.stringify(notebooks) !== JSON.stringify(await mergeWereadNotebookLocalMetadata(plugin, fresh, { migrate: false }))) throw changed();
+      if (wereadStorageFingerprint(ignoredState) !== wereadStorageFingerprint(await loadIgnoredBooksStateStrict(plugin))) throw changed();
       const currentAuth = await loadWereadAuthState(plugin, { migrate: false });
       if (!currentAuth.verified || currentAuth.apiKey !== auth.apiKey) throw changed();
 
@@ -154,7 +160,7 @@ export async function runWereadApiSyncTask(
       await loadCustomISBNBooksWithMigration(plugin);
       await plugin.saveData("temporary_weread_notebooksList", notebooks);
       await plugin.saveData("weread_notebooksList_readyAt", Date.now());
-      const imports = await commitWereadNewSources(plugin, auth.apiKey, draft.selectedBooks, draft.ignoredBooks, draft.useBookIDs, draft.allNewSources, draft.remoteDetails, approval);
+      const imports = await commitWereadNewSources(plugin, auth.apiKey, draft.selectedBooks, draft.ignoredBooks, draft.useBookIDs, draft.allNewSources, draft.remoteDetails, approval, ignoredState);
       const successful = new Set([...imports.successfulBookIDs, ...imports.successfulMpBookIDs]);
       for (const failure of imports.failed) {
         const source = selected.find(book => book.bookID === failure.bookID)!;

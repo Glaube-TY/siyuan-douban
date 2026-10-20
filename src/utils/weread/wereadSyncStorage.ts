@@ -1,3 +1,4 @@
+import { tryAcquireWereadStorageWrite, wereadStorageFingerprint } from "./wereadStorageWriteGuard";
 import { isValidISBN, normalizeISBN } from "../bookHandling/isbn";
 import { t } from "../i18n";
 import { loadPluginStorageJsonStateStrict, type PluginStorageJsonState } from "../storage/pluginStorageStrict";
@@ -332,19 +333,64 @@ export async function replaceCustomISBNBooks(plugin: any, books: unknown): Promi
     }
 }
 
-function normalizeIgnoredBooks(records: any[]): any[] {
-    const uniqueMap = new Map<string, any>();
-    for (const record of Array.isArray(records) ? records : []) {
-        const key = getWereadStorageKey(record);
-        if (!key) continue;
-        uniqueMap.set(key, normalizeStorageRecord(record));
+function invalidIgnoredRecords(): never {
+    throw Object.assign(new Error("INVALID_WEREAD_SOURCE_RECORDS"), { status: "invalid" });
+}
+
+export function wereadManagementSourceType(record: any): "book" | "mp" {
+    const id = getWereadStorageKey(record), type = record.sourceType;
+    if (type != null && type !== "" && !["book", "mp", "weread_book", "weread_mp_account"].includes(type)) invalidIgnoredRecords();
+    if (id.startsWith("MP_WXS_") && ["book", "weread_book"].includes(type)) invalidIgnoredRecords();
+    return id.startsWith("MP_WXS_") || type === "mp" || type === "weread_mp_account" ? "mp" : "book";
+}
+
+/** Validate without dropping duplicates, aliases or user metadata. */
+export function validateWereadManagementRecords(records: unknown): asserts records is any[] {
+    if (!Array.isArray(records)) invalidIgnoredRecords();
+    const seen = new Set<string>();
+    for (const record of records) {
+        if (!record || typeof record !== "object" || Array.isArray(record)) invalidIgnoredRecords();
+        const aliases = [record.bookID, record.bookId, record.syncID].filter(value => value != null && value !== "");
+        if (aliases.some(value => typeof value !== "string" && !(typeof value === "number" && Number.isFinite(value)))) invalidIgnoredRecords();
+        if (new Set(aliases.map(value => String(value).trim()).filter(Boolean)).size !== 1) invalidIgnoredRecords();
+        const id = getWereadStorageKey(record);
+        if (!id || seen.has(id)) invalidIgnoredRecords();
+        seen.add(id);
+        wereadManagementSourceType(record);
     }
-    return Array.from(uniqueMap.values());
+}
+
+function normalizeIgnoredBooks(records: unknown): any[] {
+    validateWereadManagementRecords(records);
+    return structuredClone(records);
+}
+
+export async function loadIgnoredBooksStateStrict(plugin: any): Promise<PluginStorageJsonState> {
+    let state: PluginStorageJsonState;
+    try { state = await loadPluginStorageJsonStateStrict(plugin, "weread_ignoredBooks"); }
+    catch {
+        throw Object.assign(new Error(t(plugin, "wereadManagementLoadFailed", "无法加载微信读书管理数据，请检查存储后重试。")), { status: "read_failed" });
+    }
+    if (state.exists) validateWereadManagementRecords(state.value);
+    return structuredClone(state);
 }
 
 export async function loadIgnoredBooks(plugin: any): Promise<any[]> {
-    const records = await plugin.loadData("weread_ignoredBooks");
-    return Array.isArray(records) ? records : [];
+    const state = await loadIgnoredBooksStateStrict(plugin);
+    return state.exists ? state.value as any[] : [];
+}
+
+/** New choices never replace the metadata of a source that is already ignored. */
+export function mergeIgnoredBooks(existing: any[], incoming: any[]): any[] {
+    validateWereadManagementRecords(existing);
+    validateWereadManagementRecords(incoming);
+    const merged = new Map(existing.map(record => [getWereadStorageKey(record), structuredClone(record)]));
+    for (const record of incoming) {
+        const key = getWereadStorageKey(record), previous = merged.get(key);
+        if (previous && wereadManagementSourceType(previous) !== wereadManagementSourceType(record)) invalidIgnoredRecords();
+        if (!previous) merged.set(key, structuredClone(record));
+    }
+    return [...merged.values()];
 }
 
 export function getIgnoredBookIDSet(ignoredBooks: any[] | null | undefined): Set<string> {
@@ -356,13 +402,31 @@ export function getIgnoredBookIDSet(ignoredBooks: any[] | null | undefined): Set
     return bookIDs;
 }
 
-export async function replaceIgnoredBooks(plugin: any, records: any[]): Promise<void> {
-    await plugin.saveData("weread_ignoredBooks", normalizeIgnoredBooks(records));
+async function writeIgnoredBooks(plugin: any, build: (current: any[]) => any[], expected?: PluginStorageJsonState): Promise<void> {
+    const release = tryAcquireWereadStorageWrite(plugin, "weread_ignoredBooks");
+    const changed = () => Object.assign(new Error(t(plugin, "wereadManagementChanged", "管理数据已变化或正在保存，请关闭并重新打开管理窗口检查。")), { status: "conflict" });
+    if (!release) throw changed();
+    try {
+        const before = await loadIgnoredBooksStateStrict(plugin);
+        if (expected && wereadStorageFingerprint(expected) !== wereadStorageFingerprint(before)) throw changed();
+        const records = normalizeIgnoredBooks(build(before.exists ? before.value as any[] : []));
+        const current = await loadIgnoredBooksStateStrict(plugin);
+        if (wereadStorageFingerprint(before) !== wereadStorageFingerprint(current)) throw changed();
+        if (current.exists && wereadStorageFingerprint(current.value) === wereadStorageFingerprint(records)) return;
+        await plugin.saveData("weread_ignoredBooks", records);
+        const verified = await loadIgnoredBooksStateStrict(plugin);
+        if (!verified.exists || wereadStorageFingerprint(verified.value) !== wereadStorageFingerprint(records)) {
+            throw Object.assign(new Error(t(plugin, "wereadManagementUncertain", "保存结果暂时无法验证；请重新打开管理窗口检查实际状态，勿重复提交。")), { status: "uncertain" });
+        }
+    } finally { release(); }
 }
 
-export async function saveIgnoredBooks(plugin: any, newIgnoredBooks: any[]) {
-    const existingIgnored = await loadIgnoredBooks(plugin);
-    await replaceIgnoredBooks(plugin, [...existingIgnored, ...(Array.isArray(newIgnoredBooks) ? newIgnoredBooks : [])]);
+export async function replaceIgnoredBooks(plugin: any, records: any[]): Promise<void> {
+    await writeIgnoredBooks(plugin, () => normalizeIgnoredBooks(records));
+}
+
+export async function saveIgnoredBooks(plugin: any, newIgnoredBooks: any[], expected?: PluginStorageJsonState): Promise<void> {
+    await writeIgnoredBooks(plugin, current => mergeIgnoredBooks(current, newIgnoredBooks), expected);
 }
 
 // 保存自定义书籍ISBN

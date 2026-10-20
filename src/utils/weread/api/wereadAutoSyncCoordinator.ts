@@ -351,7 +351,7 @@ export class WereadAutoSyncCoordinator {
         this.autoSyncRunning = true;
         try {
             await tryRunWereadSync("auto", async () => {
-                const auth = await loadWereadAuthState(this.plugin);
+                const auth = await loadWereadAuthState(this.plugin, { migrate: false });
                 if (!auth.verified || !auth.apiKey) {
                     showMessage(this.plugin.i18n.wereadVerifyApiKeyFirst || "请先验证微信读书 API Key");
                     return;

@@ -1,3 +1,4 @@
+import type { PluginStorageJsonState } from "../../storage/pluginStorageStrict";
 import { wereadSourceKey, type WereadApprovedSyncPlan } from "./wereadApprovedSyncPlan";
 import { showMessage } from "siyuan";
 import { svelteDialog } from "@/libs/dialog";
@@ -8,7 +9,7 @@ import { isValidISBN, normalizeISBN } from "@/utils/bookHandling/isbn";
 import { loadAVData } from "@/utils/bookHandling/index";
 import { addUseBookIDsToDatabase } from "@/utils/weread/addUseBookIDs";
 import { ensureMpAccountInDatabase, type MpAccountRecord } from "@/utils/weread/addWereadMpAccounts";
-import { saveIgnoredBooks, saveCustomBooksISBN, saveUseBookIDBooks } from "@/utils/weread/wereadSyncStorage";
+import { saveIgnoredBooks, saveCustomBooksISBN, saveUseBookIDBooks, loadIgnoredBooksStateStrict } from "@/utils/weread/wereadSyncStorage";
 import { buildWereadApiDatabaseBookDetail } from "./buildWereadApiDatabaseBookDetail";
 import { buildWereadApiMpAccountSyncData } from "./buildWereadApiMpAccountSyncData";
 import { detectWereadApiNewSources, type WereadApiNewSourceItem } from "./detectWereadApiNewSources";
@@ -211,6 +212,7 @@ export async function commitWereadNewSources(
   allNewSources: WereadApiNewSourceItem[],
   remoteDetails = new Map<string, Awaited<ReturnType<typeof buildWereadApiDatabaseBookDetail>>>(),
   approvedPlan?: WereadApprovedSyncPlan,
+  ignoredSnapshot?: PluginStorageJsonState,
 ): Promise<{ successfulBookIDs: string[]; successfulMpBookIDs: string[]; failed: WereadNewSourceImportFailure[] }> {
   const approved = new Map(approvedPlan?.items.map(item => [wereadSourceKey(item), item.action]));
   for (const [sources, action] of [[selectedBooks, "import_isbn"], [useBookIDs, "import_bookID"], [ignoredBooks, "ignore"]] as const) {
@@ -220,6 +222,8 @@ export async function commitWereadNewSources(
     }
   }
   if (!approvedPlan) throw new Error(t(plugin, "bookUpdateStateChanged", "本地书籍状态已发生变化，请重新搜索后再试。"));
+  const ignoredBefore = ignoredBooks.length ? ignoredSnapshot || await loadIgnoredBooksStateStrict(plugin) : undefined;
+  let importWriteAttempted = false;
   const successfulSources: WereadApiNewSourceItem[] = [];
   const failed: WereadNewSourceImportFailure[] = [];
   const selectedNormalBooks = selectedBooks.filter(b => b.sourceType !== "weread_mp_account");
@@ -257,9 +261,11 @@ export async function commitWereadNewSources(
           cover: bookDetail.cover || bookItem.cover,
         });
         if (avID) {
-          writeAttempted = true;
+          writeAttempted = true; importWriteAttempted = true;
           const result = await addUseBookIDsToDatabase(plugin, avID, bookDetail);
-          if (result?.code !== 0) throw new Error(result?.msg || t(plugin, "uiUnknownError", "未知错误"));
+          if (result?.code !== 0) throw Object.assign(new Error(result?.msg || t(plugin, "uiUnknownError", "未知错误")), {
+            stage: result?.identityFailure?.stage, reasonCode: result?.identityFailure?.reasonCode,
+          });
           successfulSources.push(resolvedUseBookIDSources.at(-1)!);
         } else {
           throw new Error(t(plugin, "wereadBookNoteRepairFailed", "已找到本地书籍，但其读书笔记绑定异常，无法自动修复；请检查数据库配置与绑定。"));
@@ -295,7 +301,7 @@ export async function commitWereadNewSources(
           return detail;
         };
         if (existing) {
-          writeAttempted = true;
+          writeAttempted = true; importWriteAttempted = true;
           await ensureExistingBookNoteDocument(plugin, avID, existing, target, async () => {
             const detail = await loadDouban();
             return {
@@ -311,7 +317,7 @@ export async function commitWereadNewSources(
           await linkWereadISBNSourceToDatabase(plugin, avID, target, existing.rowBlockID);
         } else {
           const doubanBook = await loadDouban();
-          writeAttempted = true;
+          writeAttempted = true; importWriteAttempted = true;
           const result = await loadAVData(avID, {
             ...doubanBook,
             ISBN: isbn,
@@ -350,7 +356,7 @@ export async function commitWereadNewSources(
         accountCover: syncData.accountInfo.accountCover,
       };
       if (avID) {
-        writeAttempted = true;
+        writeAttempted = true; importWriteAttempted = true;
         await ensureMpAccountInDatabase(plugin, avID, record);
         successfulSources.push(mp);
       } else {
@@ -390,7 +396,15 @@ export async function commitWereadNewSources(
   const successful = new Set([...successfulBookIDs, ...successfulMpBookIDs]);
   const verifiedSources = successfulSources.filter(source => successful.has(source.bookID));
   await saveCustomBooksISBN(plugin, verifiedSources.filter(source => selectedNormalBooks.some(book => book.bookID === source.bookID)), allNewSources);
-  if (ignoredBooks.length) await saveIgnoredBooks(plugin, [...ignoredNormalBooks, ...ignoredMpAccounts]);
+  if (ignoredBooks.length) {
+    try { await saveIgnoredBooks(plugin, [...ignoredNormalBooks, ...ignoredMpAccounts], ignoredBefore); }
+    catch (error) {
+      const message = importWriteAttempted
+        ? t(plugin, "wereadSourcePartialWrite", "导入未完成，可能已有部分写入；已保留数据，请检查后重试：{error}", { error: error?.message || t(plugin, "uiUnknownError", "未知错误") })
+        : error?.message || t(plugin, "uiUnknownError", "未知错误");
+      for (const source of ignoredBooks) failed.push({ bookID: source.bookID, message });
+    }
+  }
   const verifiedBookIDs = useBookIDs.filter(source => successful.has(source.bookID));
   if (verifiedBookIDs.length) await saveUseBookIDBooks(plugin, verifiedBookIDs);
   await mergeNewSourceDetailsIntoNotebookCache(plugin, [...selectedNormalBooks, ...resolvedUseBookIDSources, ...selectedMpAccounts]);

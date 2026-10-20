@@ -1,3 +1,4 @@
+import { extractWereadBookIdentityFailure, type WereadBookIdentityFailure } from "./api/wereadBookIdentityDiagnostics";
 import { parseDateToTimestamp } from '../core/formatOp';
 import { sql, getAttributeView, createDocWithMd } from "@/api";
 import { downloadWereadCoverSafely } from './downloadWereadCover';
@@ -16,7 +17,7 @@ import type { WereadApiDatabaseBookDetail } from './api/buildWereadApiDatabaseBo
 type BookIDImportStatus = "created" | "linked_existing" | "already_linked" | "conflict";
 
 // Only the user's explicit BookID import may claim an unowned historical ISBN row.
-export async function addUseBookIDsToDatabase(plugin: any, avID: string, bookDetail: WereadApiDatabaseBookDetail): Promise<{ code: number; status: BookIDImportStatus; msg: string }> {
+export async function addUseBookIDsToDatabase(plugin: any, avID: string, bookDetail: WereadApiDatabaseBookDetail): Promise<{ code: number; status: BookIDImportStatus; msg: string; identityFailure?: WereadBookIdentityFailure }> {
     const bookID = String(bookDetail.bookId || "").trim();
     const stateChanged = t(plugin, "bookUpdateStateChanged", "本地书籍状态已发生变化，请重新搜索后再试。");
     if (!bookID) throw new Error(stateChanged);
@@ -47,7 +48,9 @@ export async function addUseBookIDsToDatabase(plugin: any, avID: string, bookDet
                 wereadRatingCount: bookDetail.newRatingCount ? String(bookDetail.newRatingCount) : "",
             }));
         } catch (error: any) {
-            return { code: 1, status: "conflict", msg: error?.message || stateChanged };
+            const identityFailure = extractWereadBookIdentityFailure(error);
+            return { code: 1, status: "conflict", msg: error?.message || stateChanged,
+                ...(identityFailure ? { identityFailure } : {}) };
         }
         if (match.matchType === "bookID") return { code: 0, status: "already_linked", msg: "" };
         await claimWereadBookIDOnExistingRow(plugin, avID, row, { bookID, isbn: bookDetail.isbn });

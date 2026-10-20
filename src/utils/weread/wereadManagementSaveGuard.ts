@@ -1,5 +1,7 @@
+import { tryAcquireWereadStorageWrite, wereadStorageFingerprint as fingerprint } from "./wereadStorageWriteGuard";
+export { wereadManagementSourceType, validateWereadManagementRecords } from "./wereadSyncStorage";
 import { loadPluginStorageJsonStateStrict } from "../storage/pluginStorageStrict";
-import { getWereadStorageKey, loadCustomISBNBooksWithMigration, replaceCustomISBNBooks } from "./wereadSyncStorage";
+import { loadCustomISBNBooksWithMigration, replaceCustomISBNBooks, validateWereadManagementRecords } from "./wereadSyncStorage";
 import { t } from "../i18n";
 
 type ManagementKey = "weread_ignoredBooks" | "weread_customBooksISBN";
@@ -14,35 +16,7 @@ export interface WereadManagementSaveResult {
     status: SaveStatus;
     requiresReopen?: boolean;
 }
-// shortcut: this lock covers management saves in one process; kernel CAS is needed to serialize external writers.
-const saving = new Set<string>();
-const fingerprint = (value: unknown): string => JSON.stringify(value, (_key, item) =>
-    item && typeof item === "object" && !Array.isArray(item)
-        ? Object.fromEntries(Object.keys(item).sort().map(key => [key, item[key]])) : item);
 function fail(status: SaveStatus): never { throw Object.assign(new Error("WEREAD_MANAGEMENT_" + status.toUpperCase()), { status }); }
-
-export function wereadManagementSourceType(record: any): "book" | "mp" {
-    const id = getWereadStorageKey(record), type = record.sourceType;
-    if (type != null && type !== "" && !["book", "mp", "weread_book", "weread_mp_account"].includes(type)) fail("invalid");
-    if (id.startsWith("MP_WXS_") && ["book", "weread_book"].includes(type)) fail("invalid");
-    return id.startsWith("MP_WXS_") || type === "mp" || type === "weread_mp_account" ? "mp" : "book";
-}
-
-/** Validate without dropping duplicates, aliases or user metadata. */
-export function validateWereadManagementRecords(records: unknown): asserts records is any[] {
-    if (!Array.isArray(records)) fail("invalid");
-    const seen = new Set<string>();
-    for (const record of records) {
-        if (!record || typeof record !== "object" || Array.isArray(record)) fail("invalid");
-        const aliases = [record.bookID, record.bookId, record.syncID].filter(value => value != null && value !== "");
-        if (aliases.some(value => typeof value !== "string" && !(typeof value === "number" && Number.isFinite(value)))) fail("invalid");
-        if (new Set(aliases.map(value => String(value).trim()).filter(Boolean)).size !== 1) fail("invalid");
-        const id = getWereadStorageKey(record);
-        if (!id || seen.has(id)) fail("invalid");
-        seen.add(id);
-        wereadManagementSourceType(record);
-    }
-}
 
 async function normalize(plugin: any, key: ManagementKey, value: unknown): Promise<any[]> {
     if (key === "weread_customBooksISBN") {
@@ -69,11 +43,10 @@ export async function readWereadManagementSnapshot(plugin: any, key: ManagementK
         canonical: state.exists && fingerprint(state.value) === fingerprint(records) };
 }
 
-/** Only explicit management saves use this lock; sync storage/migration contracts stay unchanged. */
+/** Management saves share this process-local lock with sync storage writers. */
 export async function saveWereadManagementData(plugin: any, key: ManagementKey, initial: WereadManagementSnapshot, value: unknown, canWrite = () => true): Promise<WereadManagementSaveResult> {
-    const lock = `${plugin.name}:${key}`;
-    if (saving.has(lock)) return { status: "busy" };
-    saving.add(lock);
+    const release = tryAcquireWereadStorageWrite(plugin, key);
+    if (!release) return { status: "busy" };
     let attempted = false;
     try {
         const records = await normalize(plugin, key, value);
@@ -98,7 +71,7 @@ export async function saveWereadManagementData(plugin: any, key: ManagementKey, 
     } catch (error) {
         const status: SaveStatus = ["invalid", "read_failed", "conflict"].includes(error?.status) ? error.status : "read_failed";
         return { status, requiresReopen: status !== "read_failed" };
-    } finally { saving.delete(lock); }
+    } finally { release(); }
 }
 
 export function wereadManagementSaveMessage(plugin: any, status: string): string {
