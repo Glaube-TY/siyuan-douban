@@ -24,8 +24,8 @@ function component(name, f, props, expose) {
     const compiled = ts.transpileModule(script + "\nreturn {" + expose + "};", { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText;
     const mounts = [], disposers = [], messages = [];
     const storage = f.load("src/utils/weread/wereadSyncStorage.ts"), isbn = f.load("src/utils/bookHandling/isbn.ts");
-    const helpers = { ...storage, ...isbn };
-    const names = ["getIgnoredBookIDSet", "getWereadStorageKey", "loadIgnoredBooks", "replaceIgnoredBooks", "replaceCustomISBNBooks", "isValidISBN", "normalizeISBN"];
+    const helpers = { ...storage, ...isbn, ...f.load("src/utils/weread/wereadManagementSaveGuard.ts") };
+    const names = ["getIgnoredBookIDSet", "getWereadStorageKey", "loadIgnoredBooks", "replaceIgnoredBooks", "replaceCustomISBNBooks", "isValidISBN", "normalizeISBN", "readWereadManagementSnapshot", "saveWereadManagementData", "wereadManagementSaveMessage", "validateWereadManagementRecords", "wereadManagementSourceType"];
     const controller = new Function("props", "onMount", "onDestroy", "showMessage", "t", "loadPluginStorageJsonStateStrict", "getCurrentValidBookIdentifiers", "loadCustomISBNBooksWithMigration", ...names, compiled)(
         { plugin: f.plugin, ...props }, fn => mounts.push(fn), fn => disposers.push(fn), text => messages.push(text),
         f.load("src/utils/i18n.ts").t,
@@ -135,11 +135,14 @@ const tick = () => new Promise(resolve => setImmediate(resolve));
         assert.equal(p.events.cancelled, 1); assert.equal(p.records.length, 0); assert.deepEqual(f.data, before); f.zero();
     });
     for (const name of ["wereadManageISBN", "wereadIgnoredBooksDialog", "WereadSyncedDataDialog"]) await test(`${name}: actual local edits and cancel make zero writes`, async () => {
-        const f = fixture(), before = structuredClone(f.data); let cancelled = 0;
+        const f = fixture(); let cancelled = 0;
         const props = { onCancel: () => cancelled++, customISBNBooks: [{ bookID: BOOK, customISBN: ISBN }], validISBNs: [ISBN], ignoredBooks: [{ bookID: BOOK }], syncedRecords: f.data.weread_notebooks, temporaryNotebooks: [] };
         const expose = name === "wereadManageISBN" ? "edit:()=>handleDeleteEffective(props.customISBNBooks[0].bookID),cancel:onCancel"
             : name === "wereadIgnoredBooksDialog" ? "edit:()=>handleRestore(props.ignoredBooks[0].bookID),cancel:onCancel"
             : "edit:()=>toggleSync(buildRows(syncedRecords,temporaryNotebooks)[0]),cancel:onCancel";
+        f.data.weread_ignoredBooks = structuredClone(props.ignoredBooks);
+        f.data.weread_customBooksISBN = structuredClone(props.customISBNBooks);
+        const before = structuredClone(f.data);
         const p = component(name, f, props, expose); await p.init(); p.edit(); p.cancel();
         assert.equal(cancelled, 1); assert.deepEqual(f.data, before); f.zero();
     });

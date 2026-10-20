@@ -4,10 +4,10 @@
     import {
         getIgnoredBookIDSet,
         getWereadStorageKey,
-        loadIgnoredBooks,
-        replaceIgnoredBooks,
     } from "../../utils/weread/wereadSyncStorage";
 
+    import { onMount, onDestroy } from "svelte";
+    import { readWereadManagementSnapshot, saveWereadManagementData, wereadManagementSaveMessage, validateWereadManagementRecords, wereadManagementSourceType, type WereadManagementSnapshot } from "../../utils/weread/wereadManagementSaveGuard";
     export let plugin: any;
     export let syncedRecords: any[] = [];
     export let ignoredBooks: any[] = [];
@@ -28,7 +28,37 @@
     let sourceFilter = "all";
     let statusFilter = "all";
     let isSaving = false;
-    let localIgnoredBookIDs = getIgnoredBookIDSet(ignoredBooks);
+    const originalIgnoredBooks = structuredClone(ignoredBooks);
+    const originalSyncedRecords = structuredClone(syncedRecords);
+    const originalTemporaryNotebooks = structuredClone(temporaryNotebooks);
+    const initialIgnoredIDs = getIgnoredBookIDSet(originalIgnoredBooks);
+    let localIgnoredBookIDs = new Set(initialIgnoredIDs);
+    let isLoading = true;
+    let needsRecheck = false;
+    let errorText = "";
+    let alive = true;
+    let snapshot: WereadManagementSnapshot;
+    $: busy = isSaving || isLoading || needsRecheck;
+    onMount(async () => {
+        try {
+            const types = new Map<string, string>();
+            for (const records of [originalSyncedRecords, originalTemporaryNotebooks, originalIgnoredBooks]) {
+                validateWereadManagementRecords(records);
+                for (const record of records) {
+                    const id = getWereadStorageKey(record), type = wereadManagementSourceType(record);
+                    if (types.has(id) && types.get(id) !== type) throw Object.assign(new Error("SOURCE_TYPE_CONFLICT"), { status: "invalid" });
+                    types.set(id, type);
+                }
+            }
+            snapshot = await readWereadManagementSnapshot(plugin, "weread_ignoredBooks", originalIgnoredBooks);
+        } catch (error) {
+            needsRecheck = true;
+            errorText = wereadManagementSaveMessage(plugin, error?.status);
+        } finally { isLoading = false; }
+    });
+    onDestroy(() => { alive = false; });
+    const handleCancel = () => { if (!isSaving) onCancel(); };
+
 
     const tx = (key: string, fallback: string, params: Record<string, string | number> = {}) =>
         t(plugin, key, fallback, params);
@@ -67,7 +97,7 @@
         return Array.from(rowsByBookID.values());
     }
 
-    $: rows = buildRows(syncedRecords, temporaryNotebooks);
+    $: rows = buildRows(originalSyncedRecords, originalTemporaryNotebooks);
     $: normalizedSearch = search.trim().toLowerCase();
     $: activeCount = rows.filter((row) => !localIgnoredBookIDs.has(row.bookID)).length;
     $: ignoredCount = rows.length - activeCount;
@@ -86,6 +116,7 @@
     });
 
     function toggleSync(row: SyncedRow) {
+        if (isSaving || isLoading || needsRecheck) return;
         const next = new Set(localIgnoredBookIDs);
         if (next.has(row.bookID)) {
             next.delete(row.bookID);
@@ -95,35 +126,32 @@
         localIgnoredBookIDs = next;
     }
 
-    async function save() {
-        if (isSaving) return;
-        isSaving = true;
-        try {
-            const syncedBookIDs = new Set(rows.map((row) => row.bookID));
-            const currentIgnoredBooks = await loadIgnoredBooks(plugin);
-            const preservedIgnored = currentIgnoredBooks.filter((record) => !syncedBookIDs.has(getBookID(record)));
-            const stoppedRecords = rows
-                .filter((row) => localIgnoredBookIDs.has(row.bookID))
-                .map((row) => ({
-                    bookID: row.bookID,
-                    title: row.title,
-                    isbn: row.isbn,
-                    sourceType: row.sourceType || (row.isMpAccount ? "weread_mp_account" : "weread_book"),
-                    author: row.author,
-                }));
-
-            await replaceIgnoredBooks(plugin, [...preservedIgnored, ...stoppedRecords]);
-            onConfirm();
-        } catch (error) {
-            console.error("[WereadSyncedDataDialog] 保存停止同步设置失败", error);
-            showMessage(tx("syncedDataSaveFailed", "保存已同步数据设置失败"));
-        } finally {
-            isSaving = false;
-        }
+    function editedIgnoredBooks() {
+        const scope = buildRows(originalSyncedRecords, originalTemporaryNotebooks);
+        const restored = new Set(scope.filter(row => initialIgnoredIDs.has(row.bookID) && !localIgnoredBookIDs.has(row.bookID)).map(row => row.bookID));
+        return [...originalIgnoredBooks.filter(record => !restored.has(getBookID(record))),
+            ...scope.filter(row => !initialIgnoredIDs.has(row.bookID) && localIgnoredBookIDs.has(row.bookID))
+                .map(row => ({ bookID: row.bookID, title: row.title, isbn: row.isbn, author: row.author,
+                    sourceType: row.sourceType || (row.isMpAccount ? "weread_mp_account" : "weread_book") }))];
     }
+    const save = async () => {
+        if (isSaving || isLoading || needsRecheck) return;
+        isSaving = true; errorText = "";
+        try {
+            const result = await saveWereadManagementData(plugin, "weread_ignoredBooks", snapshot, editedIgnoredBooks(), () => alive);
+            if (!alive) return;
+            if (result.status === "success") onConfirm();
+            else {
+                needsRecheck = !!result.requiresReopen;
+                errorText = wereadManagementSaveMessage(plugin, result.status);
+                showMessage(errorText);
+            }
+        } finally { if (alive) isSaving = false; }
+    };
 </script>
 
-<div class="synced-data-dialog">
+<div class="synced-data-dialog" aria-busy={isSaving || isLoading}>
+    {#if errorText}<p class="management-save-error" role="alert">{errorText}</p>{/if}
     <div class="synced-toolbar">
         <input
             class="b3-text-field synced-search"
@@ -176,6 +204,7 @@
                         aria-label={localIgnoredBookIDs.has(row.bookID)
                             ? tx("syncedDataResumeSync", "恢复同步")
                             : tx("syncedDataStopSync", "停止同步")}
+                        disabled={busy}
                         on:click={() => toggleSync(row)}
                     >
                         {localIgnoredBookIDs.has(row.bookID) ? tx("syncedDataResumeSync", "恢复同步") : tx("syncedDataStopSync", "停止同步")}
@@ -186,16 +215,25 @@
     </div>
 
     <div class="synced-actions">
-        <button type="button" class="b3-button b3-button--primary" disabled={isSaving} on:click={save}>
+        <button type="button" class="b3-button b3-button--primary" disabled={busy} on:click={save}>
             {tx("confirm", "确认")}
         </button>
-        <button type="button" class="b3-button" disabled={isSaving} on:click={onCancel}>
+        <button type="button" class="b3-button" disabled={isSaving} on:click={handleCancel}>
             {tx("cancel", "取消")}
         </button>
     </div>
 </div>
 
 <style>
+    .management-save-error {
+        align-self: stretch;
+        max-width: 100%;
+        margin: 0;
+        overflow-wrap: anywhere;
+        white-space: normal;
+        color: var(--b3-theme-error);
+    }
+
     .synced-data-dialog {
         display: flex;
         flex-direction: column;

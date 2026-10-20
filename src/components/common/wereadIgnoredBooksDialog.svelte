@@ -1,7 +1,9 @@
 <script lang="ts">
     import { showMessage } from "siyuan";
-    import { getWereadStorageKey, replaceIgnoredBooks } from "../../utils/weread/wereadSyncStorage";
+    import { getWereadStorageKey } from "../../utils/weread/wereadSyncStorage";
 
+    import { onMount, onDestroy } from "svelte";
+    import { readWereadManagementSnapshot, saveWereadManagementData, wereadManagementSaveMessage, type WereadManagementSnapshot } from "../../utils/weread/wereadManagementSaveGuard";
     export let plugin;
     export let ignoredBooks: Array<{
         title?: string;
@@ -14,32 +16,53 @@
     export let onCancel: () => void;
 
     // 创建本地副本用于操作
-    let localIgnoredBooks = [...ignoredBooks];
+    const originalIgnoredBooks = structuredClone(ignoredBooks);
+    let localIgnoredBooks = structuredClone(originalIgnoredBooks);
     let isSaving = false;
+    let isLoading = true;
+    let needsRecheck = false;
+    let errorText = "";
+    let alive = true;
+    let snapshot: WereadManagementSnapshot;
+    $: busy = isSaving || isLoading || needsRecheck;
+    onMount(async () => {
+        try {
+            snapshot = await readWereadManagementSnapshot(plugin, "weread_ignoredBooks", originalIgnoredBooks);
+        } catch (error) {
+            needsRecheck = true;
+            errorText = wereadManagementSaveMessage(plugin, error?.status);
+        } finally { isLoading = false; }
+    });
+    onDestroy(() => { alive = false; });
+    const handleCancel = () => { if (!isSaving) onCancel(); };
+
 
     // 取消忽略；已同步来源的效果是恢复后续同步
     const handleRestore = (bookID: string) => {
+        if (isSaving || isLoading || needsRecheck) return;
         localIgnoredBooks = localIgnoredBooks.filter(
             (book) => getWereadStorageKey(book) !== bookID,
         );
     };
 
-    async function handleSave() {
-        if (isSaving) return;
-        isSaving = true;
+    const handleSave = async () => {
+        if (isSaving || isLoading || needsRecheck) return;
+        isSaving = true; errorText = "";
         try {
-            await replaceIgnoredBooks(plugin, localIgnoredBooks);
-            onConfirm();
-        } catch (error) {
-            console.error("[wereadIgnoredBooksDialog] 保存忽略书籍失败", error);
-            showMessage(plugin.i18n.syncedDataSaveFailed || "保存忽略书籍设置失败");
-        } finally {
-            isSaving = false;
-        }
-    }
+            const result = await saveWereadManagementData(plugin, "weread_ignoredBooks", snapshot, localIgnoredBooks, () => alive);
+            if (!alive) return;
+            if (result.status === "success") onConfirm();
+            else {
+                needsRecheck = !!result.requiresReopen;
+                errorText = wereadManagementSaveMessage(plugin, result.status);
+                showMessage(errorText);
+            }
+        } finally { if (alive) isSaving = false; }
+    };
 </script>
 
-<div class="ignored-books-dialog">
+<div class="ignored-books-dialog" aria-busy={isSaving || isLoading}>
+    {#if errorText}<p class="management-save-error" role="alert">{errorText}</p>{/if}
     <div class="table-container">
         <table class="ignored-table">
             <thead>
@@ -54,6 +77,7 @@
                         <td>{book.title || getWereadStorageKey(book)}</td>
                         <td>
                             <button 
+                                disabled={busy}
                                 on:click={() => handleRestore(getWereadStorageKey(book))}
                                 class="delete-btn"
                                 title={plugin.i18n.ignoredRestoreSync || "取消忽略 / 恢复同步"}
@@ -70,15 +94,24 @@
 
     <div class="dialog-actions">
         <button
-            disabled={isSaving}
+            disabled={busy}
             on:click={handleSave}>{plugin.i18n.confirm}</button
         >
 
-        <button disabled={isSaving} on:click={onCancel}>{plugin.i18n.cancel}</button>
+        <button disabled={isSaving} on:click={handleCancel}>{plugin.i18n.cancel}</button>
     </div>
 </div>
 
 <style lang="scss">
+    .management-save-error {
+        align-self: stretch;
+        max-width: 100%;
+        margin: 0;
+        overflow-wrap: anywhere;
+        white-space: normal;
+        color: var(--b3-theme-error);
+    }
+
     .ignored-books-dialog {
         display: flex;
         flex-direction: column;
