@@ -1,4 +1,8 @@
 <script lang="ts">
+    import { onMount, onDestroy } from "svelte";
+    import { showMessage } from "siyuan";
+    import { t } from "../../utils/i18n";
+    import { loadPluginStorageJsonStateStrict } from "../../utils/storage/pluginStorageStrict";
     export let plugin;
     export let useBookIDBooks: Array<{
         title: string;
@@ -10,37 +14,91 @@
     export let validBookIDs: string[] = [];
 
     const validBookIDSet = new Set(validBookIDs);
+    const originalBooks = structuredClone(useBookIDBooks);
+    const tx = (key: string, fallback: string) => t(plugin, key, fallback);
+    let isSaving = false;
+    let isLoading = true;
+    let baseline = "";
+    let needsRecheck = false;
+    let errorText = "";
+    let alive = true;
+    $: busy = isSaving || isLoading || needsRecheck;
+
+    async function readState() {
+        const state = await loadPluginStorageJsonStateStrict(plugin, "weread_useBookIDBooks");
+        if (state.exists && (!Array.isArray(state.value) || state.value.some(book => !book || typeof book !== "object" || Array.isArray(book) || typeof book.bookID !== "string" || !book.bookID.trim()) || new Set((state.value as any[]).map(book => book.bookID)).size !== (state.value as any[]).length)) throw new Error("Invalid BookID storage");
+        return state;
+    }
+    onMount(async () => {
+        let message = tx("wereadManagementLoadFailed", "无法加载微信读书管理数据，请检查存储后重试。");
+        try {
+            const state = await readState();
+            if (JSON.stringify(state.exists ? state.value : []) !== JSON.stringify(originalBooks)) {
+                message = tx("wereadBookIDDataChanged", "bookID 管理数据已变化，已停止保存。请关闭后重新打开管理窗口检查。");
+                throw new Error("Snapshot changed");
+            }
+            if (alive) baseline = JSON.stringify(state);
+        } catch {
+            if (alive) { needsRecheck = true; errorText = message; }
+        } finally { if (alive) isLoading = false; }
+    });
+    onDestroy(() => { alive = false; });
 
     function isUseBookIDStale(book: { title: string; isbn: string; bookID: string }): boolean {
         return !book.bookID || !validBookIDSet.has(book.bookID.trim());
     }
 
-    const effectiveBooks = useBookIDBooks.filter(book => !isUseBookIDStale(book));
-    const staleBooks = useBookIDBooks.filter(book => isUseBookIDStale(book));
+    const effectiveBooks = originalBooks.filter(book => !isUseBookIDStale(book));
+    const staleBooks = originalBooks.filter(book => isUseBookIDStale(book));
 
     let localEffectiveBooks = [...effectiveBooks];
     let localStaleBooks = [...staleBooks];
 
     const handleDeleteEffective = (bookID: string) => {
+        if (isSaving || isLoading || needsRecheck) return;
         localEffectiveBooks = localEffectiveBooks.filter((book) => book.bookID !== bookID);
     };
 
     const handleDeleteStale = (bookID: string) => {
+        if (isSaving || isLoading || needsRecheck) return;
         localStaleBooks = localStaleBooks.filter((book) => book.bookID !== bookID);
     };
 
     const handleClearStale = () => {
+        if (isSaving || isLoading || needsRecheck) return;
         localStaleBooks = [];
     };
 
-    const handleSave = () => {
-        const merged = [...localEffectiveBooks, ...localStaleBooks];
-        plugin.saveData("weread_useBookIDBooks", merged);
-        onConfirm();
+    const handleCancel = () => { if (!isSaving) onCancel(); };
+    const handleSave = async () => {
+        if (isSaving || isLoading || needsRecheck) return;
+        isSaving = true; errorText = "";
+        const merged = structuredClone([...localEffectiveBooks, ...localStaleBooks]);
+        let saved = false;
+        let message = tx("wereadManagementLoadFailed", "无法加载微信读书管理数据，请检查存储后重试。");
+        try {
+            const current = await readState();
+            if (!alive) return;
+            if (JSON.stringify(current) !== baseline) {
+                needsRecheck = true;
+                message = tx("wereadBookIDDataChanged", "bookID 管理数据已变化，已停止保存。请关闭后重新打开管理窗口检查。");
+                throw new Error("Snapshot changed");
+            }
+            message = tx("wereadBookIDSaveFailed", "保存 bookID 管理数据失败；窗口已保留，请检查后重试。");
+            await plugin.saveData("weread_useBookIDBooks", merged);
+            saved = true;
+            message = tx("wereadBookIDReadbackFailed", "保存后未能验证 bookID 管理数据，请关闭并重新打开窗口检查当前状态，勿重复提交保存。");
+            const verified = await readState();
+            if (!verified.exists || JSON.stringify(verified.value) !== JSON.stringify(merged)) throw new Error("Readback failed");
+            if (alive) onConfirm();
+        } catch {
+            if (alive) { needsRecheck ||= saved; errorText = message; showMessage(message); }
+        } finally { if (alive) isSaving = false; }
     };
 </script>
 
-<div class="use-bookid-books-dialog">
+<div class="use-bookid-books-dialog" aria-busy={isSaving || isLoading}>
+    {#if errorText}<p role="alert">{errorText}</p>{/if}
     {#if localStaleBooks.length > 0}
     <div class="stale-notice">⚠️ {plugin.i18n.managementStaleNotice || "以下历史项未找到匹配的本地书籍。书名相同不能证明身份一致，这些记录不会阻止来源重新进入待处理列表。"}</div>
     <div class="table-container stale-table">
@@ -59,6 +117,7 @@
                             <button
                                 on:click={() => handleDeleteStale(book.bookID)}
                                 class="delete-btn"
+                                disabled={busy}
                                 title="{plugin.i18n.delete}"
                             >
                                 🗑️
@@ -70,7 +129,7 @@
         </table>
     </div>
     <div class="stale-actions">
-        <button class="clear-stale-btn" on:click={handleClearStale}>
+        <button class="clear-stale-btn" disabled={busy} on:click={handleClearStale}>
             {(plugin.i18n.managementClearStale || "一键清理失效项（{count}）").replace("{count}", String(localStaleBooks.length))}
         </button>
     </div>
@@ -93,6 +152,7 @@
                             <button
                                 on:click={() => handleDeleteEffective(book.bookID)}
                                 class="delete-btn"
+                                disabled={busy}
                                 title="{plugin.i18n.delete}"
                             >
                                 🗑️
@@ -106,8 +166,8 @@
     {/if}
 
     <div class="dialog-actions">
-        <button on:click={handleSave}>{plugin.i18n.confirm}</button>
-        <button on:click={onCancel}>{plugin.i18n.cancel}</button>
+        <button disabled={busy} on:click={handleSave}>{plugin.i18n.confirm}</button>
+        <button disabled={isSaving} on:click={handleCancel}>{plugin.i18n.cancel}</button>
     </div>
 </div>
 

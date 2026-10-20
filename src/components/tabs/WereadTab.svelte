@@ -1,8 +1,5 @@
 <script lang="ts">
     import { showMessage, I18N } from "siyuan";
-    import { sql, getAttributeView, removeAttributeViewBlocks } from "@/api";
-    import { getAttributeViewValueText } from "@/utils/bookHandling/bookDeduplication";
-    import { findBookPrimaryKeyValue } from "@/utils/bookHandling/bookDatabasePrimaryKey";
     import { onMount } from "svelte";
     import { svelteDialog } from "@/libs/dialog";
     import {
@@ -40,84 +37,9 @@
     import ContextTutorialLink from "@/components/common/ContextTutorialLink.svelte";
     import { localizeKnownUiText } from "@/utils/i18n";
 
-    import wereadManageISBN from "@/components/common/wereadManageISBN.svelte";
     import wereadIgnoredBooksDialog from "@/components/common/wereadIgnoredBooksDialog.svelte";
-    import wereadUseBookIDBooksDialog from "@/components/common/wereadUseBookIDBooksDialog.svelte";
     import WereadBookManagementDialog from "@/components/common/WereadBookManagementDialog.svelte";
-    import { loadCustomISBNBooksWithMigration, loadIgnoredBooks } from "@/utils/weread/wereadSyncStorage";
-
-    async function getCurrentValidBookIdentifiers(plugin: any): Promise<{ validISBNs: Set<string>, validBookIDs: Set<string>, validBookNames: Set<string> }> {
-        const settings = await plugin.loadData("settings.json") || {};
-        const blockID = settings?.bookDatabaseID || "";
-        if (!blockID) return { validISBNs: new Set<string>(), validBookIDs: new Set<string>(), validBookNames: new Set<string>() };
-
-        let avID = "";
-        try {
-            const blockResult = await sql(`SELECT * FROM blocks WHERE id = "${blockID}"`);
-            avID = blockResult?.[0]?.markdown?.match(/data-av-id="([^"]+)"/)?.[1] || "";
-        } catch {
-            avID = "";
-        }
-        if (!avID) return { validISBNs: new Set<string>(), validBookIDs: new Set<string>(), validBookNames: new Set<string>() };
-
-        try {
-            let database = await getAttributeView(avID);
-            let avData = database?.av || {};
-            let keyValues: any[] = avData.keyValues || [];
-
-            const isbnKey = keyValues.find((item: any) => item.key?.name === "ISBN");
-            const bookIDKey = keyValues.find((item: any) => item.key?.name === "bookID");
-            const bookNameKey = findBookPrimaryKeyValue(keyValues);
-
-            let ISBNColumn = isbnKey?.values || [];
-            let bookIDColumn = bookIDKey?.values || [];
-            let bookNameColumn = bookNameKey?.values || [];
-
-            const bookNameBlockIDs = new Set<string>(bookNameColumn.map((item: any) => item.blockID));
-            const isbnBlockIDs = new Set<string>(ISBNColumn.map((item: any) => item.blockID));
-            const bookIDBlockIDs = new Set<string>(bookIDColumn.map((item: any) => item.blockID));
-            const blockIDsToRemove = Array.from(
-                new Set<string>([
-                    ...[...isbnBlockIDs].filter(id => !bookNameBlockIDs.has(id)),
-                    ...[...bookIDBlockIDs].filter(id => !bookNameBlockIDs.has(id)),
-                ])
-            );
-
-            if (blockIDsToRemove.length > 0) {
-                await removeAttributeViewBlocks(avID, blockIDsToRemove);
-                database = await getAttributeView(avID);
-                avData = database?.av || {};
-                keyValues = avData.keyValues || [];
-
-                const updatedISBNKey = keyValues.find((item: any) => item.key?.name === "ISBN");
-                const updatedBookIDKey = keyValues.find((item: any) => item.key?.name === "bookID");
-                const updatedBookNameKey = findBookPrimaryKeyValue(keyValues);
-                ISBNColumn = updatedISBNKey?.values || [];
-                bookIDColumn = updatedBookIDKey?.values || [];
-                bookNameColumn = updatedBookNameKey?.values || [];
-            }
-
-            const validISBNs = new Set<string>(
-                ISBNColumn
-                    .map((item: any) => item.number?.content?.toString())
-                    .filter((v): v is string => !!v)
-            );
-            const validBookIDs = new Set<string>(
-                bookIDColumn
-                    .map((item: any) => item.text?.content?.toString())
-                    .filter((v): v is string => !!v)
-            );
-            const validBookNames = new Set<string>(
-                bookNameColumn
-                    .map((item: any) => getAttributeViewValueText(item))
-                    .filter((v): v is string => !!v)
-            );
-
-            return { validISBNs, validBookIDs, validBookNames };
-        } catch {
-            return { validISBNs: new Set<string>(), validBookIDs: new Set<string>(), validBookNames: new Set<string>() };
-        }
-    }
+    import { loadIgnoredBooks } from "@/utils/weread/wereadSyncStorage";
 
     export let i18n: I18N;
     export let plugin: any;
@@ -487,47 +409,6 @@
         }
     }
 
-    async function createManageISBNDialog() {
-        let customISBNBooks;
-        try {
-            customISBNBooks = await loadCustomISBNBooksWithMigration(plugin);
-        } catch (error) {
-            showMessage(
-                error instanceof Error && error.name === "WereadCustomISBNStorageError"
-                    ? error.message
-                    : i18nText("wereadCustomISBNLoadFailed", "无法加载自定义 ISBN 数据，请先备份后检查数据。"),
-            );
-            return;
-        }
-
-        if (customISBNBooks.length === 0) {
-            showMessage(i18n.showMessage12);
-            return;
-        }
-
-        const { validISBNs } = await getCurrentValidBookIdentifiers(plugin);
-
-        const dialog = svelteDialog({
-            title: i18n.manageISBNDialogTitle,
-            constructor: (containerEl: HTMLElement) => {
-                return new wereadManageISBN({
-                    target: containerEl,
-                    props: {
-                        plugin,
-                        customISBNBooks: customISBNBooks,
-                        validISBNs: Array.from(validISBNs),
-                        onConfirm: () => {
-                            dialog.close();
-                        },
-                        onCancel: () => {
-                            dialog.close();
-                        },
-                    },
-                });
-            },
-        });
-    }
-
     async function loadWereadAuthSettings() {
         const state = await loadWereadAuthStateFromService(plugin);
         wereadApiKeyInput = state.apiKey || "";
@@ -615,7 +496,7 @@
         });
     }
 
-    function createWereadBookManagementDialog() {
+    function createWereadBookManagementDialog(initialTab: "synced" | "isbn" | "bookid" = "synced") {
         let dialog: any;
         dialog = svelteDialog({
             title: i18n.manageSyncedData || i18n.centerBookManagement || "微信读书书籍管理",
@@ -625,7 +506,7 @@
                 target: containerEl,
                 props: {
                     plugin,
-                    initialTab: "synced",
+                    initialTab,
                     onConfirm: () => dialog.close(),
                     onCancel: () => dialog.close(),
                 },
@@ -633,36 +514,6 @@
         });
     }
 
-    async function createWereadUseBookIDBooksDialog() {
-        const useBookIDBooks = await plugin.loadData("weread_useBookIDBooks") || [];
-
-        if (useBookIDBooks.length == 0) {
-            showMessage(i18n.showMessage42);
-            return;
-        }
-
-        const { validBookIDs } = await getCurrentValidBookIdentifiers(plugin);
-
-        const dialog = svelteDialog({
-            title: i18n.useBookIDBooksDialogTitle,
-            constructor: (containerEl: HTMLElement) => {
-                return new wereadUseBookIDBooksDialog({
-                    target: containerEl,
-                    props: {
-                        plugin,
-                        useBookIDBooks: useBookIDBooks,
-                        validBookIDs: Array.from(validBookIDs),
-                        onConfirm: () => {
-                            dialog.close();
-                        },
-                        onCancel: () => {
-                            dialog.close();
-                        },
-                    },
-                });
-            },
-        });
-    }
 </script>
 
 <div class="wereadSetting">
@@ -924,7 +775,7 @@
                     <div class="weread-row-desc">{i18n.manageSyncedDataDesc}</div>
                 </div>
                 <div class="weread-row-control">
-                    <button class="b3-button b3-button--outline" on:click={createWereadBookManagementDialog}>{i18n.manageSyncedData}</button>
+                    <button class="b3-button b3-button--outline" on:click={() => createWereadBookManagementDialog("synced")}>{i18n.manageSyncedData}</button>
                 </div>
             </div>
             <div class="weread-settings-row">
@@ -933,7 +784,7 @@
                     <div class="weread-row-desc">{i18n.manageCustomISBNBooksDesc}</div>
                 </div>
                 <div class="weread-row-control">
-                    <button class="b3-button b3-button--outline" on:click={createManageISBNDialog}>{i18n.manageCustomISBNBooks}</button>
+                    <button class="b3-button b3-button--outline" on:click={() => createWereadBookManagementDialog("isbn")}>{i18n.manageCustomISBNBooks}</button>
                 </div>
             </div>
             <div class="weread-settings-row">
@@ -951,7 +802,7 @@
                     <div class="weread-row-desc">{i18n.manageUseBookIDBooksDesc}</div>
                 </div>
                 <div class="weread-row-control">
-                    <button class="b3-button b3-button--outline" on:click={createWereadUseBookIDBooksDialog}>{i18n.manageUseBookIDBooks}</button>
+                    <button class="b3-button b3-button--outline" on:click={() => createWereadBookManagementDialog("bookid")}>{i18n.manageUseBookIDBooks}</button>
                 </div>
             </div>
         </div>

@@ -1,13 +1,14 @@
 <script lang="ts">
     import { onMount } from "svelte";
     import { getCurrentValidBookIdentifiers } from "@/utils/weread/getCurrentValidBookIdentifiers";
-    import { loadCustomISBNBooksWithMigration, loadIgnoredBooks } from "@/utils/weread/wereadSyncStorage";
+    import { loadCustomISBNBooksWithMigration } from "@/utils/weread/wereadSyncStorage";
     import wereadManageISBN from "./wereadManageISBN.svelte";
     import wereadIgnoredBooksDialog from "./wereadIgnoredBooksDialog.svelte";
     import wereadUseBookIDBooksDialog from "./wereadUseBookIDBooksDialog.svelte";
     import WereadSyncedDataDialog from "./WereadSyncedDataDialog.svelte";
     import WereadBookIDRepairPanel from "./WereadBookIDRepairPanel.svelte";
     import { t } from "../../utils/i18n";
+    import { loadPluginStorageJsonStateStrict } from "../../utils/storage/pluginStorageStrict";
 
     type TabKey = "synced" | "ignored" | "isbn" | "bookid" | "repair";
 
@@ -37,14 +38,22 @@
         { key: "repair" as TabKey, label: tx("wereadRepairTab", "身份关联") },
     ];
 
+    async function readArray(key: string): Promise<any[]> {
+        const state = await loadPluginStorageJsonStateStrict(plugin, key);
+        if (!state.exists || (key === "temporary_weread_notebooksList" && state.value === null)) return [];
+        if (!Array.isArray(state.value) || state.value.some(record => !record || typeof record !== "object" || Array.isArray(record))) throw new Error("Invalid management storage");
+        if (key === "weread_useBookIDBooks" && (state.value.some(record => typeof record.bookID !== "string" || !record.bookID.trim()) || new Set(state.value.map(record => record.bookID)).size !== state.value.length)) throw new Error("Invalid BookID management storage");
+        return state.value;
+    }
+
     onMount(async () => {
         try {
             const [synced, ignored, customISBN, useBookID, temporary, identifiers] = await Promise.all([
-                plugin.loadData("weread_notebooks"),
-                loadIgnoredBooks(plugin),
+                readArray("weread_notebooks"),
+                readArray("weread_ignoredBooks"),
                 loadCustomISBNBooksWithMigration(plugin, { migrate: false }),
-                plugin.loadData("weread_useBookIDBooks"),
-                plugin.loadData("temporary_weread_notebooksList"),
+                readArray("weread_useBookIDBooks"),
+                readArray("temporary_weread_notebooksList"),
                 getCurrentValidBookIdentifiers(plugin, { cleanupOrphans: false }),
             ]);
             syncedRecords = Array.isArray(synced) ? synced : [];

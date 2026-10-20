@@ -1,101 +1,54 @@
-import { sql, getAttributeView, removeAttributeViewBlocks } from "@/api";
-import { getAttributeViewValueText } from "../bookHandling/bookDeduplication";
+import { sql, getAttributeView } from "@/api";
+import { buildBookIdentityRows } from "../bookHandling/bookDeduplication";
 import { findBookPrimaryKeyValue } from "../bookHandling/bookDatabasePrimaryKey";
+import { isValidISBN, normalizeISBN } from "../bookHandling/isbn";
+import { loadPluginStorageJsonStateStrict } from "../storage/pluginStorageStrict";
 
-export async function getCurrentValidBookIdentifiers(plugin: any, options?: { cleanupOrphans?: boolean }): Promise<{
+/** Always read-only; the old options argument is retained for existing callers. */
+export async function getCurrentValidBookIdentifiers(plugin: any, _options?: { cleanupOrphans?: boolean }): Promise<{
     validISBNs: Set<string>;
     validBookIDs: Set<string>;
     validBookNames: Set<string>;
 }> {
-    const settings = (await plugin.loadData("settings.json")) || {};
-    const blockID = settings?.bookDatabaseID || "";
-    if (!blockID) {
-        return {
-            validISBNs: new Set<string>(),
-            validBookIDs: new Set<string>(),
-            validBookNames: new Set<string>(),
-        };
+    const validID = (value: unknown) => typeof value === "string" && /^\d{14}-[a-z0-9]{7}$/.test(value);
+    const object = (value: any) => value !== null && typeof value === "object" && !Array.isArray(value);
+    function check(condition: unknown, reason: string): asserts condition {
+        if (!condition) throw new Error("WEREAD_MANAGEMENT_" + reason);
     }
-
-    let avID = "";
-    try {
-        const blockResult = await sql(`SELECT * FROM blocks WHERE id = "${blockID}"`);
-        avID = blockResult?.[0]?.markdown?.match(/data-av-id="([^"]+)"/)?.[1] || "";
-    } catch {
-        avID = "";
-    }
-    if (!avID) {
-        return {
-            validISBNs: new Set<string>(),
-            validBookIDs: new Set<string>(),
-            validBookNames: new Set<string>(),
-        };
-    }
-
-    try {
-        let database = await getAttributeView(avID);
-        let avData = database?.av || {};
-        let keyValues: any[] = avData.keyValues || [];
-
-        const isbnKey = keyValues.find((item: any) => item.key?.name === "ISBN");
-        const bookIDKey = keyValues.find((item: any) => item.key?.name === "bookID");
-        const bookNameKey = findBookPrimaryKeyValue(keyValues);
-
-        let ISBNColumn = isbnKey?.values || [];
-        let bookIDColumn = bookIDKey?.values || [];
-        let bookNameColumn = bookNameKey?.values || [];
-
-        const bookNameBlockIDs = new Set<string>(bookNameColumn.map((item: any) => item.blockID));
-        const isbnBlockIDs = new Set<string>(ISBNColumn.map((item: any) => item.blockID));
-        const bookIDBlockIDs = new Set<string>(bookIDColumn.map((item: any) => item.blockID));
-        const blockIDsToRemove = Array.from(
-            new Set<string>([
-                ...[...isbnBlockIDs].filter((id) => !bookNameBlockIDs.has(id)),
-                ...[...bookIDBlockIDs].filter((id) => !bookNameBlockIDs.has(id)),
-            ]),
-        );
-
-        if (options?.cleanupOrphans === false) {
-            const primaryRowIDs = new Set(bookNameColumn.map((item: any) => item.blockID || item.itemID));
-            ISBNColumn = ISBNColumn.filter((item: any) => primaryRowIDs.has(item.blockID || item.itemID));
-            bookIDColumn = bookIDColumn.filter((item: any) => primaryRowIDs.has(item.blockID || item.itemID));
+    const settings = await loadPluginStorageJsonStateStrict(plugin, "settings.json");
+    check(settings.exists && object(settings.value), "SETTINGS_INVALID");
+    const blockID = (settings.value as any).bookDatabaseID;
+    check(validID(blockID), "DATABASE_ID_INVALID");
+    const blocks = await sql(`SELECT id, markdown FROM blocks WHERE id = '${blockID}'`);
+    check(Array.isArray(blocks) && blocks.length === 1 && blocks[0]?.id === blockID && typeof blocks[0].markdown === "string", "DATABASE_BLOCK_INVALID");
+    const avID = blocks[0].markdown.match(/data-av-id="([^"]+)"/)?.[1];
+    check(validID(avID), "AV_ID_INVALID");
+    const database = await getAttributeView(avID);
+    const columns = database?.av?.keyValues;
+    check(Array.isArray(columns) && columns.every(column => object(column) && object(column.key)), "AV_INVALID");
+    const primary = findBookPrimaryKeyValue(columns);
+    check(primary?.key.type === "block" && validID(primary.key.id) && columns.filter(column => column.key.type === "block").length === 1, "PRIMARY_KEY_INVALID");
+    for (const name of ["ISBN", "bookID"]) check(columns.filter(column => column.key.name === name).length <= 1, "IDENTITY_COLUMN_INVALID");
+    for (const column of columns.filter(column => column === primary || ["ISBN", "bookID"].includes(column.key.name))) {
+        check(validID(column.key.id) && Array.isArray(column.values), "COLUMN_VALUES_INVALID");
+        if (column !== primary) check(column.key.name === "bookID" ? column.key.type === "text" : ["text", "number"].includes(column.key.type), "IDENTITY_COLUMN_INVALID");
+        const seen = new Set<string>();
+        for (const cell of column.values) {
+            check(object(cell) && validID(cell.blockID || cell.itemID), "ROW_ID_INVALID");
+            const rowID = cell.blockID || cell.itemID;
+            check(!seen.has(rowID), "ROW_ID_AMBIGUOUS"); seen.add(rowID);
+            if (column === primary) check(object(cell.block) && typeof cell.block.content === "string", "PRIMARY_VALUE_INVALID");
+            else check(object(cell[column.key.type]), "IDENTITY_VALUE_INVALID");
+            for (const value of [cell.text?.content, cell.number?.formattedContent, cell.number?.content]) {
+                check(value == null || typeof value === "string" || (typeof value === "number" && Number.isFinite(value)), "IDENTITY_VALUE_INVALID");
+            }
         }
-        if (blockIDsToRemove.length > 0 && options?.cleanupOrphans !== false) {
-            await removeAttributeViewBlocks(avID, blockIDsToRemove);
-            database = await getAttributeView(avID);
-            avData = database?.av || {};
-            keyValues = avData.keyValues || [];
-
-            const updatedISBNKey = keyValues.find((item: any) => item.key?.name === "ISBN");
-            const updatedBookIDKey = keyValues.find((item: any) => item.key?.name === "bookID");
-            const updatedBookNameKey = findBookPrimaryKeyValue(keyValues);
-            ISBNColumn = updatedISBNKey?.values || [];
-            bookIDColumn = updatedBookIDKey?.values || [];
-            bookNameColumn = updatedBookNameKey?.values || [];
-        }
-
-        const validISBNs = new Set<string>(
-            ISBNColumn.map((item: any) => item.number?.content?.toString()).filter(
-                (v): v is string => !!v,
-            ),
-        );
-        const validBookIDs = new Set<string>(
-            bookIDColumn.map((item: any) => item.text?.content?.toString()).filter(
-                (v): v is string => !!v,
-            ),
-        );
-        const validBookNames = new Set<string>(
-            bookNameColumn
-                .map((item: any) => getAttributeViewValueText(item))
-                .filter((v): v is string => !!v),
-        );
-
-        return { validISBNs, validBookIDs, validBookNames };
-    } catch {
-        return {
-            validISBNs: new Set<string>(),
-            validBookIDs: new Set<string>(),
-            validBookNames: new Set<string>(),
-        };
     }
+    // The shared helper joins by primary row ID; orphan cells are left on disk and excluded in memory.
+    const rows = buildBookIdentityRows(columns);
+    return {
+        validISBNs: new Set(rows.map(row => row.isbn).filter(isValidISBN).map(normalizeISBN)),
+        validBookIDs: new Set(rows.map(row => row.bookID).filter(Boolean)),
+        validBookNames: new Set(rows.map(row => row.title).filter(Boolean)),
+    };
 }
