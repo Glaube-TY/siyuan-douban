@@ -5,6 +5,7 @@ import { getAttributeViewValueText } from "../bookHandling/bookDeduplication";
 import { findBookPrimaryKeyValue } from "../bookHandling/bookDatabasePrimaryKey";
 import { loadDatabaseSettings } from "../settings/databaseSettingsService";
 import { t } from "../i18n";
+import { bookNoteFailureResult, ensureBookNoteDocument, readBookNoteTarget } from "../bookHandling/ensureBookNoteDocument";
 
 type PluginLike = {
     loadData: (key: string) => Promise<any>;
@@ -61,6 +62,8 @@ export interface DoubanLocalBookMatch {
     blockID?: string;
     isbn?: string;
     localTitle?: string;
+    canCompleteNote?: boolean;
+    noteCompletionError?: string;
 }
 
 export interface DoubanBookUpdateFailure {
@@ -296,7 +299,41 @@ export async function inspectDoubanLocalBookMatch(
     if (match.status === "matched" && !findBookPrimaryKeyValue(keyValues)) {
         throw new Error(tx(plugin, "bookUpdateMissingPrimaryKey", "本地书籍数据库缺少主键，无法安全更新"));
     }
+    if (match.status === "matched" && match.blockID) {
+        try {
+            const target = await readBookNoteTarget(plugin, database.avID, match.blockID, {
+                ...bookInfo, title: match.localTitle, ISBN: normalizedISBN, databaseBlockId: database.blockID,
+            });
+            match.canCompleteNote = !target.complete;
+        } catch (error: any) {
+            match.canCompleteNote = false;
+            match.noteCompletionError = error?.message || tx(plugin, "bookNoteReadInvalid", "笔记正文读取结果无效，已停止写入");
+        }
+    }
     return match;
+}
+
+export async function completeEditedDoubanBookNote(plugin: PluginLike, bookInfo: Record<string, unknown>, expected: DoubanLocalBookMatch) {
+    const changed = tx(plugin, "bookUpdateStateChanged", "本地书籍状态已发生变化，请重新搜索后再试。");
+    if (expected.status !== "matched" || !expected.avID || !expected.blockID
+        || !isValidISBN(normalizeISBN(bookInfo.isbn)) || normalizeISBN(bookInfo.isbn) !== expected.isbn) throw new Error(changed);
+    const database = await loadDatabaseSettings(plugin);
+    if (!database.valid || database.avID !== expected.avID) throw new Error(changed);
+    const current = buildLocalMatch(database.avID, await readKeyValues(database.avID), expected.isbn);
+    if (current.status !== "matched" || current.blockID !== expected.blockID || current.localTitle !== expected.localTitle) throw new Error(changed);
+    const settings = await plugin.loadData("settings.json");
+    if (!settings || settings.bookDatabaseID !== database.blockID) throw new Error(changed);
+    try {
+        const docBlockID = await ensureBookNoteDocument(plugin, database.avID, expected.blockID, {
+            ...bookInfo, title: current.localTitle, ISBN: expected.isbn,
+            databaseBlockId: database.blockID, noteTemplate: settings.noteTemplate,
+        });
+        try { await reloadAttributeView(database.avID); }
+        catch { console.warn("[douban] Database view refresh unavailable"); }
+        return { code: 0, rowBlockID: expected.blockID, docBlockID, msg: tx(plugin, "bookNoteCompleteSuccess", "读书笔记已补全，已有正文已保留") };
+    } catch (error) {
+        return bookNoteFailureResult(plugin, error, expected.blockID);
+    }
 }
 
 function getFieldLabel(plugin: PluginLike, fieldName: string): string {

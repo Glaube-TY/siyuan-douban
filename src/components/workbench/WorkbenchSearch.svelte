@@ -8,7 +8,7 @@
     import DoubanBookDetailDialog from "../bookSearch/DoubanBookDetailDialog.svelte";
     import type { WorkbenchAction, WorkbenchSearchResult } from "../../types/workbench";
     import { addEditedDoubanBookToDatabase, loadDoubanBookDetail, loadDoubanBookPreferences, searchDoubanBook } from "../../utils/bookSearch/doubanSearchService";
-    import { inspectDoubanLocalBookMatch, updateEditedDoubanBookInDatabase } from "../../utils/bookSearch/doubanBookUpdateService";
+    import { completeEditedDoubanBookNote, inspectDoubanLocalBookMatch, updateEditedDoubanBookInDatabase } from "../../utils/bookSearch/doubanBookUpdateService";
     import { openLocalBookResult, searchLocalBooks } from "../../utils/bookSearch/localBookSearchService";
     import { openWereadBookResult, searchWereadLibraryBooks } from "../../utils/bookSearch/wereadBookSearchService";
     import { getImage } from "../../utils/core/getImg";
@@ -210,7 +210,7 @@
                 ...bookRaw,
                 addNotes: bookRaw.addNotes ?? true,
             };
-            const localMatch = await inspectDoubanLocalBookMatch(plugin, bookInfo);
+            let localMatch = await inspectDoubanLocalBookMatch(plugin, bookInfo);
             if (!isDetailContextCurrent()) {
                 clearStaleDetailState();
                 return;
@@ -230,7 +230,7 @@
                 clearStaleDetailState();
                 return;
             }
-            const actionMode = localMatch.status === "matched" ? "update" : "add";
+            let actionMode = localMatch.status === "matched" ? "update" : "add";
             let alreadySubmitting = false;
 
             statusText = actionMode === "update"
@@ -256,6 +256,8 @@
                             actionMode,
                             localMatch: localMatch.status === "matched" ? localMatch : null,
                             submitting: false,
+                            canCompleteNote: !!localMatch.canCompleteNote,
+                            completionMessage: localMatch.noteCompletionError || "",
                             close: () => dialogRef.close(),
                         },
                     }),
@@ -276,22 +278,24 @@
                 dialogRef.dialog.element.classList.add("siyuan-douban-mobile-detail-dialog");
             }
 
-            const setDialogSubmitting = (submitting: boolean) => {
+            const setDialogState = (state: Record<string, unknown>) => {
                 try {
-                    dialogRef.component?.$set({ submitting });
+                    dialogRef.component?.$set(state);
                 } catch {
                 }
             };
 
-            dialogRef.component.$on("confirm", async (event: CustomEvent<any>) => {
+            const submitDoubanBook = async (event: CustomEvent<any>, completeNote = false) => {
                 if (alreadySubmitting) return;
                 alreadySubmitting = true;
-                setDialogSubmitting(true);
+                setDialogState({ submitting: true, completingNote: completeNote });
                 const editedBookInfo = event.detail;
                 try {
-                    const saveResult: any = actionMode === "update"
-                        ? await updateEditedDoubanBookInDatabase(plugin, editedBookInfo, localMatch)
-                        : await addEditedDoubanBookToDatabase(plugin, editedBookInfo);
+                    const saveResult: any = completeNote
+                        ? await completeEditedDoubanBookNote(plugin, editedBookInfo, localMatch)
+                        : actionMode === "update"
+                            ? await updateEditedDoubanBookInDatabase(plugin, editedBookInfo, localMatch)
+                            : await addEditedDoubanBookToDatabase(plugin, editedBookInfo);
                     showMessage(saveResult?.msg || (saveResult?.code === 0
                         ? actionMode === "update"
                             ? tx("bookUpdateSuccess", "书籍字段更新成功")
@@ -299,11 +303,23 @@
                         : actionMode === "update"
                             ? tx("bookUpdateFailed", "书籍字段更新失败")
                             : tx("searchAddFailed", "书籍添加失败")));
+                    if (saveResult?.partial) {
+                        actionMode = "update";
+                        setDialogState({ actionMode, canSubmit: false, canCompleteNote: false, completionMessage: saveResult.msg });
+                        dispatch("refresh");
+                        const current = await inspectDoubanLocalBookMatch(plugin, editedBookInfo);
+                        if (current.status === "matched" && current.blockID === saveResult.rowBlockID) {
+                            localMatch = current;
+                            setDialogState({ localMatch, canSubmit: true, canCompleteNote: !!current.canCompleteNote });
+                        }
+                    }
                     if (saveResult?.code === 0) {
                         actionCompletedSuccessfully = true;
                         selectedResult = null;
                         isDoubanDetailOpen = false;
-                        statusText = actionMode === "update"
+                        statusText = completeNote
+                            ? saveResult.msg
+                            : actionMode === "update"
                             ? (saveResult.updatedFields?.length
                                 ? tx("bookUpdateSuccess", "书籍字段更新成功")
                                 : tx("bookUpdateNoChanges", "本地字段已是最新，无需更新"))
@@ -312,14 +328,18 @@
                         dialogRef.close();
                     }
                 } catch (e: any) {
-                    showMessage(actionMode === "update"
+                    showMessage(completeNote
+                        ? tx("bookNoteCompleteFailedDetail", "补全失败：{error}", { error: e?.message || tx("uiUnknownError", "未知错误") })
+                        : actionMode === "update"
                         ? tx("bookUpdateFailedDetail", "更新失败：{error}", { error: e?.message || tx("uiUnknownError", "未知错误") })
                         : tx("searchAddFailedDetail", "添加失败：{error}", { error: e?.message || tx("uiUnknownError", "未知错误") }));
                 } finally {
                     alreadySubmitting = false;
-                    if (!actionCompletedSuccessfully) setDialogSubmitting(false);
+                    if (!actionCompletedSuccessfully) setDialogState({ submitting: false, completingNote: false });
                 }
-            });
+            };
+            dialogRef.component.$on("confirm", (event: CustomEvent<any>) => { void submitDoubanBook(event); });
+            dialogRef.component.$on("completeNote", (event: CustomEvent<any>) => { void submitDoubanBook(event, true); });
         } catch (error: any) {
             if (!isDetailContextCurrent()) {
                 clearStaleDetailState();

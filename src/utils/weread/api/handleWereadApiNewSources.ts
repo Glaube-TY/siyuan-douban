@@ -329,7 +329,7 @@ export async function commitWereadNewSources(
             readingStatus: "",
             startDate: "",
             finishDate: ""
-          }, plugin, { cleanupOrphans: false });
+          }, plugin, { cleanupOrphans: false, requireNoteContent: false });
           if (result?.code !== 0) throw new Error(result?.msg || t(plugin, "uiUnknownError", "未知错误"));
           if (!result.rowBlockID) throw new Error(t(plugin, "bookUpdateVerificationFailed", "回读验证未通过"));
           await linkWereadISBNSourceToDatabase(plugin, avID, target, result.rowBlockID);

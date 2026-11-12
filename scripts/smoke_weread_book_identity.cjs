@@ -32,7 +32,7 @@ function load(file) {
 }
 
 const ISBN_A = "9787111128069", ISBN_B = "9787302423287";
-let keyValues, storage, docs, children, writes, requests, created, messages, claims, importResults, bookInfos, dialogProps, writeMode, beforeRead, doubanBooks, doubanRequests, infoRequests, rawNotebooks, removals, blockTypes, docAttrs, rendered, bindingWrites, forceRuns, repairFailure, afterRender, duringDouban, delayedDocReads, pendingBinding, visibilityRead, columnReadLag, claimReadLag, pendingVisibility, readbackHook, columnAdds, visibilityReads, columnWriteFails, serial = 0;
+let keyValues, storage, docs, docContents, children, writes, requests, created, messages, claims, importResults, bookInfos, dialogProps, writeMode, beforeRead, doubanBooks, doubanRequests, infoRequests, rawNotebooks, removals, blockTypes, docAttrs, rendered, bindingWrites, forceRuns, repairFailure, afterRender, duringDouban, delayedDocReads, pendingBinding, visibilityRead, columnReadLag, claimReadLag, pendingVisibility, readbackHook, columnAdds, visibilityReads, columnWriteFails, serial = 0;
 const source = (bookID, isbn = "", title = "测试书") => ({ bookID, isbn, title, sourceType: "weread_book", updatedTime: 10, noteCount: 1, reviewCount: 0, bookmarkCount: 1, totalNoteCount: 1 });
 const plugin = {
     name: "siyuan-douban", i18n: {},
@@ -47,7 +47,7 @@ function reset() {
         { key: { id: "bookid", name: "bookID", type: "text" }, values: [] },
     ];
     storage = { "settings.json": { bookDatabaseID: "database", noteTemplate: "{{书名}}" }, temporary_weread_notebooksList: [], weread_notebooks: [], weread_customBooksISBN: [] };
-    docs = new Set(); children = new Map(); writes = []; requests = []; created = [];
+    docs = new Set(); docContents = new Map(); children = new Map(); writes = []; requests = []; created = [];
     messages = []; claims = []; importResults = []; bookInfos = new Map(); dialogProps = undefined; writeMode = "ok"; beforeRead = undefined;
     doubanBooks = new Map(); doubanRequests = []; infoRequests = []; rawNotebooks = { books: [] }; removals = [];
     blockTypes = new Map(); docAttrs = new Map(); rendered = []; bindingWrites = []; forceRuns = []; repairFailure = ""; afterRender = undefined; duringDouban = undefined; delayedDocReads = 0; pendingBinding = undefined; visibilityRead = undefined;
@@ -62,15 +62,20 @@ function row(bookID, isbn, doc, title = "测试书", rowID = doc || `row-${++ser
 mock("src/api.ts", {
     sql: async query => {
         if (visibilityRead) { const value = visibilityRead(query); if (value !== undefined) return value; }
-        if (query.includes('id = "database"') || query.includes("id = 'database'")) return [{ markdown: '<div data-av-id="av"></div>', box: "box", hpath: "/books", root_id: "parent" }];
+        if (query.includes('id = "database"') || query.includes("id = 'database'")) return [{ id: "database", path: "/parent.sy", markdown: '<div data-av-id="av"></div>', box: "box", hpath: "/books", root_id: "parent" }];
+        if (query.includes("hpath =")) return [];
         if (query.includes("FROM attributes")) return [...docAttrs].filter(([id]) => query.includes(`'${id}'`)).map(([, attrs]) => ({ value: attrs["custom-avs"] }));
         if (repairFailure === "doc-lag" && docs.has("delayed-row") && query.includes("delayed-row") && delayedDocReads++ < 2) return [];
-        return [...new Set([...docs, ...blockTypes.keys()])].filter(id => query.includes(`"${id}"`) || query.includes(`'${id}'`)).map(id => ({ id, type: blockTypes.get(id) || "d" }));
+        return [...new Set([...docs, ...blockTypes.keys()])].filter(id => query.includes(`"${id}"`) || query.includes(`'${id}'`)).map(id => ({ id, type: blockTypes.get(id) || "d", box: "box", path: "/parent/" + id + ".sy" }));
     },
     getAttributeView: async () => {
         if (beforeRead) { const run = beforeRead; beforeRead = undefined; run(); }
         if (pendingBinding && pendingBinding.reads-- <= 0) {
-            Object.assign(keyValues[0].values.find(cell => cell.blockID === pendingBinding.itemID), pendingBinding.value); pendingBinding = undefined;
+            const cell = keyValues[0].values.find(cell => cell.blockID === pendingBinding.itemID);
+            const block = { ...cell.block, ...pendingBinding.value.block };
+            Object.assign(cell, pendingBinding.value, { block });
+            if (repairFailure !== "attrs") docAttrs.set(block.id, { "custom-avs": "av" });
+            pendingBinding = undefined;
         }
         const visible = structuredClone(pendingVisibility && pendingVisibility.remaining-- > 0 ? pendingVisibility.snapshot : keyValues);
         if (pendingVisibility) { visibilityReads++; if (readbackHook) readbackHook(visible, pendingVisibility.phase); }
@@ -78,6 +83,7 @@ mock("src/api.ts", {
     },
     reloadAttributeView: async () => {},
     setAttributeViewBlockAttrStrict: async payload => {
+        if (payload.value.block) return mocks.get(path.join(root, "src/api.ts")).setAttributeViewBlockAttr(payload);
         assert.equal(payload.avID, "av"); assert.equal(payload.keyID, keyValues.find(kv => kv.key.name === "bookID").key.id);
         assert.deepEqual(Object.keys(payload.value), ["text"], "Claim changes only bookID");
         claims.push(structuredClone(payload));
@@ -122,11 +128,22 @@ mock("src/api.ts", {
         if (repairFailure === "bind") return;
         if (repairFailure === "av-lag") { pendingBinding = { itemID, value: structuredClone(value), reads: 2 }; return; }
         const item = keyValues[0].values.find(v => v.blockID === itemID);
-        assert.ok(item); Object.assign(item, value);
+        assert.ok(item);
+        const block = { ...item.block, ...value.block };
+        Object.assign(item, value, { block });
+        if (repairFailure !== "attrs") docAttrs.set(block.id, { ...docAttrs.get(block.id), "custom-avs": "av" });
     },
     getChildBlocks: async id => structuredClone(children.get(id) || []),
     removeAttributeViewBlocks: async (avID, ids) => { removals.push({ avID, ids: structuredClone(ids) }); throw new Error("Unexpected destructive operation"); },
 });
+const hostApi = mocks.get(path.join(root, "src/api.ts"));
+hostApi.createDocWithMdStrict = (...args) => hostApi.createDocWithMd(...args);
+hostApi.requestStrict = (endpoint, data) => {
+    if (endpoint === "/api/query/sql") return hostApi.sql(data.stmt);
+    if (endpoint === "/api/av/getAttributeView") return hostApi.getAttributeView(data.id);
+    if (endpoint === "/api/attr/getBlockAttrs") return Promise.resolve(docAttrs.get(data.id) || {});
+    throw new Error("Unexpected strict endpoint " + endpoint);
+};
 mocks.get(path.join(root, "src/api.ts")).addAttributeViewKeyStrict = payload => {
     if (columnWriteFails) throw new Error("Fixture column write rejected");
     return mocks.get(path.join(root, "src/api.ts")).addAttributeViewKey(payload);
@@ -135,10 +152,15 @@ mock("src/utils/core/formatOp.ts", { generateUniqueBlocked: () => `2026100212000
 mock("src/utils/bookHandling/changeMainKeyName.ts", { changeMainKeyName: async () => { throw new Error("Unexpected rename"); } });
 mock("src/utils/weread/downloadWereadCover.ts", { downloadWereadCoverSafely: async () => "" });
 mock("src/utils/core/getImg.ts", { getImage: async () => "", downloadCover: async () => "" });
-mock("src/utils/template/renderBookNoteTemplate.ts", { renderBookNoteTemplate: async (id, template) => {
+mock("src/utils/template/renderBookNoteTemplate.ts", {
+    BOOK_NOTE_READBACK_DELAYS: [0, 0, 0],
+    hasBookNoteContent: value => !!value.trim(),
+    readBookNoteKramdown: async id => docContents.get(id) || "",
+    renderBookNoteTemplate: async (id, template) => {
     rendered.push({ id, template });
     if (afterRender) { const run = afterRender; afterRender = undefined; run(); }
     if (repairFailure === "render") throw new Error("Fixture render failed");
+    docContents.set(id, template);
 } });
 mock("src/utils/weread/api/buildWereadApiEnhancedNotebook.ts", { buildWereadApiEnhancedNotebook: async (_key, book) => { requests.push(book.bookID); return { title: book.title }; } });
 mock("src/utils/weread/incremental/buildBookRenderModel.ts", {
@@ -846,5 +868,16 @@ async function updatesAreStable(expectedCount = 2) {
     }
     console.log("Repair bilingual PASS: invalid bindings use the correct Chinese and English messages");
     console.log("Repair safety PASS: create/render/bind/readback failures, concurrent edits, occupied IDs, ambiguous ISBN, historical/shared documents and target orphans never claim or force the source");
+    reset(); storage["settings.json"].noteTemplate = "";
+    storage.temporary_weread_notebooksList = [source("WR_EMPTY_TEMPLATE", ISBN_A)];
+    doubanBooks.set(ISBN_A, douban(ISBN_A));
+    await confirmISBNs([source("WR_EMPTY_TEMPLATE", ISBN_A)]);
+    assert.equal(created.length, 1); assert.equal(bindingWrites.length, 1); assert.equal(claims.length, 1);
+    assert.equal(rendered[0].template, "");
+    assert.deepEqual(forceRuns[0].forceBookIDs, ["WR_EMPTY_TEMPLATE"]);
+    reset(); storage["settings.json"].noteTemplate = "";
+    assert.equal((await add(plugin, "av", detail("WR_EMPTY_BOOKID", ISBN_A))).code, 0);
+    assert.equal(created.length, 1); assert.equal(bindingWrites.length, 1); assert.equal(rendered[0].template, "");
+    console.log("Legacy empty templates PASS: actual ISBN confirmation and BookID import chains keep one bound document available for sync");
     console.log("WeRead book identity smoke: ALL PASS (mocked I/O; not a live SiYuan/WeRead account test)");
 })().catch(error => { console.error(error); process.exitCode = 1; });

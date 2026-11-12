@@ -1,16 +1,23 @@
-import { sql, getAttributeView, removeAttributeViewBlocks, createDocWithMd } from "@/api";
+import { getAttributeView, removeAttributeViewBlocks } from "@/api";
 import { parseDateToTimestamp } from '../core/formatOp';
 import { getImage, downloadCover } from "@/utils/core/getImg";
 import { ensureAttributeViewKeys, appendBookToAttributeView } from './ensureAttributeViewKeys';
-import { bindBookToNote } from './bindBookToNote';
+import { bookNoteFailureResult, ensureBookNoteDocument, readBookNoteParent } from './ensureBookNoteDocument';
+import { t } from '../i18n';
 import { findBookByNormalizedTitle } from './bookDeduplication';
 import { findBookPrimaryKeyValue } from './bookDatabasePrimaryKey';
 import { isValidISBN, normalizeISBN } from './isbn';
-import { renderBookNoteTemplate } from '../template/renderBookNoteTemplate';
-import { renderLocalBookTemplateVariables } from '../template/renderLocalBookTemplateVariables';
 
-export async function loadAVData(avID: string, fullData: any, _plugin: any, options?: { cleanupOrphans?: boolean }) {
+export async function loadAVData(avID: string, fullData: any, _plugin: any, options?: { cleanupOrphans?: boolean; requireNoteContent?: boolean }) {
+    const requireNoteContent = options?.requireNoteContent !== false;
+    let rowBlockID = "";
     try {
+        if (fullData.addNotes) {
+            if (requireNoteContent && (typeof fullData.noteTemplate !== "string" || !fullData.noteTemplate.trim())) {
+                throw new Error(t(_plugin, "bookNoteTemplateEmpty", "请先配置非空的读书笔记模板"));
+            }
+            await readBookNoteParent(_plugin, avID, fullData.databaseBlockId);
+        }
         // 判断数据库中是否含有该书籍（以 ISBN 为依据）
         let originalDatabase = await getAttributeView(avID);
         let originalDatabasekeyValues = originalDatabase.av.keyValues;
@@ -90,68 +97,30 @@ export async function loadAVData(avID: string, fullData: any, _plugin: any, opti
         }
 
         // 添加书籍数据到数据库并回查 blockID
-        const { blockID, matchingValue } = await appendBookToAttributeView(
+        const { blockID } = await appendBookToAttributeView(
             avID,
             databaseKeys,
             fullData,
             buildBlocksValues
         );
 
-        // 创建读书笔记
+        rowBlockID = blockID;
         if (fullData.addNotes) {
-            const sqlresult = await sql(`SELECT * FROM blocks WHERE id = "${fullData.databaseBlockId}"`);
-
-            // 先创建空文档，再统一交给思源内部模板渲染。
-            const template = renderLocalBookTemplateVariables(fullData.noteTemplate, {
-                title: fullData.title || '无书名',
-                subtitle: fullData.subtitle || '',
-                originalTitle: fullData.originalTitle || '',
-                author: Array.isArray(fullData.authors) ? fullData.authors.join('、') : '',
-                translator: Array.isArray(fullData.translators) ? fullData.translators.join('、') : '',
-                publisher: fullData.publisher || '未知出版社',
-                publishDate: fullData.publishDate || '未知日期',
-                producer: fullData.producer || '',
-                isbn: fullData.ISBN || '',
-                binding: fullData.binding || '',
-                series: fullData.series || '',
-                doubanRating: fullData.rating ? `${fullData.rating}` : '无评分',
-                doubanRatingCount: fullData.ratingCount ? `${fullData.ratingCount}` : '0',
-                pages: fullData.pages ? `${fullData.pages}` : '',
-                price: fullData.price ? `${fullData.price}` : '',
-                myRating: fullData.myRating || '未评分',
-                bookCategory: fullData.bookCategory || '默认分类',
-                readingStatus: fullData.readingStatus || '未读',
-                startDate: fullData.startDate || '未开始',
-                finishDate: fullData.finishDate || '未完成',
-                cover: fullData.cover || '',
-                description: fullData.description || '',
-                authorBio: fullData.authorBio || '',
-                wereadRating: '',
-                wereadRatingCount: '',
-            });
-
-            await createDocWithMd(
-                sqlresult[0].box,
-                sqlresult[0].hpath + "/" + fullData.title,
-                "",
-                { id: blockID, parentID: sqlresult[0].root_id }
-            );
-            await renderBookNoteTemplate(blockID, template);
-
-            // 绑定数据库与读书笔记
-            await bindBookToNote(avID, blockID, matchingValue);
+            await ensureBookNoteDocument(_plugin, avID, blockID, fullData, requireNoteContent);
         }
 
         return {
             code: 0,
             rowBlockID: blockID,
-            msg: "书籍添加成功"
+            msg: t(_plugin, "searchAddSuccess", "书籍添加成功")
         };
-    } catch (error) {
+    } catch (error: any) {
+        if (rowBlockID && fullData.addNotes) return bookNoteFailureResult(_plugin, error, rowBlockID);
         return {
             code: 1,
-            msg: error.message || "未知错误",
-            stack: error.stack
+            msg: error?.message || t(_plugin, "uiUnknownError", "未知错误"),
+            rowBlockID: error?.rowBlockID,
+            partial: false,
         };
     }
 }

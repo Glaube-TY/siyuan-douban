@@ -15,6 +15,13 @@ export async function request(url: string, data: any) {
     return res;
 }
 
+export async function requestStrict(url: string, data: any): Promise<any> {
+    const response: IWebSocketData = await fetchSyncPost(url, data);
+    if (response.code !== 0) {
+        throw Object.assign(new Error(response.msg || ("SiYuan API error: " + response.code)), { kernelCode: response.code });
+    }
+    return response.data;
+}
 
 // **************************************** Noteboook ****************************************
 
@@ -86,6 +93,9 @@ export async function createDocWithMd(notebook: NotebookId, path: string, markdo
     return request(url, data);
 }
 
+export async function createDocWithMdStrict(notebook: NotebookId, path: string, markdown: string, options?: { id?: string; parentID?: string }): Promise<DocumentId> {
+    return requestStrict('/api/filetree/createDocWithMd', { notebook, path, markdown, ...options });
+}
 
 export async function renameDoc(notebook: NotebookId, path: string, title: string): Promise<DocumentId> {
     let data = {

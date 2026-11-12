@@ -13,8 +13,12 @@
     export let actionMode: "add" | "update" = "add";
     export let localMatch: { title?: string; isbn?: string } | null = null;
     export let submitting = false;
+    export let canSubmit = true;
+    export let canCompleteNote = false;
+    export let completingNote = false;
+    export let completionMessage = "";
 
-    const dispatch = createEventDispatcher<{ confirm: any }>();
+    const dispatch = createEventDispatcher<{ confirm: any; completeNote: any }>();
     const tx = (key: string, fallback: string, params: Record<string, string | number> = {}) => t(i18n, key, fallback, params);
 
     let coverData = "";
@@ -45,7 +49,7 @@
     }
 
     function handleAdd() {
-        if (!bookInfo || submitting) return;
+        if (!bookInfo || submitting || !canSubmit) return;
         dispatch("confirm", {
             ...bookInfo,
             ...(actionMode === "add" ? {
@@ -61,7 +65,9 @@
 </script>
 
 <div class="douban-detail-dialog" class:douban-detail-dialog-mobile={mobile}>
-    {#if actionMode === "update"}
+    {#if completionMessage}
+        <div class="book-update-notice" role="alert">{completionMessage}</div>
+    {:else if actionMode === "update"}
         <div class="book-update-notice">
             <strong>{tx("bookLocalExistsUpdate", "匹配到已经存在的 ISBN 的同样书籍，可以进行增量更新")}</strong>
         </div>
@@ -261,9 +267,15 @@
     {/if}
 
     <div class="douban-detail-footer">
-        <button class="b3-button b3-button--outline" on:click={close}>{tx("cancel", "取消")}</button>
-        <button class="b3-button b3-button--primary" on:click={handleAdd} disabled={submitting}>
-            {submitting
+        {#if canCompleteNote}
+            <button class="b3-button b3-button--outline book-note-complete-button" disabled={submitting}
+                on:click={() => dispatch("completeNote", { ...bookInfo })}>
+                {completingNote ? tx("bookNoteCompleting", "补全中...") : tx("bookNoteCompleteAction", "补全读书笔记")}
+            </button>
+        {/if}
+        <button class="b3-button b3-button--outline" on:click={close} disabled={submitting}>{tx("cancel", "取消")}</button>
+        <button class="b3-button b3-button--primary" on:click={handleAdd} disabled={submitting || !canSubmit}>
+            {submitting && !completingNote
                 ? (actionMode === "update" ? tx("bookUpdating", "更新中...") : tx("bookAdding", "添加中..."))
                 : (actionMode === "update" ? tx("bookUpdateFields", "更新字段") : tx("bookAdd", "添加书籍"))}
         </button>
@@ -624,9 +636,14 @@
     .mobile-note-toggle input { width: 22px; height: 22px; }
 
     .douban-detail-dialog-mobile .douban-detail-footer {
+        flex-wrap: wrap;
         padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
         background: color-mix(in srgb, var(--b3-theme-background) 92%, transparent);
         backdrop-filter: blur(14px);
+    }
+
+    .douban-detail-dialog-mobile .douban-detail-footer .book-note-complete-button {
+        flex-basis: 100%;
     }
 
     .douban-detail-dialog-mobile .douban-detail-footer button {

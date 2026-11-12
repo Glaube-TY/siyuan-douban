@@ -118,8 +118,9 @@ export async function addEditedDoubanBookToDatabase(plugin: PluginLike, editedBo
     };
 
     const saveResult = await loadAVData(database.avID, fullData, plugin);
-    if (saveResult?.code === 0) {
-        await reloadAttributeView(database.avID);
+    if (saveResult?.code === 0 || saveResult?.partial) {
+        try { await reloadAttributeView(database.avID); }
+        catch { console.warn("[douban] Database view refresh unavailable"); }
     }
     return saveResult;
 }
