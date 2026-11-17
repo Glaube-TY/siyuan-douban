@@ -58,6 +58,10 @@ function fixture() {
             case "/api/file/removeFile": templateFiles.delete(body.path); return good(null);
             case "/api/ui/reloadAttributeView": return good(null);
             case "/api/template/render":
+                // SiYuan 3.8.10 reserves hidden path components under templates.
+                if (body.path.split("/data/templates/")[1].split("/").some(part => part.startsWith("."))) {
+                    return bad("hidden template paths are reserved");
+                }
                 if (state.mode === "render-rejected") return bad("synthetic template error");
                 await new Promise(resolve => setTimeout(resolve, 0));
                 const template = templateFiles.get(body.path.slice(body.path.indexOf("/data/templates/")));
@@ -115,7 +119,7 @@ function fixture() {
         databaseBlockId: id(1), noteTemplate: "# {{书名}}\n{{作者}}\n{{ISBN}}", cover: "" };
     const service = load("src/utils/bookHandling/ensureBookNoteDocument.ts");
     service.BOOK_NOTE_READBACK_DELAYS.splice(0, service.BOOK_NOTE_READBACK_DELAYS.length, 0, 0, 0);
-    return Object.assign(state, { columns, docs, attrs, calls, book, plugin, load, service,
+    return Object.assign(state, { columns, docs, attrs, calls, book, plugin, load, service, templateFiles,
         primary: () => columns[0].values[0], save: (overrides, options) => load("src/utils/bookHandling/index.ts").loadAVData(id(4), { ...book, ...overrides }, plugin, options),
         complete: () => service.ensureBookNoteDocument(plugin, id(4), columns[0].values[0].blockID, book),
         callsTo: url => calls.filter(c => c.url === url),
@@ -123,16 +127,20 @@ function fixture() {
 }
 
 (async () => {
-    for (const frontend of ["mobile", "desktop", "browser-mobile"]) await test("verified note creation on " + frontend, async () => {
+    for (const frontend of ["mobile", "desktop", "browser-mobile", "browser-desktop"]) await test("verified note creation on " + frontend, async () => {
         const f = fixture(); f.frontend = frontend;
         const result = await f.save(); assert.equal(result.code, 0);
         assert.equal(f.primary().block.id, result.rowBlockID); assert.equal(f.primary().isDetached, false);
         assert.match(f.docs.get(result.rowBlockID), /Synthetic book/);
+        assert.deepEqual(f.callsTo("/api/file/removeFile").map(call => call.body.path),
+            f.callsTo("/api/file/putFile").map(call => call.body.get("path")));
+        assert.equal(f.templateFiles.size, 0);
     });
     for (const mode of ["create-rejected", "create-wrong-id", "render-rejected", "empty-render", "empty-paragraph", "append-rejected", "append-noop", "binding-rejected", "binding-noop", "content-read-error", "content-read-invalid", "attrs-read-error"]) await test("failure is reported with recoverable row: " + mode, async () => {
         const f = fixture(); f.mode = mode;
         const result = await f.save(); assert.equal(result.code, 1); assert.equal(result.partial, true); assert.equal(result.rowBlockID, f.primary().blockID);
         assert.match(result.msg, /书籍已入库/);
+        assert.equal(f.templateFiles.size, 0);
     });
     for (const mode of ["create-response-lost", "append-response-lost", "binding-response-lost"]) await test("readback resolves uncertain write: " + mode, async () => {
         const f = fixture(); f.mode = mode;

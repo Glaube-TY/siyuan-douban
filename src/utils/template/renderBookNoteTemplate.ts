@@ -86,7 +86,7 @@ export async function renderBookNoteTemplate(blockID: string, template: string, 
         throw new Error(t(i18nSource, "bookNoteTemplateEmpty", "请先配置非空的读书笔记模板"));
     }
     // Frontends and background WeRead imports must not share a mutable template file.
-    const filePath = "/data/templates/.siyuan-douban/noteTemplate-" + generateUniqueBlocked() + ".md";
+    const filePath = "/data/templates/siyuan-douban-temp/noteTemplate-" + generateUniqueBlocked() + ".md";
     const templatePath = await getTemplateAbsolutePath(filePath, i18nSource);
     let rendered: any;
     try {

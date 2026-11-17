@@ -5,12 +5,13 @@ import { countNotebookNotes, safeLoadNotebookCache, safeLoadReadingStatsCache } 
 import { openDoc } from "../openDoc";
 import type { WorkbenchSearchResult } from "../../types/workbench";
 import { t } from "../i18n";
+import { loadPluginStorageJsonStateStrict, type PluginLike as StoragePluginLike } from "../storage/pluginStorageStrict";
 
 const WEREAD_SHELF_CACHE_KEY = "weread_api_bookshelf_cache";
 const WEREAD_NOTEBOOK_CACHE_KEY = "temporary_weread_notebooksList";
 const WEREAD_SEARCH_RESULT_LIMIT = 20;
 
-type PluginLike = {
+type PluginLike = StoragePluginLike & {
     loadData: (key: string) => Promise<any>;
     saveData: (key: string, value: any) => Promise<void>;
     i18n: any;
@@ -154,12 +155,15 @@ export async function searchWereadCachedBooks(plugin: PluginLike, query: string)
 async function loadSearchArrayCacheStrict(plugin: PluginLike, key: string, label: string): Promise<any[]> {
     let cache: any;
     try {
-        cache = await plugin.loadData(key);
+        const state = await loadPluginStorageJsonStateStrict(plugin, key);
+        if (!state.exists) return [];
+        cache = state.value;
     } catch (error: any) {
         const message = error?.message || String(error || "未知错误");
         throw new Error(`读取${label}失败：${message}`);
     }
-    if (cache === null || cache === undefined) return [];
+    // Older clear/failure paths wrote JSON null only for this temporary cache.
+    if (key === WEREAD_NOTEBOOK_CACHE_KEY && cache === null) return [];
     if (!Array.isArray(cache)) throw new Error(`${label}格式异常`);
     return cache;
 }
