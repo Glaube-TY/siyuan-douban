@@ -37,12 +37,15 @@ const result = await callWereadApi<T>(apiKey, apiName, params);
 ```
 
 **调用规则：**
-1. 每个请求自动注入 `skill_version: "1.0.5"`，开发者无需手动添加。
+1. 每个请求自动注入 `skill_version: "1.0.6"`，开发者无需手动添加。
 2. 参数直接放在请求体里，不要包 `params` 对象。
 3. API Key 不允许 `console.log`。
 4. 鉴权失败返回 `{ errcode: -2013, errmsg: "鉴权失败" }`。
 5. 正常响应不一定有 `errcode`，只要有业务字段即可视为成功。
 6. 请求方式：`POST /api/agent/gateway`，Header 带 `Authorization: Bearer {apiKey}`。
+7. upgrade_info 只作非阻塞升级通知；有效业务数据正常返回，不因此暂停、重试、重新发起请求或下载文件。网关每个运行时只记录一次固定诊断，不输出通知原文；真实 errcode 继续报错，仅有通知而无业务字段的响应仍视为返回为空，避免误作空缓存。
+
+协议核对日期：2026-11-18。依据 [腾讯官方 Skill 1.0.6](https://github.com/Tencent/WeChatReading/blob/61c337269bdaf078615bdd8919ed2592043c142e/skills/SKILL.md)。本次升级未改变现有同步接口、鉴权和游标分页。新增 context 规则针对搜索/推荐的 Agent 调用；当前插件不调用这些接口，本次不新增对话上下文上报。
 
 ---
 

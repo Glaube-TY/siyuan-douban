@@ -29,7 +29,7 @@ mock("src/api.ts", {
     forwardProxyStrict: async (url, method, body, headers) => {
         assert.equal(method, "POST"); assert.equal(url, "https://i.weread.qq.com/api/agent/gateway");
         assert.ok(headers[0].Authorization === "Bearer fixture-key", "Bearer authorization retained");
-        requests.push(structuredClone(body)); return structuredClone(proxyResponse);
+        requests.push(structuredClone(body)); return structuredClone(typeof proxyResponse === "function" ? proxyResponse(body) : proxyResponse);
     },
     appendBlock: async () => { throw new Error("Existing position mark must be retained"); },
     insertBlock: async (_type, markdown, _next, previousID) => {
@@ -146,12 +146,40 @@ const modelFor = (notebook, value = template) => buildModel({ notebook, template
     assert.ok(mp.items.every(item => item.sourceKey === "mp:MP_WXS_A"));
     console.log("G MP PASS: existing account rendering works; no reader/deep link capability added");
     const gateway = load("src/utils/weread/api/wereadApiGateway.ts");
-    await gateway.callWereadApi("fixture-key", "/book/info", { bookId: "WR_A" });
-    assert.deepEqual(requests[0], { api_name: "/book/info", skill_version: "1.0.5", bookId: "WR_A" });
-    proxyResponse = { upgrade_info: { message: "Fixture upgrade" } };
-    await assert.rejects(gateway.callWereadApi("fixture-key", "/book/info", { bookId: "WR_A" }), gateway.WereadApiUpgradeError);
-    proxyResponse = { errcode: -2013 };
-    await assert.rejects(gateway.callWereadApi("fixture-key", "/book/info", { bookId: "WR_A" }), gateway.WereadApiAuthError);
-    console.log("Protocol PASS: v1.0.5, flat business params, Bearer auth, upgrade/auth failures retained");
+    const previousWarn = console.warn, notices = [];
+    console.warn = (...parts) => notices.push(parts.join(" "));
+    try {
+        const upgrade = { message: "fixture-key private upgrade payload" };
+        proxyResponse = { bookId: "WR_A", title: "Fixture title", upgrade_info: upgrade };
+        assert.deepEqual(await gateway.callWereadApi("fixture-key", "/book/info", { bookId: "WR_A" }), proxyResponse);
+        assert.equal(requests.length, 1, "Upgrade notices must not repeat the request");
+        assert.deepEqual(requests[0], { api_name: "/book/info", skill_version: "1.0.6", bookId: "WR_A" });
+        proxyResponse = { books: [], albums: [], upgrade_info: upgrade };
+        assert.equal((await load("src/utils/weread/api/wereadApiAuth.ts").validateWereadApiKey("fixture-key")).success, true);
+        assert.equal(requests.length, 2, "Valid empty shelf data is still usable");
+        proxyResponse = { upgrade_info: upgrade };
+        await assert.rejects(gateway.callWereadApi("fixture-key", "/book/info"), /接口返回为空/);
+        proxyResponse = { errcode: 0, errmsg: "", upgrade_info: upgrade };
+        await assert.rejects(gateway.callWereadApi("fixture-key", "/book/info"), /接口返回为空/);
+        proxyResponse = { errcode: -2013, upgrade_info: upgrade };
+        await assert.rejects(gateway.callWereadApi("fixture-key", "/book/info"), gateway.WereadApiAuthError);
+        proxyResponse = { errcode: 499, errmsg: "fixture business rejection", upgrade_info: upgrade };
+        await assert.rejects(gateway.callWereadApi("fixture-key", "/book/info"), error => error instanceof gateway.WereadApiError && error.errcode === 499);
+        assert.equal(requests.length, 6, "Real API errors remain errors, without upgrade-triggered retries");
+        let page = 0;
+        proxyResponse = body => {
+            assert.equal(body.api_name, "/user/notebooks"); assert.equal(body.skill_version, "1.0.6");
+            assert.equal(body.count, 100); assert.equal(Object.hasOwn(body, "params"), false);
+            if (++page === 1) { assert.equal(body.lastSort, undefined); return { books: [{ bookId: "12345", book: { title: "A" }, sort: 20, noteCount: 1 }], hasMore: 1, upgrade_info: upgrade }; }
+            assert.equal(page, 2); assert.equal(body.lastSort, 20);
+            return { books: [{ bookId: "23456", book: { title: "B" }, sort: 10, reviewCount: 1 }], hasMore: 0, upgrade_info: upgrade };
+        };
+        const provider = new (load("src/utils/weread/api/wereadApiProvider.ts").wereadApiProvider)("fixture-key");
+        const notebooks = await provider.getNotebooks();
+        assert.deepEqual(notebooks.map(book => book.bookId), ["12345", "23456"]); assert.equal(page, 2);
+        assert.equal(requests.length, 8); assert.equal(notices.length, 1, "Only one fixed upgrade diagnostic per runtime");
+        assert.doesNotMatch(notices.join("\n"), /fixture-key|private upgrade payload|Fixture title/);
+    } finally { console.warn = previousWarn; }
+    console.log("Protocol PASS: v1.0.6, non-blocking upgrade notices, one fixed diagnostic, real errors retained, flat cursor pagination");
     console.log("WeRead readerLink smoke ALL PASS (mocked host/network; no live account verification)");
 })().catch(error => { console.error(error); process.exitCode = 1; });

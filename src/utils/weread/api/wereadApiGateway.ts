@@ -14,16 +14,10 @@ export const WEREAD_API_RATE_LIMIT_JITTER_MS = 1000;
 let requestChain: Promise<void> = Promise.resolve();
 let lastRequestStartedAt = 0;
 let globalCooldownUntil = 0;
+let upgradeNoticeLogged = false;
 
 function isNetworkError(message: string): boolean {
   return NETWORK_ERROR_PATTERNS.test(message);
-}
-
-export class WereadApiUpgradeError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = "WereadApiUpgradeError";
-  }
 }
 
 export class WereadApiAuthError extends Error {
@@ -62,9 +56,9 @@ export function extractRateLimitRetryAfterMs(parsed: unknown): number | undefine
 }
 
 export function isWereadRateLimitError(error: unknown): boolean {
-  if (error instanceof WereadApiUpgradeError || error instanceof WereadApiAuthError) return false;
+  if (error instanceof WereadApiAuthError) return false;
   const errorName = typeof error === "object" && error !== null ? String((error as any).name || "") : "";
-  if (errorName === "WereadApiUpgradeError" || errorName === "WereadApiAuthError") return false;
+  if (errorName === "WereadApiAuthError") return false;
 
   const errorText = typeof error === "object" && error !== null
     ? [
@@ -177,11 +171,6 @@ async function requestWereadApi<T>(apiKey: string, body: Record<string, unknown>
     parsed = rawBody;
   }
 
-  if (parsed.upgrade_info) {
-    const upgradeMsg = parsed.upgrade_info.message || "微信读书接口需要升级";
-    throw new WereadApiUpgradeError(upgradeMsg);
-  }
-
   if (typeof parsed.errcode === "number" && parsed.errcode !== 0) {
     const code = parsed.errcode;
     if (code === -2013) {
@@ -189,6 +178,15 @@ async function requestWereadApi<T>(apiKey: string, body: Record<string, unknown>
     }
     const msg = parsed.errmsg || parsed.errlog || `微信读书接口错误：${code}`;
     throw new WereadApiError(msg, code, extractRateLimitRetryAfterMs(parsed));
+  }
+
+  if (parsed.upgrade_info) {
+    const hasBusinessData = Object.keys(parsed).some(key => !["upgrade_info", "errcode", "errmsg", "errlog"].includes(key));
+    if (!hasBusinessData) throw new Error("微信读书接口返回为空");
+    if (!upgradeNoticeLogged) {
+      upgradeNoticeLogged = true;
+      console.warn("[Weread API] A newer API version is available; continuing with the current response.");
+    }
   }
 
   return parsed as T;

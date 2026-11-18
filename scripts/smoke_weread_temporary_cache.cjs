@@ -88,7 +88,7 @@ function tabRefresh(options) {
 function reset() {
     remoteBooks = ["A", "B"].map(bookId => ({ bookId, title: bookId, sort: 10, noteCount: 1, reviewCount: 0, bookmarkCount: 1, totalNoteCount: 1 }));
     storage = { weread_templates: "template", weread_notebooks: [], weread_api_bookshelf_cache: [], weread_customBooksISBN: [],
-        weread_auth_settings: { apiKeyEncrypted: "fixture-encrypted", verified: true },
+        weread_auth_settings: { apiKeyEncrypted: "fixture-encrypted", verified: true, apiProtocolVersion: "1.0.5" },
     };
     writes = []; requests = []; networkError = undefined; readError = undefined;
 }
@@ -202,7 +202,12 @@ const entries = [
             assert.deepEqual(storage, sentinel); assert.equal(writes.length, 0);
         }
     } finally { global.fetch = previousFetch; }
-    assert.equal(load("src/utils/weread/api/constants.ts").WEREAD_API_PROTOCOL_VERSION, "1.0.5");
-    console.log("F/G PASS: other storage contracts remain strict; damaged JSON/fresh data cannot write; protocol remains 1.0.5");
+    reset();
+    const authBefore = structuredClone(storage.weread_auth_settings);
+    const legacyAuth = await settings.loadWereadAuthState(plugin, { migrate: false });
+    assert.equal(legacyAuth.verified, true); assert.equal(legacyAuth.apiKey, "fixture-key");
+    assert.deepEqual(storage.weread_auth_settings, authBefore); assert.equal(writes.length, 0);
+    assert.equal(load("src/utils/weread/api/constants.ts").WEREAD_API_PROTOCOL_VERSION, "1.0.6");
+    console.log("F/G PASS: storage contracts remain strict; protocol 1.0.6 retains verified 1.0.5 settings without writes");
     console.log("WeRead temporary cache smoke: ALL PASS (mocked I/O; not live account/SiYuan validation)");
 })().catch(error => { console.error(error); process.exitCode = 1; });
